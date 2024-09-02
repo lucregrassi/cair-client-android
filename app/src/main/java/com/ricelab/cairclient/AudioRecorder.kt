@@ -3,7 +3,9 @@ import android.content.pm.PackageManager
 import android.media.AudioRecord
 import android.media.MediaPlayer
 import android.media.MediaRecorder
+import android.media.audiofx.NoiseSuppressor
 import android.util.Log
+import android.widget.TextView
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,20 +17,70 @@ import java.io.*
 
 private const val TAG = "AudioRecorder"
 
-class AudioRecorder(private val context: Context) {
+class AudioRecorder(private val context: Context, private val thresholdTextView: TextView) {
 
     private val sampleRate = 16000
     private val audioSource = MediaRecorder.AudioSource.MIC
     private val channelConfig = android.media.AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = android.media.AudioFormat.ENCODING_PCM_16BIT
     private val bufferSize = 4 * AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-    private val threshold = 1500
     private val silenceDurationMillis = 500L
     private val longSilenceDurationMillis = 2000L
     private val initialTimeoutMillis = 30000L
 
+    private var threshold = 1500  // Default value, will be adjusted based on background noise
+
     @Volatile
     private var isRecording = false
+
+    init {
+        // Measure background noise and set threshold
+        threshold = measureBackgroundNoise() + 500  // Set threshold slightly above background noise level
+        Log.d(TAG, "Threshold set to $threshold based on background noise")
+
+        // Update the UI with the calculated threshold
+        thresholdTextView.post {
+            thresholdTextView.text = "Threshold: $threshold"
+        }
+    }
+
+    private fun measureBackgroundNoise(): Int {
+        val audioRecord = AudioRecord(audioSource, sampleRate, channelConfig, audioFormat, bufferSize)
+        val audioBuffer = ShortArray(bufferSize)
+        var maxAmplitude = 0
+
+        try {
+            audioRecord.startRecording()
+
+            // Attach NoiseSuppressor if available
+            val noiseSuppressor: NoiseSuppressor? = if (NoiseSuppressor.isAvailable()) {
+                NoiseSuppressor.create(audioRecord.audioSessionId)
+            } else {
+                Log.w(TAG, "NoiseSuppressor not supported on this device")
+                null
+            }
+
+            val startTime = System.currentTimeMillis()
+
+            while (System.currentTimeMillis() - startTime < 2000) {  // Measure for 2 seconds
+                val ret = audioRecord.read(audioBuffer, 0, audioBuffer.size)
+                if (ret > 0) {
+                    val amplitude = audioBuffer.maxOrNull() ?: 0
+                    if (amplitude > maxAmplitude) {
+                        maxAmplitude = amplitude
+                    }
+                }
+            }
+
+            audioRecord.stop()
+            noiseSuppressor?.release()
+        } finally {
+            audioRecord.release()
+        }
+
+        Log.d(TAG, "Measured background noise max amplitude: $maxAmplitude")
+        return maxAmplitude
+    }
 
     suspend fun listenAndSplit(): String {
         if (ContextCompat.checkSelfPermission(
@@ -42,6 +94,14 @@ class AudioRecorder(private val context: Context) {
 
         return withContext(Dispatchers.IO) {
             val audioRecord = AudioRecord(audioSource, sampleRate, channelConfig, audioFormat, bufferSize)
+
+            // Attach NoiseSuppressor if available
+            val noiseSuppressor: NoiseSuppressor? = if (NoiseSuppressor.isAvailable()) {
+                NoiseSuppressor.create(audioRecord.audioSessionId)
+            } else {
+                Log.w(TAG, "NoiseSuppressor not supported on this device")
+                null
+            }
 
             val audioBuffer = ShortArray(bufferSize)
             val finalResult = StringBuilder()
@@ -110,6 +170,7 @@ class AudioRecorder(private val context: Context) {
                 isRecording = false
                 audioRecord.stop()
                 audioRecord.release()
+                noiseSuppressor?.release()
             }
         }
     }
