@@ -1,3 +1,7 @@
+package com.ricelab.cairclient
+
+import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioRecord
@@ -17,77 +21,68 @@ import java.io.*
 
 private const val TAG = "AudioRecorder"
 
-class AudioRecorder(private val context: Context, private val thresholdTextView: TextView) {
+class AudioRecorder(private val context: Context) {
 
+    // Audio recording configuration parameters
     private val sampleRate = 16000
     private val audioSource = MediaRecorder.AudioSource.MIC
     private val channelConfig = android.media.AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = android.media.AudioFormat.ENCODING_PCM_16BIT
     private val bufferSize = 4 * AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+    private var threshold = 1500 // Default threshold, adjusted after background noise measurement
     private val silenceDurationMillis = 500L
     private val longSilenceDurationMillis = 2000L
     private val initialTimeoutMillis = 30000L
-
-    private var threshold = 1500  // Default value, will be adjusted based on background noise
 
     @Volatile
     private var isRecording = false
 
     init {
-        // Measure background noise and set threshold
-        threshold = measureBackgroundNoise() + 500  // Set threshold slightly above background noise level
-        Log.d(TAG, "Threshold set to $threshold based on background noise")
+        // Measure the background noise and adjust the threshold accordingly
+        threshold = measureBackgroundNoise() + 1500
 
-        // Update the UI with the calculated threshold
-        thresholdTextView.post {
-            thresholdTextView.text = "Threshold: $threshold"
+        // Update the threshold value in the UI if the context is an Activity
+        (context as? Activity)?.runOnUiThread {
+            val thresholdTextView: TextView? = context.findViewById(R.id.thresholdTextView)
+            thresholdTextView?.text = "Threshold: $threshold"
         }
     }
 
+    /**
+     * Measures the background noise level using the microphone and returns the maximum amplitude detected.
+     * @return The measured maximum amplitude of background noise.
+     */
     private fun measureBackgroundNoise(): Int {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Permission to record audio was denied.")
+            return -1 // Return an error code if permission is not granted
+        }
+
         val audioRecord = AudioRecord(audioSource, sampleRate, channelConfig, audioFormat, bufferSize)
         val audioBuffer = ShortArray(bufferSize)
         var maxAmplitude = 0
 
         try {
             audioRecord.startRecording()
-
-            // Attach NoiseSuppressor if available
-            val noiseSuppressor: NoiseSuppressor? = if (NoiseSuppressor.isAvailable()) {
-                NoiseSuppressor.create(audioRecord.audioSessionId)
-            } else {
-                Log.w(TAG, "NoiseSuppressor not supported on this device")
-                null
-            }
-
-            val startTime = System.currentTimeMillis()
-
-            while (System.currentTimeMillis() - startTime < 2000) {  // Measure for 2 seconds
-                val ret = audioRecord.read(audioBuffer, 0, audioBuffer.size)
-                if (ret > 0) {
-                    val amplitude = audioBuffer.maxOrNull() ?: 0
-                    if (amplitude > maxAmplitude) {
-                        maxAmplitude = amplitude
-                    }
-                }
-            }
-
-            audioRecord.stop()
-            noiseSuppressor?.release()
+            audioRecord.read(audioBuffer, 0, bufferSize)
+            maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Error measuring background noise: ${e.message}")
         } finally {
+            audioRecord.stop()
             audioRecord.release()
         }
 
-        Log.d(TAG, "Measured background noise max amplitude: $maxAmplitude")
+        Log.i(TAG, "Measured background noise level: $maxAmplitude")
         return maxAmplitude
     }
 
+    /**
+     * Starts listening and splitting the audio input, processing the audio in 0.5-second intervals.
+     * @return The final transcribed text after processing the audio input.
+     */
     suspend fun listenAndSplit(): String {
-        if (ContextCompat.checkSelfPermission(
-                context,
-                android.Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             Log.d(TAG, "Permission to record audio was denied.")
             return "Permission to record audio was denied."
         }
@@ -95,9 +90,11 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
         return withContext(Dispatchers.IO) {
             val audioRecord = AudioRecord(audioSource, sampleRate, channelConfig, audioFormat, bufferSize)
 
-            // Attach NoiseSuppressor if available
+            // Enable NoiseSuppressor if available
             val noiseSuppressor: NoiseSuppressor? = if (NoiseSuppressor.isAvailable()) {
-                NoiseSuppressor.create(audioRecord.audioSessionId)
+                NoiseSuppressor.create(audioRecord.audioSessionId).apply {
+                    Log.i(TAG, "NoiseSuppressor enabled")
+                }
             } else {
                 Log.w(TAG, "NoiseSuppressor not supported on this device")
                 null
@@ -123,18 +120,20 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
                         return@withContext "Error reading audio"
                     }
 
-                    val maxAmplitude = audioBuffer.maxOrNull() ?: 0
+                    val maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
                     if (maxAmplitude > threshold) {
                         lastSpeechTime = currentTime
                         byteArrayStream.write(shortsToBytes(audioBuffer))
                     }
 
+                    // If no speech is detected within the initial timeout, stop recording
                     if (lastSpeechTime == null && currentTime - startTime > initialTimeoutMillis) {
                         Log.d(TAG, "Timeout due to no speech detected.")
                         isRecording = false
                         return@withContext "Timeout"
                     }
 
+                    // Split the audio every 0.5 seconds and send it for processing
                     if (lastSpeechTime != null) {
                         if (currentTime - lastSpeechTime > silenceDurationMillis && byteArrayStream.size() > 0) {
                             val audioBytes = byteArrayStream.toByteArray()
@@ -148,6 +147,7 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
                             }
                         }
 
+                        // Finalize the result if there is a long silence
                         if (currentTime - lastSpeechTime > longSilenceDurationMillis) {
                             finalResult.append(currentPartialResult.toString().trim()).append(" ")
                             break
@@ -155,6 +155,7 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
                     }
                 }
 
+                // Send any remaining audio for processing
                 if (byteArrayStream.size() > 0) {
                     val audioBytes = byteArrayStream.toByteArray()
                     val partialResult = sendToMicrosoftSpeechRecognition(audioBytes)
@@ -170,17 +171,25 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
                 isRecording = false
                 audioRecord.stop()
                 audioRecord.release()
-                noiseSuppressor?.release()
+                noiseSuppressor?.release() // Release NoiseSuppressor when done
             }
         }
     }
 
+    /**
+     * Sends the recorded audio bytes to Microsoft Speech Recognition for transcription.
+     * @param audioBytes The audio data to be sent for transcription.
+     * @return The transcribed text from Microsoft Speech Recognition.
+     */
     private fun sendToMicrosoftSpeechRecognition(audioBytes: ByteArray): String {
         val client = OkHttpClient()
         val mediaType = "audio/wav".toMediaTypeOrNull()
         val tempFile = File.createTempFile("speech_chunk", ".wav", context.cacheDir)
 
         writeWavFile(audioBytes, tempFile)
+
+        // Stop recording to avoid overlap while playing audio
+        stopRecording()
 
         // Play the audio file to check its quality
         playAudio(tempFile)
@@ -204,6 +213,11 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
         }
     }
 
+    /**
+     * Writes the recorded audio data to a WAV file.
+     * @param audioBytes The audio data to be written.
+     * @param file The file where the audio data will be written.
+     */
     private fun writeWavFile(audioBytes: ByteArray, file: File) {
         try {
             FileOutputStream(file).use { fos ->
@@ -231,6 +245,10 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
         }
     }
 
+    /**
+     * Plays the recorded audio file for quality verification.
+     * @param file The audio file to be played.
+     */
     private fun playAudio(file: File) {
         if (!file.exists() || file.length() == 0L) {
             Log.e(TAG, "Audio file does not exist or is empty: ${file.absolutePath}")
@@ -255,6 +273,11 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
         }
     }
 
+    /**
+     * Extracts the transcribed text from the JSON response returned by Microsoft Speech Recognition.
+     * @param response The JSON response string from the API.
+     * @return The extracted transcribed text.
+     */
     private fun extractTextFromResponse(response: String): String {
         return try {
             val jsonObject = JSONObject(response)
@@ -265,6 +288,11 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
         }
     }
 
+    /**
+     * Converts an array of shorts to an array of bytes.
+     * @param sData The short array to be converted.
+     * @return The resulting byte array.
+     */
     private fun shortsToBytes(sData: ShortArray): ByteArray {
         val bytes = ByteArray(sData.size * 2)
         for (i in sData.indices) {
@@ -274,6 +302,11 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
         return bytes
     }
 
+    /**
+     * Converts an integer to a byte array.
+     * @param value The integer to be converted.
+     * @return The resulting byte array.
+     */
     private fun intToByteArray(value: Int): ByteArray {
         return byteArrayOf(
             (value shr 0).toByte(),
@@ -283,6 +316,11 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
         )
     }
 
+    /**
+     * Converts a short value to a byte array.
+     * @param value The short to be converted.
+     * @return The resulting byte array.
+     */
     private fun shortToByteArray(value: Short): ByteArray {
         return byteArrayOf(
             (value.toInt() shr 0).toByte(),
@@ -290,6 +328,9 @@ class AudioRecorder(private val context: Context, private val thresholdTextView:
         )
     }
 
+    /**
+     * Stops the audio recording.
+     */
     fun stopRecording() {
         Log.d(TAG, "Stop recording requested.")
         isRecording = false
