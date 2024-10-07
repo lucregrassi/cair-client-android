@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/setupScrollView"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp"
+    android:background="@color/white">
+
+    <LinearLayout
+        android:id="@+id/setupLinearLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <!-- App Title -->
+        <TextView
+            android:id="@+id/setupTitleTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Setup"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="@color/black"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Server IP Address Selection -->
+        <TextView
+            android:id="@+id/serverIpLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Select Server IP Address"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <Spinner
+            android:id="@+id/serverIpSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp" />
+
+        <!-- OpenAI API Key Input -->
+        <TextView
+            android:id="@+id/openAIApiKeyLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="OpenAI API Key"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <EditText
+            android:id="@+id/openAIApiKeyEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Enter your OpenAI API key"
+            android:inputType="textPassword"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Proceed Button -->
+        <Button
+            android:id="@+id/proceedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Proceed"
+            android:textColor="@color/white" />
+    </LinearLayout>
+</ScrollView>

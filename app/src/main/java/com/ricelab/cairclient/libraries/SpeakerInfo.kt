@@ -4,7 +4,7 @@ data class SpeakerInfo(
     var profileId: String? = null,
     var name: String? = null,
     var gender: String? = null,
-    var age: Int? = null
+    var age: String? = null
 ) {
     // Secondary constructor to allow initialization from a map (like Python's "d" parameter)
     constructor(d: Map<String, Any>?) : this() {
@@ -12,7 +12,7 @@ data class SpeakerInfo(
             profileId = it["profileId"] as? String
             name = it["name"] as? String
             gender = it["gender"] as? String
-            age = (it["age"] as? Double)?.toInt()  // JSON parsing might give age as Double
+            age = it["age"] as? String  // JSON parsing might give age as Double
         }
     }
 

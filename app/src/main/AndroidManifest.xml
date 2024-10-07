@@ -12,19 +12,26 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.CAIRclient"
         tools:targetApi="31">
+
+        <!-- ServerIpActivity to be launched when the app starts -->
         <activity
-            android:name=".MainActivity"
+            android:name=".SetupActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
 
+        <!-- MainActivity, launched after entering the server IP -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
             <meta-data
                 android:name="android.app.lib_name"
                 android:value="" />
         </activity>
+
     </application>
 
     <uses-feature android:name="com.softbank.hardware.pepper"/>

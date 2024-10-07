@@ -1,49 +1,115 @@
 plugins {
+    // Apply the Android application plugin, which is required for building Android apps.
     id 'com.android.application'
+    // Apply the Kotlin Android plugin, which is required for using Kotlin in Android projects.
     id 'org.jetbrains.kotlin.android'
 }
 
+// Load the properties file where the API keys are stored
+def loadApiKeys() {
+    Properties properties = new Properties()
+    def apiKeysFile = rootProject.file("apikeys.properties")
+    if (apiKeysFile.exists()) {
+        properties.load(new FileInputStream(apiKeysFile))
+    } else {
+        logger.warn("API keys file not found: $apiKeysFile.absolutePath")
+    }
+    return properties
+}
+
+def apiKeys = loadApiKeys()
+
 android {
+    // Defines the namespace for your app, used for package scoping in the generated R class and other Android components.
     namespace 'com.ricelab.cairclient'
+
+    // Specifies the API level to compile your app against. This should be the latest SDK version available.
     compileSdk 34
 
     defaultConfig {
+        // The unique identifier for your application.
         applicationId "com.ricelab.cairclient"
+
+        // The minimum API level that your app can run on.
         minSdk 23
+
+        // The target API level your app is aimed at.
         targetSdk 34
+
+        // The version code of your app, used to differentiate between versions.
         versionCode 1
+
+        // The version name of your app, typically used as a user-facing version string.
         versionName "1.0"
 
+        // Specifies the instrumentation test runner to use for running tests on your app.
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // Define a custom field for the build configuration, storing the Microsoft Speech API key.
+        buildConfigField "String", "MICROSOFT_SPEECH_API_KEY", "\"${apiKeys.MICROSOFT_SPEECH_API_KEY ?: 'default_key'}\""
     }
 
     buildTypes {
+        // Configuration for the release build type.
         release {
+            // Whether to enable code shrinking, obfuscation, and optimization for release builds.
             minifyEnabled false
+
+            // Specifies the ProGuard configuration files to use for the release build.
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
     compileOptions {
+        // Set the Java version compatibility for source code.
         sourceCompatibility JavaVersion.VERSION_1_8
+        // Set the Java version compatibility for compiled classes.
         targetCompatibility JavaVersion.VERSION_1_8
     }
+
     kotlinOptions {
+        // Set the JVM target for Kotlin compilation.
         jvmTarget = '1.8'
+    }
+
+    // To reduce APK size - suggested by official documentation
+    splits {
+        // Configures multiple APKs based on ABI.
+        abi {
+            enable true
+            reset()
+            include "x86", "armeabi-v7a"
+            universalApk false
+        }
     }
 }
 
 dependencies {
+    // Core Android libraries
     implementation 'androidx.core:core-ktx:1.13.1'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.12.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.security:security-crypto-ktx:1.1.0-alpha03'
+
+    // Unit testing library
     testImplementation 'junit:junit:4.13.2'
+
+    // Android testing libraries
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
-	implementation 'com.aldebaran:qisdk:1.7.5'
-	implementation 'com.aldebaran:qisdk-design:1.7.5'
-    // To perform request to Microsoft
+
+    // Aldebaran's QiSDK libraries for working with Pepper robots.
+    implementation 'com.aldebaran:qisdk:1.7.5'
+    implementation 'com.aldebaran:qisdk-design:1.7.5'
+
+    // OkHttp library for making HTTP requests, such as sending audio to Microsoft's Speech API.
     implementation 'com.squareup.okhttp3:okhttp:4.9.3'
+
+    // Google Play Services libraries for authentication and other base services.
     implementation 'com.google.android.gms:play-services-base:18.5.0'
     implementation 'com.google.android.gms:play-services-auth:21.2.0'
+
+    // To serialize and deserialize json
+    implementation 'com.google.code.gson:gson:2.10.1'
 }

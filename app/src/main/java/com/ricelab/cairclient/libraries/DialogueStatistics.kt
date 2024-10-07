@@ -96,29 +96,6 @@ data class DialogueStatistics(
         }
     }
 
-    // Generic function to increase matrix size both for integers and double
-    fun <T> increaseMatrixSize(matrix: MutableList<MutableList<T>>, defaultValue: T): MutableList<MutableList<T>> {
-        val matrixSize = matrix.size
-
-        // Add the default value to each row (increase the column count)
-        matrix.forEach { it.add(defaultValue) }
-
-        // Add a new row full of the default value
-        matrix.add(MutableList(matrixSize + 1) { defaultValue })
-
-        return matrix
-    }
-
-    // Add new speaker statistics
-    fun addNewSpeakerStatistics(profileId: String) {
-        sameTurn = increaseMatrixSize(sameTurn, 0)
-        successiveTurn = increaseMatrixSize(successiveTurn, 0)
-        averageTopicDistance = increaseMatrixSize(averageTopicDistance, 0.0).map { it.map { it.toDouble() }.toMutableList() }.toMutableList()
-        mappingIndexSpeaker.add(profileId)
-        speakersTurns.add(0)
-        aPrioriProb.add(0.0)
-    }
-
     fun getTotalTurns(): Int = speakersTurns.sum()
 
     fun getRegisteredSpeakersTurns(): Int {

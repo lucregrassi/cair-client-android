@@ -5,7 +5,6 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.AudioRecord
-import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.media.audiofx.NoiseSuppressor
 import android.util.Log
@@ -29,8 +28,10 @@ class AudioRecorder(private val context: Context) {
     private val channelConfig = android.media.AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = android.media.AudioFormat.ENCODING_PCM_16BIT
     private val bufferSize = 4 * AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-    private var threshold = 1500 // Default threshold, adjusted after background noise measurement
-    private val silenceDurationMillis = 500L
+    private val microsoftApiKey = BuildConfig.MICROSOFT_SPEECH_API_KEY
+    private var speechDetectionThreshold = 2000 // Default threshold, adjusted after background noise measurement
+    private val thresholdAdjustmentValue = 1500 // Value added to the background noise level to determine the threshold
+    private val shortSilenceDurationMillis = 500L
     private val longSilenceDurationMillis = 2000L
     private val initialTimeoutMillis = 30000L
 
@@ -38,14 +39,8 @@ class AudioRecorder(private val context: Context) {
     private var isRecording = false
 
     init {
-        // Measure the background noise and adjust the threshold accordingly
-        threshold = measureBackgroundNoise() + 1500
-
-        // Update the threshold value in the UI if the context is an Activity
-        (context as? Activity)?.runOnUiThread {
-            val thresholdTextView: TextView? = context.findViewById(R.id.thresholdTextView)
-            thresholdTextView?.text = "Threshold: $threshold"
-        }
+        // Initial threshold calibration
+        recalibrateThreshold()
     }
 
     /**
@@ -78,11 +73,32 @@ class AudioRecorder(private val context: Context) {
     }
 
     /**
+     * Recalibrates the speech detection threshold based on the current background noise.
+     * @return The new threshold value.
+     */
+    fun recalibrateThreshold(): Int {
+        val backgroundNoiseLevel = measureBackgroundNoise()
+        speechDetectionThreshold = backgroundNoiseLevel + thresholdAdjustmentValue
+
+        // Update the threshold value in the UI if the context is an Activity
+        (context as? Activity)?.runOnUiThread {
+            val thresholdTextView: TextView? = context.findViewById(R.id.thresholdTextView)
+            thresholdTextView?.text = "Threshold: $speechDetectionThreshold"
+        }
+
+        return speechDetectionThreshold
+    }
+
+    /**
      * Starts listening and splitting the audio input, processing the audio in 0.5-second intervals.
      * @return The final transcribed text after processing the audio input.
      */
     suspend fun listenAndSplit(): String {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        if (ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
             Log.d(TAG, "Permission to record audio was denied.")
             return "Permission to record audio was denied."
         }
@@ -121,7 +137,7 @@ class AudioRecorder(private val context: Context) {
                     }
 
                     val maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
-                    if (maxAmplitude > threshold) {
+                    if (maxAmplitude > speechDetectionThreshold) {
                         lastSpeechTime = currentTime
                         byteArrayStream.write(shortsToBytes(audioBuffer))
                     }
@@ -135,7 +151,7 @@ class AudioRecorder(private val context: Context) {
 
                     // Split the audio every 0.5 seconds and send it for processing
                     if (lastSpeechTime != null) {
-                        if (currentTime - lastSpeechTime > silenceDurationMillis && byteArrayStream.size() > 0) {
+                        if (currentTime - lastSpeechTime > shortSilenceDurationMillis && byteArrayStream.size() > 0) {
                             val audioBytes = byteArrayStream.toByteArray()
                             val partialResult = sendToMicrosoftSpeechRecognition(audioBytes)
                             if (partialResult.isNotEmpty()) {
@@ -188,18 +204,12 @@ class AudioRecorder(private val context: Context) {
 
         writeWavFile(audioBytes, tempFile)
 
-        // Stop recording to avoid overlap while playing audio
-        stopRecording()
-
-        // Play the audio file to check its quality
-        playAudio(tempFile)
-
         val requestBody = tempFile.asRequestBody(mediaType)
         val request = Request.Builder()
             .url("https://westeurope.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=it-IT")
             .post(requestBody)
             .addHeader("Content-Type", "audio/wav")
-            .addHeader("Ocp-Apim-Subscription-Key", "8f95505a0a7f49edaa75edcf6440dcbf")
+            .addHeader("Ocp-Apim-Subscription-Key", microsoftApiKey)
             .build()
 
         Log.d(TAG, "Sending audio data to Microsoft Speech Recognition...")
@@ -242,34 +252,6 @@ class AudioRecorder(private val context: Context) {
             }
         } catch (e: IOException) {
             Log.e(TAG, "Error writing wav file: ${e.message}", e)
-        }
-    }
-
-    /**
-     * Plays the recorded audio file for quality verification.
-     * @param file The audio file to be played.
-     */
-    private fun playAudio(file: File) {
-        if (!file.exists() || file.length() == 0L) {
-            Log.e(TAG, "Audio file does not exist or is empty: ${file.absolutePath}")
-            return
-        }
-
-        val mediaPlayer = MediaPlayer()
-        try {
-            mediaPlayer.setDataSource(file.absolutePath)
-            mediaPlayer.prepare()
-            mediaPlayer.start()
-            Log.i(TAG, "Playing recorded audio...")
-
-            mediaPlayer.setOnCompletionListener {
-                it.release()
-                Log.i(TAG, "Audio playback completed.")
-            }
-
-        } catch (e: IOException) {
-            Log.e(TAG, "Could not play audio: ${e.message}", e)
-            mediaPlayer.release()
         }
     }
 
