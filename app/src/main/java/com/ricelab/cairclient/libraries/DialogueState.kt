@@ -2,7 +2,7 @@ package com.ricelab.cairclient.libraries
 
 data class DialogueState(
     var dialogueSentence: String? = null,
-    var prevDialogueSentence: String? = null,
+    var prevDialogueSentence: List<Pair<String, String>> = listOf(),
     var addressedSpeaker: String? = null,
     var topic: String? = null,
     var prevTopic: String? = null,
@@ -13,7 +13,7 @@ data class DialogueState(
     var flags: Any? = null,
     var addressedCommunity: String? = null,
     var dialogueNuances: Any? = null,
-    var conversationHistory: Any? = null,
+    var conversationHistory: MutableList<Map<String, String>> = mutableListOf(),
     var ongoingConversation: Any? = null
 ) {
     constructor(d: DialogueState?) : this() {
