@@ -158,7 +158,7 @@ class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
 
     private suspend fun sayMessage(text: String) {
         // Build the Say action off the main thread
-        val say = withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO) {
             SayBuilder.with(qiContext)
                 .withText(text)
                 .build().run()
