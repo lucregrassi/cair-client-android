@@ -5,8 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
-import android.view.Menu
-import android.view.MenuItem
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,8 +54,6 @@ class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
     private lateinit var speakersInfoFile: File
     private lateinit var dialogueStatisticsFile: File
     private lateinit var nuanceVectorsFile: File
-
-    private var nuanceVectors: MutableMap<String, Any> = mutableMapOf()
 
     private val gson = Gson() // Initialize Gson instance
     private lateinit var serverCommunicationManager: ServerCommunicationManager
@@ -165,12 +161,7 @@ class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
         val say = withContext(Dispatchers.IO) {
             SayBuilder.with(qiContext)
                 .withText(text)
-                .build()
-        }
-
-        // Run the Say action on the main thread
-        withContext(Dispatchers.Main) {
-            say.run()
+                .build().run()
         }
     }
 
