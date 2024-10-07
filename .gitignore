@@ -14,4 +14,4 @@
 .cxx
 local.properties
 apikeys.properties
-app/src/main/res/raw/server.crt
+app/src/main/res/raw/*.crt
