@@ -1,4 +1,3 @@
-// SetupActivity.kt
 package com.ricelab.cairclient
 
 import android.content.Intent
@@ -8,7 +7,7 @@ import android.util.Log
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 
-// Import necessary libraries for secure storage
+// Libraries for secure storage
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.io.IOException
@@ -16,6 +15,7 @@ import java.io.IOException
 class SetupActivity : AppCompatActivity() {
 
     private lateinit var serverIpSpinner: Spinner
+    private lateinit var serverPortEditText: EditText
     private lateinit var openAIApiKeyEditText: EditText
     private lateinit var proceedButton: Button
 
@@ -28,6 +28,7 @@ class SetupActivity : AppCompatActivity() {
 
         // Initialize UI elements
         serverIpSpinner = findViewById(R.id.serverIpSpinner)
+        serverPortEditText = findViewById(R.id.serverPortEditText)
         openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
         proceedButton = findViewById(R.id.proceedButton)
 
@@ -41,16 +42,57 @@ class SetupActivity : AppCompatActivity() {
         proceedButton.setOnClickListener {
             val serverIp = serverIpSpinner.selectedItem as String
             val openAIApiKey = openAIApiKeyEditText.text.toString().trim()
+            val serverPortText = serverPortEditText.text.toString().trim()
 
-            if (openAIApiKey.isEmpty()) {
-                Toast.makeText(this, "Please enter your OpenAI API Key.", Toast.LENGTH_SHORT).show()
+            if (openAIApiKey.isEmpty() || serverPortText.isEmpty()) {
+                Toast.makeText(this, "Please enter your OpenAI API Key and Server Port.", Toast.LENGTH_SHORT).show()
             } else {
-                // Save the values securely
-                saveValues(serverIp, openAIApiKey)
-                // Proceed to MainActivity
-                val intent = Intent(this, MainActivity::class.java)
-                startActivity(intent)
-                finish()
+                val serverPort = serverPortText.toIntOrNull()
+                if (serverPort == null || serverPort <= 0 || serverPort > 65535) {
+                    Toast.makeText(this, "Please enter a valid port number (1-65535).", Toast.LENGTH_SHORT).show()
+                } else {
+                    // Save the values securely
+                    saveValues(serverIp, openAIApiKey, serverPort)
+                    // Proceed to MainActivity
+                    val intent = Intent(this, MainActivity::class.java)
+                    startActivity(intent)
+                    finish()
+                }
+            }
+        }
+    }
+
+    // Function to load saved values
+    private fun loadSavedValues() {
+        // Initialize MasterKey for encryption
+        val masterKeyAlias = MasterKey.Builder(this)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        // Initialize EncryptedSharedPreferences
+        val sharedPreferences = EncryptedSharedPreferences.create(
+            this,
+            "secure_prefs",
+            masterKeyAlias,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+
+        // Load saved server IP, OpenAI API key, and server port if they exist
+        val savedServerIp = sharedPreferences.getString("server_ip", null)
+        val savedOpenAIApiKey = sharedPreferences.getString("openai_api_key", null)
+        val savedServerPort = sharedPreferences.getInt("server_port", -1)
+
+        if (!savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
+            // Values exist, proceed to MainActivity
+            val intent = Intent(this, MainActivity::class.java)
+            startActivity(intent)
+            finish()
+        } else {
+            // Set the saved values in the input fields (optional)
+            savedOpenAIApiKey?.let { openAIApiKeyEditText.setText(it) }
+            if (savedServerPort != -1) {
+                serverPortEditText.setText(savedServerPort.toString())
             }
         }
     }
@@ -86,7 +128,7 @@ class SetupActivity : AppCompatActivity() {
     }
 
     // Function to save values securely
-    private fun saveValues(serverIp: String, openAIApiKey: String) {
+    private fun saveValues(serverIp: String, openAIApiKey: String, serverPort: Int) {
         // Initialize MasterKey for encryption
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -101,42 +143,12 @@ class SetupActivity : AppCompatActivity() {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
 
-        // Save the server IP and OpenAI API key securely
+        // Save the server IP, OpenAI API key, and server port securely
         with(sharedPreferences.edit()) {
             putString("server_ip", serverIp)
             putString("openai_api_key", openAIApiKey)
+            putInt("server_port", serverPort)
             apply()
-        }
-    }
-
-    // Function to load saved values
-    private fun loadSavedValues() {
-        // Initialize MasterKey for encryption
-        val masterKeyAlias = MasterKey.Builder(this)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-
-        // Initialize EncryptedSharedPreferences
-        val sharedPreferences = EncryptedSharedPreferences.create(
-            this,
-            "secure_prefs",
-            masterKeyAlias,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-
-        // Load saved server IP and OpenAI API key if they exist
-        val savedServerIp = sharedPreferences.getString("server_ip", null)
-        val savedOpenAIApiKey = sharedPreferences.getString("openai_api_key", null)
-
-        if (!savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty()) {
-            // Values exist, proceed to MainActivity
-            val intent = Intent(this, MainActivity::class.java)
-            startActivity(intent)
-            finish()
-        } else {
-            // Set the saved values in the input fields (optional)
-            savedOpenAIApiKey?.let { openAIApiKeyEditText.setText(it) }
         }
     }
 }

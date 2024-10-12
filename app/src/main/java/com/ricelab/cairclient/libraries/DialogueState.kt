@@ -7,34 +7,15 @@ data class DialogueState(
     var topic: String? = null,
     var prevTopic: String? = null,
     var sentenceType: String? = null,
-    var pattern: String? = null,
+    var pattern: List<String>? = null,
     var bool: Boolean? = null,
-    var familiarities: Any? = null,
-    var flags: Any? = null,
+    var familiarities: Map<String, Any>? = null,
+    var flags: Map<String, Any>? = null,
     var addressedCommunity: String? = null,
-    var dialogueNuances: Any? = null,
+    var dialogueNuances: List<Any> = listOf(),
     var conversationHistory: MutableList<Map<String, String>> = mutableListOf(),
-    var ongoingConversation: Any? = null
+    var ongoingConversation: Boolean? = null
 ) {
-    constructor(d: DialogueState?) : this() {
-        if (d != null) {
-            dialogueSentence = d.dialogueSentence
-            prevDialogueSentence = d.prevDialogueSentence
-            addressedSpeaker = d.addressedSpeaker
-            topic = d.topic
-            prevTopic = d.prevTopic
-            sentenceType = d.sentenceType
-            pattern = d.pattern
-            bool = d.bool
-            familiarities = d.familiarities
-            flags = d.flags
-            addressedCommunity = d.addressedCommunity
-            dialogueNuances = d.dialogueNuances
-            conversationHistory = d.conversationHistory
-            ongoingConversation = d.ongoingConversation
-        }
-    }
-
     fun toDict(): Map<String, Any?> {
         return mapOf(
             "dialogueSentence" to dialogueSentence,

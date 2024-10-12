@@ -10,35 +10,7 @@ data class DialogueStatistics(
     var movingWindow: MutableList<Map<String, Any>> = mutableListOf(),
     var latestTurns: MutableList<String> = mutableListOf()
 ) {
-    companion object {
-        const val MOVING_WINDOW_TIME = 5 * 60
-        const val COMMUNITY_TURNS = 20
-    }
-
-    // Primary constructor for initializing from a profile ID
-    constructor(profileId: String) : this() {
-        mappingIndexSpeaker.add(profileId)
-        sameTurn.add(mutableListOf(0))
-        successiveTurn.add(mutableListOf(0))
-        averageTopicDistance.add(mutableListOf(0.0))
-        speakersTurns.add(0)
-        aPrioriProb.add(0.0)
-    }
-
-    // Copy constructor for initializing from an existing DialogueStatistics
-    constructor(d: DialogueStatistics) : this() {
-        mappingIndexSpeaker = d.mappingIndexSpeaker.toMutableList()
-        sameTurn = d.sameTurn.map { it.toMutableList() }.toMutableList()
-        successiveTurn = d.successiveTurn.map { it.toMutableList() }.toMutableList()
-        averageTopicDistance = d.averageTopicDistance.map { it.toMutableList() }.toMutableList()
-        speakersTurns = d.speakersTurns.toMutableList()
-        aPrioriProb = d.aPrioriProb.toMutableList()
-        movingWindow = d.movingWindow.toMutableList()
-        latestTurns = d.latestTurns.toMutableList()
-    }
-
-    // Converts object to a dictionary (Map in Kotlin)
-    fun toDict(): Map<String, Any> {
+    fun toDict(): Map<String, Any?> {
         return mapOf(
             "mappingIndexSpeaker" to mappingIndexSpeaker,
             "sameTurn" to sameTurn,
@@ -51,68 +23,41 @@ data class DialogueStatistics(
         )
     }
 
-    // Updates statistics based on the current turn
-    fun updateStatistics(dialogueTurn: DialogueTurn, prevTurnLastSpeaker: String) {
-        println("Updating dialogue statistics")
-        dialogueTurn.turnPieces.forEachIndexed { index, turnPiece ->
-            val profileId = turnPiece.profileId
-
-            if (profileId != "00000000-0000-0000-0000-000000000000") {
-                var time = getMovingWindowTotalTime()
-                while (movingWindow.isNotEmpty() &&
-                    time + turnPiece.speakingTime - (movingWindow[0]["speaking_time"] as Float) > MOVING_WINDOW_TIME) {
-                    movingWindow.removeAt(0)
-                    time = getMovingWindowTotalTime()
-                }
-                val turnPieceDict = turnPiece.toDict().toMutableMap().apply {
-                    remove("sentence")
-                }.filterValues { it != null }.mapValues { it.value!! }.toMutableMap()  // Filter out nulls and force non-null
-
-                movingWindow.add(turnPieceDict)
-            }
-
-            val speakerIndex = mappingIndexSpeaker.indexOf(profileId)
-            speakersTurns[speakerIndex]++
-
-            while (latestTurns.size > COMMUNITY_TURNS) {
-                latestTurns.removeAt(0)
-            }
-            latestTurns.add(profileId)
-
-            if (index == 0 && prevTurnLastSpeaker.isNotEmpty()) {
-                val row = mappingIndexSpeaker.indexOf(prevTurnLastSpeaker)
-                val column = mappingIndexSpeaker.indexOf(profileId)
-                successiveTurn[row][column]++
-            } else if (index > 0) {
-                val row = mappingIndexSpeaker.indexOf(dialogueTurn.turnPieces[index - 1].profileId)
-                val column = mappingIndexSpeaker.indexOf(profileId)
-                sameTurn[row][column]++
-            }
-        }
-
-        val totTurns = speakersTurns.sum()
-        for (i in speakersTurns.indices) {
-            aPrioriProb[i] = speakersTurns[i].toDouble() / totTurns.toDouble()
+    // Example methods; implement according to your server's logic
+    fun getSpeakingTimeRatio(): List<Double> {
+        val totalTime = movingWindow.sumOf { it["speaking_time"] as Double }
+        return mappingIndexSpeaker.drop(1).map { profileId ->
+            val speakerTime = movingWindow.filter { it["profile_id"] == profileId }
+                .sumOf { it["speaking_time"] as Double }
+            if (totalTime > 0) speakerTime / totalTime else 0.0
         }
     }
 
-    fun getTotalTurns(): Int = speakersTurns.sum()
-
-    fun getRegisteredSpeakersTurns(): Int {
-        return if (speakersTurns.size > 1) speakersTurns.drop(1).sum() else 0
+    fun getNumberOfWordsRatio(): List<Double> {
+        val totalWords = movingWindow.sumOf { it["number_of_words"] as Int }
+        return mappingIndexSpeaker.drop(1).map { profileId ->
+            val speakerWords = movingWindow.filter { it["profile_id"] == profileId }
+                .sumOf { it["number_of_words"] as Int }
+            if (totalWords > 0) speakerWords.toDouble() / totalWords else 0.0
+        }
     }
 
     fun getMovingWindowSpeakerTurns(profileId: String): Int {
         return movingWindow.count { it["profile_id"] == profileId }
     }
 
-    private fun getMovingWindowSpeakerWords(profileId: String): Int {
-        return movingWindow.filter { it["profile_id"] == profileId }.sumOf { it["number_of_words"] as Int }
+    fun getMovingWindowSpeakerWords(profileId: String): Int {
+        return movingWindow.filter { it["profile_id"] == profileId }
+            .sumOf { it["number_of_words"] as Int }
     }
 
     fun getMovingWindowSpeakerTime(profileId: String): Double {
         return movingWindow.filter { it["profile_id"] == profileId }
-            .sumOf { (it["speaking_time"] as Float).toDouble() }
+            .sumOf { it["speaking_time"] as Double }
+    }
+
+    fun getRegisteredSpeakersTurns(): Int {
+        return speakersTurns.sum()
     }
 
     fun getMovingWindowTotalTime(): Double {
@@ -121,32 +66,5 @@ data class DialogueStatistics(
 
     fun getMovingWindowTotalWords(): Int {
         return movingWindow.sumOf { it["number_of_words"] as Int }
-    }
-
-    fun getSpeakingTimeRatio(): List<Double> {
-        val totalTime = getMovingWindowTotalTime()
-        return mappingIndexSpeaker.drop(1).map { profileId ->
-            getMovingWindowSpeakerTime(profileId).toDouble() / totalTime
-        }
-    }
-
-    fun getNumberOfWordsRatio(): List<Double> {
-        val totalWords = getMovingWindowTotalWords()
-        return mappingIndexSpeaker.drop(1).map { profileId ->
-            getMovingWindowSpeakerWords(profileId).toDouble() / totalWords
-        }
-    }
-
-    fun getLatestTurnsSuccessiveTurnMatrix(): Array<IntArray> {
-        val matrixSize = mappingIndexSpeaker.size
-        val successiveTurnMatrix = Array(matrixSize) { IntArray(matrixSize) }
-        latestTurns.forEachIndexed { index, speakerId ->
-            if (index > 0) {
-                val prevIndex = mappingIndexSpeaker.indexOf(latestTurns[index - 1])
-                val currentIndex = mappingIndexSpeaker.indexOf(speakerId)
-                successiveTurnMatrix[prevIndex][currentIndex]++
-            }
-        }
-        return successiveTurnMatrix
     }
 }

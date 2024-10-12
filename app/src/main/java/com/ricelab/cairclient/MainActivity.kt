@@ -8,6 +8,7 @@ import android.util.Log
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.aldebaran.qi.sdk.QiContext
@@ -24,8 +25,9 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 
 private const val TAG = "MainActivity"
+private const val SILENCE_THRESHOLD: Long = 300
 
-class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
+class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private lateinit var qiContext: QiContext
 
@@ -36,7 +38,7 @@ class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
     private lateinit var recalibrateButton: Button
 
     // Network-related variables
-    private val serverPort = 12345
+    private var serverPort: Int = 12345 // Default value
 
     private var previousSentence: String = ""
     private var isAlive = true
@@ -46,7 +48,6 @@ class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
     private var language = "it-IT"
 
     // Time settings
-    private val SILENCE_THRESHOLD: Long = 300
     private var lastActiveSpeakerTime: Long = 0
 
     // Declare the variables without initializing them
@@ -114,11 +115,12 @@ class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
 
-        // Retrieve the stored server IP and OpenAI API key
+        // Retrieve the stored server IP, OpenAI API key, and server port
         serverIp = sharedPreferences.getString("server_ip", null) ?: ""
         openAIApiKey = sharedPreferences.getString("openai_api_key", null) ?: ""
+        serverPort = sharedPreferences.getInt("server_port", -1)
 
-        if (serverIp.isEmpty() || openAIApiKey.isEmpty()) {
+        if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
             // Redirect back to SetupActivity if values are missing
             val intent = Intent(this, SetupActivity::class.java)
             startActivity(intent)
@@ -143,34 +145,6 @@ class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private suspend fun startListening(): String {
-        Log.i(TAG, "Begin startListening.")
-        val result = withContext(Dispatchers.IO) {
-            audioRecorder.listenAndSplit() // Start listening and get the result
-        }
-        withContext(Dispatchers.Main) {
-            textView.text = "Result: $result" // Update the UI with the result
-        }
-        return result.ifBlank {
-            startListening() // Restart listening if there's no result to say
-        }
-    }
-
-    private suspend fun sayMessage(text: String) {
-        // Build the Say action off the main thread
-        withContext(Dispatchers.IO) {
-            SayBuilder.with(qiContext)
-                .withText(text)
-                .build().run()
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        QiSDK.unregister(this, this)
-        audioRecorder.stopRecording() // Stop any ongoing recording
-    }
-
     override fun onRobotFocusGained(qiContext: QiContext) {
         this.qiContext = qiContext
 
@@ -181,14 +155,6 @@ class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
         lifecycleScope.launch {
             startDialogue()
         }
-    }
-
-    override fun onRobotFocusLost() {
-        Log.i(TAG, "Robot focus lost, stopping or pausing operations if necessary.")
-    }
-
-    override fun onRobotFocusRefused(reason: String) {
-        Log.e(TAG, "Robot focus refused: $reason")
     }
 
     private suspend fun startDialogue() {
@@ -222,16 +188,28 @@ class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
     private suspend fun initializeUserSession() {
         val welcomeMessage: String
 
-        if (!speakersInfoFile.exists()) {
+        if (!dialogueStateFile.exists()) {
             // First-time user
             Log.i(TAG, "First user!")
 
             // Acquire initial state using ServerCommunicationManager
-            val firstRequestResponse = withContext(Dispatchers.IO) {
-                serverCommunicationManager.acquireInitialState(language)
+            val firstRequestResponse = try {
+                withContext(Dispatchers.IO) {
+                    serverCommunicationManager.firstServerRequest(language)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to acquire initial state", e)
+                sayMessage("Mi dispiace, non riesco a connettermi al server.")
+                return
             }
+
             // Extract the welcome message and dialogue state from the server response
             welcomeMessage = firstRequestResponse.firstSentence
+
+            // Save the received data to files
+            withContext(Dispatchers.IO) {
+                fileStorageManager.writeToFile(firstRequestResponse.dialogueState, "dialogue_state.json")
+            }
         } else {
             // Returning user
             Log.i(TAG, "Returning user")
@@ -244,9 +222,45 @@ class MainActivity : RobotActivity(), RobotLifecycleCallbacks {
 
         // Say the welcome message using Pepper's text-to-speech
         sayMessage(welcomeMessage)
-
         // Store the welcome message in previousSentence
         previousSentence = welcomeMessage
+    }
+
+    private suspend fun startListening(): String {
+        Log.i(TAG, "Begin startListening.")
+        val result = withContext(Dispatchers.IO) {
+            audioRecorder.listenAndSplit() // Start listening and get the result
+        }
+        withContext(Dispatchers.Main) {
+            textView.text = "Result: $result" // Update the UI with the result
+        }
+        return result.ifBlank {
+            startListening() // Restart listening if there's no result to say
+        }
+    }
+
+    private suspend fun sayMessage(text: String) {
+        // Build the Say action off the main thread
+        withContext(Dispatchers.IO) {
+            SayBuilder.with(qiContext)
+                .withText(text)
+                .build().run()
+        }
+    }
+
+
+    override fun onDestroy() {
+        super.onDestroy()
+        QiSDK.unregister(this, this)
+        audioRecorder.stopRecording() // Stop any ongoing recording
+    }
+
+    override fun onRobotFocusLost() {
+        Log.i(TAG, "Robot focus lost, stopping or pausing operations if necessary.")
+    }
+
+    override fun onRobotFocusRefused(reason: String) {
+        Log.e(TAG, "Robot focus refused: $reason")
     }
 
     private suspend fun handleUserInput(input: String) {

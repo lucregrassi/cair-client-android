@@ -1,24 +1,24 @@
 // FileStorageManager.kt
 package com.ricelab.cairclient.libraries
 
-import android.content.Context
 import com.google.gson.Gson
 import java.io.File
 
 class FileStorageManager(private val gson: Gson, private val filesDir: File) {
 
-    fun <T> loadData(fileName: String, type: Class<T>): T? {
-        val file = File(filesDir, fileName)
-        if (file.exists()) {
-            val json = file.readText(Charsets.UTF_8)
-            return gson.fromJson(json, type)
-        }
-        return null
+    fun <T> writeToFile(data: T, filename: String) {
+        val file = File(filesDir, filename)
+        val jsonData = gson.toJson(data)
+        file.writeText(jsonData)
     }
 
-    fun saveData(fileName: String, data: Any) {
-        val file = File(filesDir, fileName)
-        val json = gson.toJson(data)
-        file.writeText(json, Charsets.UTF_8)
+    fun <T> readFromFile(filename: String, classOfT: Class<T>): T? {
+        val file = File(filesDir, filename)
+        return if (file.exists()) {
+            val jsonData = file.readText()
+            gson.fromJson(jsonData, classOfT)
+        } else {
+            null
+        }
     }
 }

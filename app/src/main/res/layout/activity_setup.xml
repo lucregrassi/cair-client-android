@@ -39,6 +39,24 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp" />
 
+        <!-- Server Port Number Input -->
+        <TextView
+            android:id="@+id/serverPortLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Server Port Number"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <EditText
+            android:id="@+id/serverPortEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Enter the server port number"
+            android:inputType="number"
+            android:text="12345"
+        android:layout_marginBottom="16dp" />
+
         <!-- OpenAI API Key Input -->
         <TextView
             android:id="@+id/openAIApiKeyLabel"
@@ -62,6 +80,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Proceed"
+            android:backgroundTint="@color/purple_500"
             android:textColor="@color/white" />
     </LinearLayout>
 </ScrollView>
