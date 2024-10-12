@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.res.AssetManager
 import android.os.Bundle
 import android.util.Log
+import android.view.MenuItem
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 
@@ -12,7 +13,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.io.IOException
 
-class SetupActivity : AppCompatActivity() {
+class ConnectionSettingsActivity : AppCompatActivity() {
 
     private lateinit var serverIpSpinner: Spinner
     private lateinit var serverPortEditText: EditText
@@ -24,7 +25,9 @@ class SetupActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Set the layout
-        setContentView(R.layout.activity_setup)
+        setContentView(R.layout.activity_settings)
+        // Enable the "Up" button in the action bar
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         // Initialize UI elements
         serverIpSpinner = findViewById(R.id.serverIpSpinner)
@@ -32,8 +35,11 @@ class SetupActivity : AppCompatActivity() {
         openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
         proceedButton = findViewById(R.id.proceedButton)
 
-        // Load saved values if they exist
-        loadSavedValues()
+        // Check if SetupActivity was opened from the menu or on first launch
+        val fromMenu = intent.getBooleanExtra("fromMenu", false)
+
+        // Load saved values
+        loadSavedValues(fromMenu)
 
         // Load server IPs from certificates
         loadServerIpsFromCertificates()
@@ -54,16 +60,33 @@ class SetupActivity : AppCompatActivity() {
                     // Save the values securely
                     saveValues(serverIp, openAIApiKey, serverPort)
                     // Proceed to MainActivity
-                    val intent = Intent(this, MainActivity::class.java)
-                    startActivity(intent)
+                    //val intent = Intent(this, MainActivity::class.java)
+                    //intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    if (!fromMenu) {
+                        Log.i("MainActivity", "FromMenu False, spawning new MainActivity")
+                        val intent = Intent(this, MainActivity::class.java)
+                        startActivity(intent)
+                    }
                     finish()
                 }
             }
         }
     }
 
-    // Function to load saved values
-    private fun loadSavedValues() {
+    // Handle the "Up" button press
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> {
+                // Navigate back to MainActivity when the back button is pressed
+                finish()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    // Function to load saved values based on the 'fromMenu' flag
+    private fun loadSavedValues(fromMenu: Boolean) {
         // Initialize MasterKey for encryption
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -83,17 +106,29 @@ class SetupActivity : AppCompatActivity() {
         val savedOpenAIApiKey = sharedPreferences.getString("openai_api_key", null)
         val savedServerPort = sharedPreferences.getInt("server_port", -1)
 
-        if (!savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
+        // If opened for the first time (not from the menu) and values exist, proceed to MainActivity
+        if (!fromMenu && !savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
             // Values exist, proceed to MainActivity
             val intent = Intent(this, MainActivity::class.java)
+            Log.i("MainActivity", "Spawing MainActivity ONLY THE FIRST TIME")
             startActivity(intent)
             finish()
         } else {
-            // Set the saved values in the input fields (optional)
+            // If the activity is opened from the menu, or no saved values exist,
+            // populate the fields with saved values or leave them empty for input
+            savedServerIp?.let { setSelectedServerIp(it) }
             savedOpenAIApiKey?.let { openAIApiKeyEditText.setText(it) }
             if (savedServerPort != -1) {
                 serverPortEditText.setText(savedServerPort.toString())
             }
+        }
+    }
+
+    // Set the selected server IP in the spinner
+    private fun setSelectedServerIp(ip: String) {
+        val index = serverIpList.indexOf(ip)
+        if (index != -1) {
+            serverIpSpinner.setSelection(index)
         }
     }
 

@@ -15,7 +15,8 @@
 
         <!-- ServerIpActivity to be launched when the app starts -->
         <activity
-            android:name=".SetupActivity"
+            android:name=".ConnectionSettingsActivity"
+            android:windowSoftInputMode="stateHidden"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

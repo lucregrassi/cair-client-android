@@ -16,6 +16,23 @@ data class DialogueState(
     var conversationHistory: MutableList<Map<String, String>> = mutableListOf(),
     var ongoingConversation: Boolean? = null
 ) {
+    constructor(dialogueState: Map<String, Any?>) : this(
+        dialogueSentence = dialogueState["dialogue_sentence"] as? String,
+        prevDialogueSentence = (dialogueState["prev_dialogue_sentence"] as? List<*>)?.filterIsInstance<Pair<String, String>>() ?: listOf(),
+        addressedSpeaker = dialogueState["addressed_speaker"] as? String,
+        topic = dialogueState["topic"] as? String,
+        prevTopic = dialogueState["prev_topic"] as? String,
+        sentenceType = dialogueState["sentence_type"] as? String,
+        pattern = (dialogueState["pattern"] as? List<*>)?.filterIsInstance<String>() ?: listOf(),
+        bool = dialogueState["bool"] as? Boolean,
+        familiarities = (dialogueState["familiarities"] as? Map<*, *>)?.filterKeys { it is String }?.filterValues { it is Any }?.mapKeys { it.key as String }?.mapValues { it.value as Any } ?: mapOf(),
+        flags = (dialogueState["flags"] as? Map<*, *>)?.filterKeys { it is String }?.filterValues { it is Any }?.mapKeys { it.key as String }?.mapValues { it.value as Any } ?: mapOf(),
+        addressedCommunity = dialogueState["addressed_community"] as? String,
+        dialogueNuances = (dialogueState["dialogue_nuances"] as? List<*>)?.filterIsInstance<Any>() ?: listOf(),
+        conversationHistory = (dialogueState["conversation_history"] as? List<*>)?.filterIsInstance<Map<String, String>>()?.toMutableList() ?: mutableListOf(),
+        ongoingConversation = dialogueState["ongoing_conversation"] as? Boolean
+    )
+
     fun toDict(): Map<String, Any?> {
         return mapOf(
             "dialogueSentence" to dialogueSentence,

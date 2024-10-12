@@ -17,7 +17,7 @@
             android:id="@+id/setupTitleTextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Setup"
+            android:text="Connection settings"
             android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="@color/black"
@@ -74,13 +74,15 @@
             android:inputType="textPassword"
             android:layout_marginBottom="24dp" />
 
-        <!-- Proceed Button -->
         <Button
             android:id="@+id/proceedButton"
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Proceed"
             android:backgroundTint="@color/purple_500"
-            android:textColor="@color/white" />
+            android:textColor="@color/white"
+            android:layout_gravity="center_horizontal"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp" />
     </LinearLayout>
 </ScrollView>

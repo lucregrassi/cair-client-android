@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,9 +17,6 @@ import com.aldebaran.qi.sdk.QiContext
 import com.aldebaran.qi.sdk.QiSDK
 import com.aldebaran.qi.sdk.RobotLifecycleCallbacks
 import com.aldebaran.qi.sdk.builder.SayBuilder
-import com.aldebaran.qi.sdk.design.activity.RobotActivity
-import java.io.File
-import com.google.gson.Gson
 import com.ricelab.cairclient.libraries.*
 import kotlinx.coroutines.*
 
@@ -29,7 +28,8 @@ private const val SILENCE_THRESHOLD: Long = 300
 
 class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
-    private lateinit var qiContext: QiContext
+    private var qiContext: QiContext? = null
+    private var coroutineJob: Job? = null
 
     // Needed for the microphone
     private lateinit var audioRecorder: AudioRecorder
@@ -50,13 +50,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     // Time settings
     private var lastActiveSpeakerTime: Long = 0
 
-    // Declare the variables without initializing them
-    private lateinit var dialogueStateFile: File
-    private lateinit var speakersInfoFile: File
-    private lateinit var dialogueStatisticsFile: File
-    private lateinit var nuanceVectorsFile: File
+    private lateinit var dialogueState : DialogueState
 
-    private val gson = Gson() // Initialize Gson instance
+    // Declare the variables without initializing them
     private lateinit var serverCommunicationManager: ServerCommunicationManager
     private lateinit var serverIp: String  // Declare serverIp as a class property
     private lateinit var openAIApiKey: String
@@ -82,12 +78,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         retrieveStoredValues()
 
         // Initialize file paths and other components that don't need qiContext
-        dialogueStateFile = File(filesDir, "dialogue_state.json")
-        speakersInfoFile = File(filesDir, "speakers_info.json")
-        dialogueStatisticsFile = File(filesDir, "dialogue_statistics.json")
-        nuanceVectorsFile = File(filesDir, "nuance_vectors.json")
 
-        fileStorageManager = FileStorageManager(gson, filesDir)
+
+        fileStorageManager = FileStorageManager(this, filesDir)
 
         textView = findViewById(R.id.textView)
         thresholdTextView = findViewById(R.id.thresholdTextView)
@@ -98,6 +91,26 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             recalibrateThreshold()
         }
         checkAndRequestAudioPermission()
+    }
+
+    // Inflate the menu
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
+    // Handle menu item clicks
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_setup -> {
+                // Launch SetupActivity when the "Setup" menu item is clicked
+                val intent = Intent(this, ConnectionSettingsActivity::class.java)
+                intent.putExtra("fromMenu", true)  // Important for not redirecting back to MainActivity
+                startActivity(intent)
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     private fun retrieveStoredValues() {
@@ -122,7 +135,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
             // Redirect back to SetupActivity if values are missing
-            val intent = Intent(this, SetupActivity::class.java)
+            val intent = Intent(this, ConnectionSettingsActivity::class.java)
             startActivity(intent)
             finish()
         }
@@ -148,26 +161,69 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onRobotFocusGained(qiContext: QiContext) {
         this.qiContext = qiContext
 
+        Log.i("MainActivity", "Entering onRobotFocusGained and creating ServerCommunicationManager")
+
         // Initialize ServerCommunicationManager now that qiContext is available
         serverCommunicationManager = ServerCommunicationManager(this, serverIp, serverPort, openAIApiKey)
 
         // Start dialogue with Pepper when QiContext is ready
-        lifecycleScope.launch {
+        coroutineJob = lifecycleScope.launch {
             startDialogue()
         }
     }
 
+    private suspend fun initializeUserSession() {
+        val firstSentence: String
+
+        if (!fileStorageManager.filesExist()) {
+            // First-time user
+            Log.i(TAG, "First user!")
+
+            // Acquire initial state using ServerCommunicationManager
+            val firstRequestResponse = try {
+                withContext(Dispatchers.IO) {
+                    serverCommunicationManager.firstServerRequest(language)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to acquire initial state", e)
+                sayMessage("Mi dispiace, non riesco a connettermi al server.")
+                return
+            }
+
+            // Extract the welcome message and dialogue state from the server response
+            firstSentence = firstRequestResponse.firstSentence
+
+            dialogueState = DialogueState(firstRequestResponse.dialogueState)
+            // Save the received data to files
+            withContext(Dispatchers.IO) {
+                fileStorageManager.writeToFile(dialogueState)
+            }
+        } else {
+            // Returning user
+            Log.i(TAG, "Returning user")
+            firstSentence = if (language == "it-IT") {
+                "È bello rivedervi! Di cosa vorreste parlare?"
+            } else {
+                "Welcome back! I missed you. What would you like to talk about?"
+            }
+        }
+
+        // Say the welcome message using Pepper's text-to-speech
+        sayMessage(firstSentence)
+        // Store the welcome message in previousSentence
+        previousSentence = firstSentence
+    }
+
     private suspend fun startDialogue() {
         initializeUserSession()
-        val conversationLoader = ConversationStateLoader(
-            dialogueStateFile,
-            speakersInfoFile,
-            dialogueStatisticsFile,
+
+        val conversationLoader = ConversationState(
+            fileStorageManager,
             previousSentence
         )
-        withContext(Dispatchers.IO) {
-            conversationLoader.loadConversationState()
-        }
+        //withContext(Dispatchers.IO) {
+        //    conversationLoader.loadConversationState()
+        //}
         lastActiveSpeakerTime = System.currentTimeMillis()
 
         while (isAlive) {
@@ -185,46 +241,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private suspend fun initializeUserSession() {
-        val welcomeMessage: String
 
-        if (!dialogueStateFile.exists()) {
-            // First-time user
-            Log.i(TAG, "First user!")
-
-            // Acquire initial state using ServerCommunicationManager
-            val firstRequestResponse = try {
-                withContext(Dispatchers.IO) {
-                    serverCommunicationManager.firstServerRequest(language)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to acquire initial state", e)
-                sayMessage("Mi dispiace, non riesco a connettermi al server.")
-                return
-            }
-
-            // Extract the welcome message and dialogue state from the server response
-            welcomeMessage = firstRequestResponse.firstSentence
-
-            // Save the received data to files
-            withContext(Dispatchers.IO) {
-                fileStorageManager.writeToFile(firstRequestResponse.dialogueState, "dialogue_state.json")
-            }
-        } else {
-            // Returning user
-            Log.i(TAG, "Returning user")
-            welcomeMessage = if (language == "it-IT") {
-                "È bello rivedervi! Di cosa vorreste parlare?"
-            } else {
-                "Welcome back! I missed you. What would you like to talk about?"
-            }
-        }
-
-        // Say the welcome message using Pepper's text-to-speech
-        sayMessage(welcomeMessage)
-        // Store the welcome message in previousSentence
-        previousSentence = welcomeMessage
-    }
 
     private suspend fun startListening(): String {
         Log.i(TAG, "Begin startListening.")
@@ -242,12 +259,28 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private suspend fun sayMessage(text: String) {
         // Build the Say action off the main thread
         withContext(Dispatchers.IO) {
-            SayBuilder.with(qiContext)
-                .withText(text)
-                .build().run()
+            if (qiContext != null) {
+                try {
+                    Log.i("MainActivity", "Try sayMessage")
+                    val say = SayBuilder.with(qiContext)
+                        .withText(text)
+                        .build()
+                    say.run()
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Errore durante Say: ${e.message}")
+                }
+            } else {
+                Log.e("MainActivity", "Il focus non è disponibile, Say non può essere eseguito.")
+            }
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        Log.d("MainActivity", "OnPause, cancelling coroutine")
+        // Cancel the coroutine when the activity is paused
+        coroutineJob?.cancel()
+    }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -256,6 +289,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     override fun onRobotFocusLost() {
+        this.qiContext = null
         Log.i(TAG, "Robot focus lost, stopping or pausing operations if necessary.")
     }
 

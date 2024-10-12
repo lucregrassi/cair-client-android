@@ -15,7 +15,7 @@ import java.security.KeyStore
 import java.security.cert.CertificateFactory
 import javax.net.ssl.*
 
-data class ServerResponse(
+data class FirstServerResponse(
     val firstSentence: String,
     val dialogueState: Map<String, Any>
 )
@@ -41,6 +41,7 @@ class ServerCommunicationManager(
             val ipFormatted = serverIp.replace(".", "_")
             val certificateFileName = "certificates/server_$ipFormatted.crt"
 
+            Log.i("MainActivity", "Certificate name: $certificateFileName")
             // Load the certificate from assets
             val certificateFactory = CertificateFactory.getInstance("X.509")
             val caInput: InputStream = context.assets.open(certificateFileName)
@@ -83,8 +84,10 @@ class ServerCommunicationManager(
         }
     }
 
-    suspend fun firstServerRequest(language: String): ServerResponse {
+    suspend fun firstServerRequest(language: String): FirstServerResponse {
         val url = "https://$serverIp:$serverPort/CAIR_hub/start"
+
+        Log.d("ServerCommunication","Url for server connect: $url")
 
         // Preparare il payload della richiesta come stringa JSON
         val jsonPayloadString = gson.toJson(
@@ -109,7 +112,7 @@ class ServerCommunicationManager(
                     // Leggere il corpo della risposta come stringa
                     val responseBody = response.body?.string() ?: throw Exception("Empty response")
                     // Analizzare la risposta JSON
-                    parseServerResponse(responseBody)
+                    parseFirstServerResponse(responseBody)
                 } else {
                     throw Exception("Server returned an error: ${response.code}")
                 }
@@ -120,7 +123,7 @@ class ServerCommunicationManager(
         }
     }
 
-    private fun parseServerResponse(responseBody: String): ServerResponse {
+    private fun parseFirstServerResponse(responseBody: String): FirstServerResponse {
         return try {
             // Analizzare la risposta JSON in una mappa
             val responseData = gson.fromJson(responseBody, Map::class.java) as Map<*, *>
@@ -130,7 +133,7 @@ class ServerCommunicationManager(
                 ?.mapValues { it.value ?: throw Exception("Null value found in dialogue_state") }
                 ?: throw Exception("Invalid dialogue_state format")
 
-            ServerResponse(firstSentence = firstSentence, dialogueState = dialogueState)
+            FirstServerResponse(firstSentence = firstSentence, dialogueState = dialogueState)
         } catch (e: Exception) {
             Log.e("ServerCommunication", "Error parsing JSON response: ${e.message}")
             throw Exception("Error parsing JSON response: ${e.message}", e)
