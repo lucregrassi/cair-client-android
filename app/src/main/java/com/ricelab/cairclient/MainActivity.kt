@@ -172,6 +172,33 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
+    private suspend fun startDialogue() {
+        initializeUserSession()
+
+        val conversationState = ConversationState(
+            fileStorageManager,
+            previousSentence
+        )
+        withContext(Dispatchers.IO) {
+            conversationState.loadConversationState()
+        }
+        lastActiveSpeakerTime = System.currentTimeMillis()
+
+        while (isAlive) {
+            // Check if the conversation is ongoing
+            if ((System.currentTimeMillis() - lastActiveSpeakerTime) > SILENCE_THRESHOLD * 1000) {
+                log("Silence threshold exceeded - setting ongoing conversation to false.")
+                sayMessage("It seems the conversation has ended due to silence.")
+                break
+            }
+
+            // Listening to the user input
+            val userInput = startListening()
+            lastActiveSpeakerTime = System.currentTimeMillis()
+            handleUserInput(userInput)
+        }
+    }
+
     private suspend fun initializeUserSession() {
         val firstSentence: String
 
@@ -194,9 +221,38 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             firstSentence = firstRequestResponse.firstSentence
 
             dialogueState = DialogueState(firstRequestResponse.dialogueState)
+
+// Initialize variables
+            val profileId = "00000000-0000-0000-0000-000000000000"
+
+// Determine the user name based on the language
+            val userName = if (language == "it-IT") "Utente" else "User"
+
+// Create the SpeakerInfo object
+            val speakerInfo = SpeakerInfo(
+                profileId = profileId,
+                name = userName,
+                gender = "nb",  // 'nb' stands for non-binary, based on your original code
+                age = "nd"      // 'nd' stands for 'not determined' or undefined
+            )
+
+// Initialize DialogueStatistics with the profileId
+            val dialogueStatistics = DialogueStatistics(
+                mappingIndexSpeaker = mutableListOf(profileId),
+                sameTurn = mutableListOf(mutableListOf(0)),
+                successiveTurn = mutableListOf(mutableListOf(0)),
+                averageTopicDistance = mutableListOf(mutableListOf(0.0)),
+                speakersTurns = mutableListOf(0),
+                aPrioriProb = mutableListOf(0.0),
+                movingWindow = mutableListOf(),
+                latestTurns = mutableListOf()
+            )
+
             // Save the received data to files
             withContext(Dispatchers.IO) {
                 fileStorageManager.writeToFile(dialogueState)
+                fileStorageManager.writeToFile(speakerInfo)
+                fileStorageManager.writeToFile(dialogueStatistics)
             }
         } else {
             // Returning user
@@ -213,35 +269,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         // Store the welcome message in previousSentence
         previousSentence = firstSentence
     }
-
-    private suspend fun startDialogue() {
-        initializeUserSession()
-
-        val conversationLoader = ConversationState(
-            fileStorageManager,
-            previousSentence
-        )
-        //withContext(Dispatchers.IO) {
-        //    conversationLoader.loadConversationState()
-        //}
-        lastActiveSpeakerTime = System.currentTimeMillis()
-
-        while (isAlive) {
-            // Check if the conversation is ongoing
-            if ((System.currentTimeMillis() - lastActiveSpeakerTime) > SILENCE_THRESHOLD * 1000) {
-                log("Silence threshold exceeded - setting ongoing conversation to false.")
-                sayMessage("It seems the conversation has ended due to silence.")
-                break
-            }
-
-            // Listening to the user input
-            val userInput = startListening()
-            lastActiveSpeakerTime = System.currentTimeMillis()
-            handleUserInput(userInput)
-        }
-    }
-
-
 
     private suspend fun startListening(): String {
         Log.i(TAG, "Begin startListening.")

@@ -35,4 +35,19 @@ data class DialogueStatistics(
             "latestTurns" to latestTurns
         )
     }
+
+    override fun toString(): String {
+        return """
+            DialogueStatistics(
+                mappingIndexSpeaker=${mappingIndexSpeaker.joinToString()},
+                sameTurn=${sameTurn.joinToString { it.joinToString(prefix = "[", postfix = "]") }},
+                successiveTurn=${successiveTurn.joinToString { it.joinToString(prefix = "[", postfix = "]") }},
+                averageTopicDistance=${averageTopicDistance.joinToString { it.joinToString(prefix = "[", postfix = "]") }},
+                speakersTurns=${speakersTurns.joinToString()},
+                aPrioriProb=${aPrioriProb.joinToString()},
+                movingWindow=${movingWindow.joinToString()},
+                latestTurns=${latestTurns.joinToString()}
+            )
+        """.trimIndent()
+    }
 }

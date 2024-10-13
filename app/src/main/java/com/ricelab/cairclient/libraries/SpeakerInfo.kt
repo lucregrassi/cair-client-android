@@ -25,4 +25,15 @@ data class SpeakerInfo(
             "age" to age
         )
     }
+
+    override fun toString(): String {
+        return """
+            SpeakerInfo(
+                profileId=$profileId,
+                name=$name,
+                gender=$gender,
+                age=$age
+            )
+        """.trimIndent()
+    }
 }
