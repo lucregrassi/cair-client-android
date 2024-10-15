@@ -1,5 +1,8 @@
 package com.ricelab.cairclient.libraries
 
+import android.util.Log
+import org.json.JSONObject
+
 data class DialogueState(
     var dialogueSentence: String? = null,
     var prevDialogueSentence: List<Pair<String, String>> = listOf(),
@@ -38,9 +41,27 @@ data class DialogueState(
         } ?: DialogueNuances(), // Default to empty Nuances if missing
         conversationHistory = (dialogueState["conversation_history"] as? List<*>)?.filterIsInstance<Map<String, String>>()?.toMutableList() ?: mutableListOf(),
         ongoingConversation = dialogueState["ongoing_conversation"] as? Boolean
-    )
+    ) {
+        topic = when (val jsonTopic = dialogueState["topic"]) {
+            is String -> jsonTopic
+            is Number -> jsonTopic.toString() // Convert number to string
+            else -> null // Handle other cases or set to null if the type is unexpected
+        }
+        prevTopic = when (val jsonTopic = dialogueState["prev_topic"]) {
+            is String -> jsonTopic
+            is Number -> jsonTopic.toString() // Convert number to string
+            else -> null // Handle other cases or set to null if the type is unexpected
+        }
+        addressedCommunity = when (val jsonTopic = dialogueState["addressed_community"]) {
+            is String -> jsonTopic
+            is Number -> jsonTopic.toString() // Convert number to string
+            else -> null // Handle other cases or set to null if the type is unexpected
+        }
 
-    fun toDict(): Map<String, Any?> {
+        Log.i("initializeUserSession", "Constructor: topic = $topic, jsonTopic = ${dialogueState["topic"]}")
+    }
+
+    fun toMap(): Map<String, Any?> {
         return mapOf(
             "dialogueSentence" to dialogueSentence,
             "prevDialogueSentence" to prevDialogueSentence,
@@ -61,6 +82,45 @@ data class DialogueState(
             "conversationHistory" to conversationHistory,
             "ongoingConversation" to ongoingConversation
         )
+    }
+
+    // Function to update the dialogue state from a JSON object
+    fun updateFromJson(json: JSONObject): DialogueState {
+        this.dialogueSentence = json.optString("dialogueSentence", this.dialogueSentence)
+        this.addressedSpeaker = json.optString("addressedSpeaker", this.addressedSpeaker)
+        this.topic = json.optString("topic", this.topic)
+        this.prevTopic = json.optString("prevTopic", this.prevTopic)
+        this.sentenceType = json.optString("sentenceType", this.sentenceType)
+
+        this.pattern = json.optJSONArray("pattern")?.let { jsonArray ->
+            (0 until jsonArray.length()).map { jsonArray.getString(it) }
+        }
+
+        this.bool = json.optBoolean("bool", this.bool ?: false)
+
+        this.familiarities = json.optJSONObject("familiarities")?.let { familiaritiesJson ->
+            familiaritiesJson.keys().asSequence().associateWith { familiaritiesJson[it] as Any }
+        }
+
+        this.flags = json.optJSONObject("flags")?.let { flagsJson ->
+            flagsJson.keys().asSequence().associateWith { flagsJson[it] as Any }
+        }
+
+        this.addressedCommunity = json.optString("addressedCommunity", this.addressedCommunity)
+
+        // Assuming DialogueNuances has an updateFromJson method
+        this.dialogueNuances.updateFromJson(json.optJSONObject("dialogueNuances") ?: JSONObject())
+
+        this.conversationHistory = json.optJSONArray("conversationHistory")?.let { historyJson ->
+            (0 until historyJson.length()).map { idx ->
+                val historyItem = historyJson.getJSONObject(idx)
+                historyItem.keys().asSequence().associateWith { historyItem.getString(it) }.toMutableMap()
+            }.toMutableList()
+        } ?: this.conversationHistory
+
+        this.ongoingConversation = json.optBoolean("ongoingConversation", this.ongoingConversation ?: false)
+
+        return this
     }
 
     override fun toString(): String {

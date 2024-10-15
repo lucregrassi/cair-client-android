@@ -22,6 +22,8 @@ import kotlinx.coroutines.*
 
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import org.w3c.dom.Element
+import javax.xml.parsers.DocumentBuilderFactory
 
 private const val TAG = "MainActivity"
 private const val SILENCE_THRESHOLD: Long = 300
@@ -50,14 +52,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     // Time settings
     private var lastActiveSpeakerTime: Long = 0
 
-    private lateinit var dialogueState : DialogueState
-
     // Declare the variables without initializing them
     private lateinit var serverCommunicationManager: ServerCommunicationManager
     private lateinit var serverIp: String  // Declare serverIp as a class property
     private lateinit var openAIApiKey: String
 
     private lateinit var fileStorageManager: FileStorageManager
+    private lateinit var conversationState: ConversationState
 
     // Register for the audio permission request result
     private val requestAudioPermission = registerForActivityResult(
@@ -172,16 +173,44 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
+    // Function to parse the XML string and extract content
+    fun parseXmlString(xmlString: String): String {
+        // Create a new Document from the XML string
+        val factory = DocumentBuilderFactory.newInstance()
+        val builder = factory.newDocumentBuilder()
+        val inputStream = xmlString.byteInputStream()
+        val document = builder.parse(inputStream)
+        document.documentElement.normalize()
+
+        // Extract the profile_id element
+        val profileIdElement = document.getElementsByTagName("profile_id").item(0) as Element
+        val profileId = profileIdElement.getAttribute("value")
+
+        // Extract the spoken sentence (text content of profile_id)
+        val sentence = profileIdElement.firstChild.nodeValue.trim()
+
+        // Extract the language element
+        val languageElement = profileIdElement.getElementsByTagName("language").item(0).textContent
+
+        // Extract the speaking_time element
+        val speakingTimeElement = profileIdElement.getElementsByTagName("speaking_time").item(0).textContent
+        val speakingTime = speakingTimeElement.toDoubleOrNull() ?: 0.0
+
+        // Return the parsed values as a triple
+        return sentence
+    }
+
     private suspend fun startDialogue() {
         initializeUserSession()
 
-        val conversationState = ConversationState(
+        conversationState = ConversationState(
             fileStorageManager,
             previousSentence
         )
         withContext(Dispatchers.IO) {
             conversationState.loadConversationState()
         }
+
         lastActiveSpeakerTime = System.currentTimeMillis()
 
         while (isAlive) {
@@ -193,16 +222,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             }
 
             // Listening to the user input
-            val userInput = startListening()
+            val xmlString = startListening()
             lastActiveSpeakerTime = System.currentTimeMillis()
-            handleUserInput(userInput)
+            handleUserInput(xmlString)
         }
     }
 
     private suspend fun initializeUserSession() {
         val firstSentence: String
 
-        if (!fileStorageManager.filesExist()) {
+        if (true /*!fileStorageManager.filesExist()*/) {
             // First-time user
             Log.i(TAG, "First user!")
 
@@ -220,15 +249,18 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             // Extract the welcome message and dialogue state from the server response
             firstSentence = firstRequestResponse.firstSentence
 
-            dialogueState = DialogueState(firstRequestResponse.dialogueState)
+            Log.i("initializeUserSession", "First request response: dialogue state")
+            Log.i("initializeUserSession", firstRequestResponse.dialogueState.toString())
 
-// Initialize variables
+            val dialogueState = DialogueState(firstRequestResponse.dialogueState)
+
+            // Initialize variables
             val profileId = "00000000-0000-0000-0000-000000000000"
 
-// Determine the user name based on the language
+            // Determine the user name based on the language
             val userName = if (language == "it-IT") "Utente" else "User"
 
-// Create the SpeakerInfo object
+            // Create the SpeakerInfo object
             val speakerInfo = SpeakerInfo(
                 profileId = profileId,
                 name = userName,
@@ -236,7 +268,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 age = "nd"      // 'nd' stands for 'not determined' or undefined
             )
 
-// Initialize DialogueStatistics with the profileId
+            // Initialize DialogueStatistics with the profileId
             val dialogueStatistics = DialogueStatistics(
                 mappingIndexSpeaker = mutableListOf(profileId),
                 sameTurn = mutableListOf(mutableListOf(0)),
@@ -270,6 +302,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         previousSentence = firstSentence
     }
 
+    private fun generateSimpleXmlString(sentence: String): String {
+        return """
+            <profile_id value="00000000-0000-0000-0000-000000000000">
+                $sentence
+                <language>$language</language>
+                <speaking_time>0.0</speaking_time>
+            </profile_id>
+    """.trimIndent()
+    }
+
     private suspend fun startListening(): String {
         Log.i(TAG, "Begin startListening.")
         val result = withContext(Dispatchers.IO) {
@@ -278,7 +320,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         withContext(Dispatchers.Main) {
             textView.text = "Result: $result" // Update the UI with the result
         }
-        return result.ifBlank {
+
+        // TODO: do this in the audio recorder with real data
+        val xmlString = generateSimpleXmlString(result)
+        return xmlString.ifBlank {
             startListening() // Restart listening if there's no result to say
         }
     }
@@ -324,14 +369,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         Log.e(TAG, "Robot focus refused: $reason")
     }
 
-    private suspend fun handleUserInput(input: String) {
-        if (exitKeywords.any { input.contains(it, ignoreCase = true) }) {
+    private suspend fun handleUserInput(xmlString: String) {
+        val sentence = parseXmlString(xmlString)
+
+        if (exitKeywords.any { sentence.contains(it, ignoreCase = true) }) {
             sayMessage("È stato bello parlare con te. A presto!")
             isAlive = false
             return
         }
 
-        if (repeatKeywords.any { input.contains(it, ignoreCase = true) }) {
+        if (repeatKeywords.any { sentence.contains(it, ignoreCase = true) }) {
             if (previousSentence.isNotEmpty()) {
                 sayMessage("Ho detto: $previousSentence")
             } else {
@@ -341,11 +388,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
 
         // Normal interaction
-        sayMessage("Hai detto: $input")
-        previousSentence = input
+        if (!sentence.isBlank()){
+            sayMessage("Hai detto: $sentence")
+            previousSentence = sentence
 
-        // Simulate sending data to the server or processing the input
-        println("SENDING $input to server")
+            val profileId = "00000000-0000-0000-0000-000000000000"
+            // Simulate sending data to the server or processing the input
+            serverCommunicationManager.hubRequest(xmlString, language, conversationState, profileId,
+                conversationState.dialogueState.topic, listOf(), false)
+            println("SENDING $sentence to server")
+        }
     }
 
     private fun log(message: String) {

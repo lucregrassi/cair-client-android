@@ -66,7 +66,7 @@ class FileStorageManager(
                 }
             }
             isDialogueNuances(classOfT) -> {
-                mycontext!!.assets.open("nuances/nuance_vectors.json").bufferedReader()?.use { reader ->
+                mycontext!!.assets.open("nuances/nuance_vectors.json").bufferedReader().use { reader ->
                     val jsonData = reader.readText()
                     gson.fromJson(jsonData, classOfT)
                 }

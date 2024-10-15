@@ -6,10 +6,10 @@ class ConversationState(
     private var fileStorageManager: FileStorageManager,
     private var previousSentence: String
 ) {
-    private var dialogueState: DialogueState = DialogueState()
-    private var speakersInfo = SpeakerInfo()
-    private var dialogueStatistics = DialogueStatistics()
-    private var dialogueNuances = DialogueNuances() // This should be the actual type
+    var dialogueState: DialogueState = DialogueState()
+    var speakersInfo = SpeakerInfo()
+    var dialogueStatistics = DialogueStatistics()
+    var dialogueNuances = DialogueNuances() // This should be the actual type
 
     // Function to load conversation state
     fun loadConversationState() {
@@ -30,7 +30,6 @@ class ConversationState(
         dialogueState.conversationHistory.add(mapOf("role" to "assistant", "content" to previousSentence))
 
         // Step 4: Retrieve user info and store it in a dictionary
-
         Log.i("loadConversationState", "Loading SpeakersInfo")
         speakersInfo = fileStorageManager.readFromFile(SpeakerInfo::class.java)!!
 
@@ -43,5 +42,22 @@ class ConversationState(
 
         // Step 6: Set the previous dialogue sentence
         dialogueState.prevDialogueSentence = listOf(Pair("s", previousSentence))
+    }
+
+    // Custom copy method
+    fun copy(
+        fileStorageManager: FileStorageManager = this.fileStorageManager,
+        previousSentence: String = this.previousSentence,
+        dialogueState: DialogueState = this.dialogueState.copy(), // Assuming DialogueState has a copy method
+        speakersInfo: SpeakerInfo = this.speakersInfo.copy(), // Assuming SpeakerInfo has a copy method
+        dialogueStatistics: DialogueStatistics = this.dialogueStatistics.copy(), // Assuming DialogueStatistics has a copy method
+        dialogueNuances: DialogueNuances = this.dialogueNuances.copy() // Assuming DialogueNuances has a copy method
+    ): ConversationState {
+        val newConversationState = ConversationState(fileStorageManager, previousSentence)
+        newConversationState.dialogueState = dialogueState
+        newConversationState.speakersInfo = speakersInfo
+        newConversationState.dialogueStatistics = dialogueStatistics
+        newConversationState.dialogueNuances = dialogueNuances
+        return newConversationState
     }
 }

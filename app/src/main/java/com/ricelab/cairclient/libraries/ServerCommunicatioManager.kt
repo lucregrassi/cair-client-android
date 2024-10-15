@@ -10,9 +10,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import org.json.JSONObject
 import java.io.InputStream
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
+import java.util.zip.Deflater
 import javax.net.ssl.*
 
 data class FirstServerResponse(
@@ -140,5 +142,96 @@ class ServerCommunicationManager(
         }
     }
 
+    suspend fun hubRequest(
+        xmlString: String,
+        language: String,
+        conversationState: ConversationState,
+        prevSpeakerId: String,
+        prevSpeakerTopic: String?,
+        denseCapResult: List<String>,
+        dueIntervention: Boolean
+    ): ConversationState? {
 
+        val url = "https://$serverIp:$serverPort/CAIR_hub"
+        Log.d("ServerCommunication", "Url for hub request: $url")
+
+        // Compose the data payload to be sent
+        val data = mapOf(
+            "req_type" to "reply",
+            "openai_api_key" to openAIApiKey,
+            "client_sentence" to xmlString,
+            "language" to language,
+            "due_intervention" to dueIntervention,
+            "dialogue_state" to conversationState.dialogueState.toMap(),
+            "dialogue_statistics" to conversationState.dialogueStatistics.toMap(),
+            "speakers_info" to conversationState.speakersInfo.toMap(),
+            "prev_speaker_info" to mapOf("id" to prevSpeakerId, "topic" to prevSpeakerTopic),
+            "dense_cap_result" to denseCapResult
+        )
+
+        Log.d("ServerCommunicationManager", "xmlString = $xmlString")
+        Log.d("ServerCommunicationManager", "client_sentence = ${data["client_sentence"]}")
+        val jsonData = JSONObject(data).toString().toByteArray(Charsets.UTF_8)
+        val jsonstring = JSONObject(data).toString()
+
+        Log.d("ServerCommunicationManager", "jsonData = $jsonstring")
+        val compressedData = compressData(jsonData)
+
+        // Create a POST request
+        val requestBody = compressedData.toRequestBody("application/octet-stream".toMediaTypeOrNull())
+        val request = Request.Builder()
+            .url(url)
+            .post(requestBody)
+            .build()
+
+        val startTime = System.currentTimeMillis()
+
+        return withContext(Dispatchers.IO) {
+            try {
+                Log.i("ServerCommunicationManager", "Calling execute")
+                val response = client.newCall(request).execute()
+                val endTime = System.currentTimeMillis()
+
+                if (response.isSuccessful) {
+                    Log.i("ServerCommunicationManager", "Successful")
+                    val responseBody = response.body?.string() ?: throw Exception("Empty response")
+                    val jsonResponse = JSONObject(responseBody)
+                    val error = jsonResponse.optString("error", "")
+
+                    if (error.isNotEmpty()) {
+                        Log.e("ServerCommunication", "Error from Hub: $error")
+                        return@withContext null
+                    }
+
+                    // Parse the updated conversation state
+                    val updatedDialogueState = conversationState.dialogueState.updateFromJson(jsonResponse.getJSONObject("dialogue_state"))
+                    val updatedDialogueStatistics = conversationState.dialogueStatistics.updateFromJson(jsonResponse.getJSONObject("dialogue_statistics"))
+
+                    Log.i("ServerCommunication", "Request response time: ${endTime - startTime}ms")
+
+                    // Return updated conversation state
+                    return@withContext conversationState.copy(
+                        dialogueState = updatedDialogueState,
+                        dialogueStatistics = updatedDialogueStatistics
+                    )
+                } else {
+                    Log.i("ServerCommunicationManager", "Calling execute gave an error")
+                    throw Exception("Server returned an error: ${response.code}")
+                }
+            } catch (e: Exception) {
+                Log.e("ServerCommunication", "Failed to acquire updated state: ${e.message}")
+                null
+            }
+        }
+    }
+    // Compress the data using zlib
+    private fun compressData(data: ByteArray): ByteArray {
+        val deflater = Deflater()
+        val compressedData = ByteArray(data.size)
+        deflater.setInput(data)
+        deflater.finish()
+        val compressedLength = deflater.deflate(compressedData)
+        deflater.end()
+        return compressedData.copyOf(compressedLength)
+    }
 }

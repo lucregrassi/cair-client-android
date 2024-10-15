@@ -2,6 +2,7 @@ package com.ricelab.cairclient.libraries
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 data class DialogueStatistics(
     var mappingIndexSpeaker: MutableList<String> = mutableListOf(),
@@ -23,7 +24,7 @@ data class DialogueStatistics(
         }
     }
 
-    fun toDict(): Map<String, Any?> {
+    fun toMap(): Map<String, Any?> {
         return mapOf(
             "mappingIndexSpeaker" to mappingIndexSpeaker,
             "sameTurn" to sameTurn,
@@ -34,6 +35,52 @@ data class DialogueStatistics(
             "movingWindow" to movingWindow,
             "latestTurns" to latestTurns
         )
+    }
+
+    fun updateFromJson(json: JSONObject): DialogueStatistics {
+        this.mappingIndexSpeaker = json.optJSONArray("mappingIndexSpeaker")?.let { jsonArray ->
+            (0 until jsonArray.length()).map { jsonArray.getString(it) }.toMutableList()
+        } ?: this.mappingIndexSpeaker
+
+        this.sameTurn = json.optJSONArray("sameTurn")?.let { jsonArray ->
+            (0 until jsonArray.length()).map { idx ->
+                val innerArray = jsonArray.getJSONArray(idx)
+                (0 until innerArray.length()).map { innerArray.getInt(it) }.toMutableList()
+            }.toMutableList()
+        } ?: this.sameTurn
+
+        this.successiveTurn = json.optJSONArray("successiveTurn")?.let { jsonArray ->
+            (0 until jsonArray.length()).map { idx ->
+                val innerArray = jsonArray.getJSONArray(idx)
+                (0 until innerArray.length()).map { innerArray.getInt(it) }.toMutableList()
+            }.toMutableList()
+        } ?: this.successiveTurn
+
+        this.averageTopicDistance = json.optJSONArray("averageTopicDistance")?.let { jsonArray ->
+            (0 until jsonArray.length()).map { idx ->
+                val innerArray = jsonArray.getJSONArray(idx)
+                (0 until innerArray.length()).map { innerArray.getDouble(it) }.toMutableList()
+            }.toMutableList()
+        } ?: this.averageTopicDistance
+
+        this.speakersTurns = json.optJSONArray("speakersTurns")?.let { jsonArray ->
+            (0 until jsonArray.length()).map { jsonArray.getInt(it) }.toMutableList()
+        } ?: this.speakersTurns
+
+        this.aPrioriProb = json.optJSONArray("aPrioriProb")?.let { jsonArray ->
+            (0 until jsonArray.length()).map { jsonArray.getDouble(it) }.toMutableList()
+        } ?: this.aPrioriProb
+
+        // MovingWindow and LatestTurns are more complex structures, keeping them as MutableList<Any>
+        this.movingWindow = json.optJSONArray("movingWindow")?.let { jsonArray ->
+            (0 until jsonArray.length()).map { jsonArray.get(it) }.toMutableList()
+        } ?: this.movingWindow
+
+        this.latestTurns = json.optJSONArray("latestTurns")?.let { jsonArray ->
+            (0 until jsonArray.length()).map { jsonArray.get(it) }.toMutableList()
+        } ?: this.latestTurns
+
+        return this
     }
 
     override fun toString(): String {

@@ -17,7 +17,7 @@ data class SpeakerInfo(
     }
 
     // Method to convert this object to a Map (similar to to_dict() in Python)
-    fun toDict(): Map<String, Any?> {
+    fun toMap(): Map<String, Any?> {
         return mapOf(
             "profileId" to profileId,
             "name" to name,
