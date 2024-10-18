@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.reflect.TypeToken
 import java.io.File
 import java.io.InputStream
 
@@ -13,7 +14,6 @@ class FileStorageManager(
     val gson: Gson = GsonBuilder().setPrettyPrinting().create(),
     var speakersInfoFile: File? = null,
     var dialogueStatisticsFile: File? = null,
-    //var nuanceVectorsInputStream: InputStream? = null, // InputStream for assets (read-only)
     var mycontext: Context? = null
 ) {
     // Secondary constructor that takes Context and filesDir
@@ -22,7 +22,6 @@ class FileStorageManager(
         dialogueStateFile = File(filesDir, "dialogue_state.json"),
         speakersInfoFile = File(filesDir, "speakers_info.json"),
         dialogueStatisticsFile = File(filesDir, "dialogue_statistics.json"),
-        //nuanceVectorsInputStream = context.assets.open("nuances/nuance_vectors.json")
         mycontext = context
     )
 
@@ -31,7 +30,7 @@ class FileStorageManager(
         val jsonData = gson.toJson(data)
         when {
             isDialogueState(data) -> dialogueStateFile?.writeText(jsonData)
-            isSpeakerInfo(data) -> speakersInfoFile?.writeText(jsonData)
+            isSpeakersInfo(data) -> speakersInfoFile?.writeText(jsonData)
             isDialogueStatistics(data) -> dialogueStatisticsFile?.writeText(jsonData)
             isDialogueNuances(data) -> {
                 // Nuances are stored in internal storage since assets are read-only
@@ -47,13 +46,11 @@ class FileStorageManager(
         return when {
             isDialogueState(classOfT) -> {
                 dialogueStateFile?.let {
-                    Log.d("ConversationState", "isDialogueState readFromFile")
                     val jsonData = it.readText()
-                    Log.d("ConversationState", "readText done, data = $jsonData")
                     gson.fromJson(jsonData, classOfT)
                 }
             }
-            isSpeakerInfo(classOfT) -> {
+            isSpeakersInfo(classOfT) -> {
                 speakersInfoFile?.let {
                     val jsonData = it.readText()
                     gson.fromJson(jsonData, classOfT)
@@ -89,8 +86,8 @@ inline fun <reified T> isDialogueStatistics(data: T): Boolean {
     return data is DialogueStatistics
 }
 
-inline fun <reified T> isSpeakerInfo(data: T): Boolean {
-    return data is SpeakerInfo
+inline fun <reified T> isSpeakersInfo(data: T): Boolean {
+    return data is SpeakersInfo
 }
 
 inline fun <reified T> isDialogueState(data: T): Boolean {
@@ -107,8 +104,8 @@ fun <T> isDialogueState(classOfT: Class<T>): Boolean {
 }
 
 // Similar helper functions for other classes
-fun <T> isSpeakerInfo(classOfT: Class<T>): Boolean {
-    return classOfT == SpeakerInfo::class.java
+fun <T> isSpeakersInfo(classOfT: Class<T>): Boolean {
+    return classOfT == SpeakersInfo::class.java
 }
 
 fun <T> isDialogueStatistics(classOfT: Class<T>): Boolean {

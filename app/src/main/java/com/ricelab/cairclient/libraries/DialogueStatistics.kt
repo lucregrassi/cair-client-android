@@ -26,14 +26,14 @@ data class DialogueStatistics(
 
     fun toMap(): Map<String, Any?> {
         return mapOf(
-            "mappingIndexSpeaker" to mappingIndexSpeaker,
-            "sameTurn" to sameTurn,
-            "successiveTurn" to successiveTurn,
-            "averageTopicDistance" to averageTopicDistance,
-            "speakersTurns" to speakersTurns,
-            "aPrioriProb" to aPrioriProb,
-            "movingWindow" to movingWindow,
-            "latestTurns" to latestTurns
+            "mapping_index_speaker" to mappingIndexSpeaker,
+            "same_turn" to sameTurn,
+            "successive_turn" to successiveTurn,
+            "average_topic_distance" to averageTopicDistance,
+            "speakers_turns" to speakersTurns,
+            "a_priori_prob" to aPrioriProb,
+            "moving_window" to movingWindow,
+            "latest_turns" to latestTurns
         )
     }
 

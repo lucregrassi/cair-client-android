@@ -4,148 +4,178 @@ import android.util.Log
 import org.json.JSONObject
 
 data class DialogueState(
-    var dialogueSentence: String? = null,
-    var prevDialogueSentence: List<Pair<String, String>> = listOf(),
+    var dialogueSentence: List<List<String>> = listOf(),
+    var prevDialogueSentence: List<List<String>> = listOf(),
     var addressedSpeaker: String? = null,
-    var topic: String? = null,
-    var prevTopic: String? = null,
+    var topic: Int? = null,
+    var prevTopic: Int? = null,
     var sentenceType: String? = null,
     var pattern: List<String>? = null,
     var bool: Boolean? = null,
     var familiarities: Map<String, Any>? = null,
     var flags: Map<String, Any>? = null,
     var addressedCommunity: String? = null,
-    //var dialogueNuances: List<Any> = listOf(),
     var dialogueNuances: DialogueNuances = DialogueNuances(),
     var conversationHistory: MutableList<Map<String, String>> = mutableListOf(),
     var ongoingConversation: Boolean? = null
 ) {
+    // Constructor using snake_case from server-side
     constructor(dialogueState: Map<String, Any?>) : this(
-        dialogueSentence = dialogueState["dialogue_sentence"] as? String,
-        prevDialogueSentence = (dialogueState["prev_dialogue_sentence"] as? List<*>)?.filterIsInstance<Pair<String, String>>() ?: listOf(),
+        dialogueSentence = parseDialogueSentence(dialogueState["dialogue_sentence"]),
+        prevDialogueSentence = parseDialogueSentence(dialogueState["prev_dialogue_sentence"]),
         addressedSpeaker = dialogueState["addressed_speaker"] as? String,
-        topic = dialogueState["topic"] as? String,
-        prevTopic = dialogueState["prev_topic"] as? String,
+        topic = (dialogueState["topic"] as? Number)?.toInt(),  // Adjusted
+        prevTopic = (dialogueState["prev_topic"] as? Number)?.toInt(),
         sentenceType = dialogueState["sentence_type"] as? String,
         pattern = (dialogueState["pattern"] as? List<*>)?.filterIsInstance<String>() ?: listOf(),
         bool = dialogueState["bool"] as? Boolean,
         familiarities = (dialogueState["familiarities"] as? Map<*, *>)?.filterKeys { it is String }?.filterValues { it is Any }?.mapKeys { it.key as String }?.mapValues { it.value as Any } ?: mapOf(),
         flags = (dialogueState["flags"] as? Map<*, *>)?.filterKeys { it is String }?.filterValues { it is Any }?.mapKeys { it.key as String }?.mapValues { it.value as Any } ?: mapOf(),
         addressedCommunity = dialogueState["addressed_community"] as? String,
-        //dialogueNuances = (dialogueState["dialogue_nuances"] as? List<*>)?.filterIsInstance<Any>() ?: listOf(),
-        dialogueNuances = dialogueState["dialogue_nuances"]?.let {
-            val nuancesMap = it as? Map<String, Map<String, List<*>>>
-            val flags = nuancesMap?.get("flags")?.mapValues { entry -> entry.value.filterIsInstance<Int>() } ?: emptyMap()
-            val values = nuancesMap?.get("values")?.mapValues { entry -> entry.value.filterIsInstance<String>() } ?: emptyMap()
+        dialogueNuances = dialogueState["dialogue_nuances"]?.let { nuances ->
+            val nuancesMap = nuances as? Map<String, Any?>
+            val flags = (nuancesMap?.get("flags") as? Map<String, List<Int>>) ?: emptyMap()
+            val values = (nuancesMap?.get("values") as? Map<String, List<String>>) ?: emptyMap()
             DialogueNuances(flags, values)
-        } ?: DialogueNuances(), // Default to empty Nuances if missing
+        } ?: DialogueNuances(),
         conversationHistory = (dialogueState["conversation_history"] as? List<*>)?.filterIsInstance<Map<String, String>>()?.toMutableList() ?: mutableListOf(),
         ongoingConversation = dialogueState["ongoing_conversation"] as? Boolean
-    ) {
-        topic = when (val jsonTopic = dialogueState["topic"]) {
-            is String -> jsonTopic
-            is Number -> jsonTopic.toString() // Convert number to string
-            else -> null // Handle other cases or set to null if the type is unexpected
+    )
+    companion object {
+        fun parseDialogueSentence(data: Any?): List<List<String>> {
+            return (data as? List<*>)?.mapNotNull {
+                when (it) {
+                    is List<*> -> {
+                        it.filterIsInstance<String>()
+                    }
+                    is Map<*, *> -> {
+                        val first = it["first"]?.toString()
+                        val second = it["second"]?.toString()
+                        if (first != null && second != null) listOf(first, second) else null
+                    }
+                    else -> null
+                }
+            } ?: listOf()
         }
-        prevTopic = when (val jsonTopic = dialogueState["prev_topic"]) {
-            is String -> jsonTopic
-            is Number -> jsonTopic.toString() // Convert number to string
-            else -> null // Handle other cases or set to null if the type is unexpected
-        }
-        addressedCommunity = when (val jsonTopic = dialogueState["addressed_community"]) {
-            is String -> jsonTopic
-            is Number -> jsonTopic.toString() // Convert number to string
-            else -> null // Handle other cases or set to null if the type is unexpected
-        }
-
-        Log.i("initializeUserSession", "Constructor: topic = $topic, jsonTopic = ${dialogueState["topic"]}")
     }
 
+    // Serializing camelCase fields to snake_case for server-side
     fun toMap(): Map<String, Any?> {
         return mapOf(
-            "dialogueSentence" to dialogueSentence,
-            "prevDialogueSentence" to prevDialogueSentence,
-            "addressedSpeaker" to addressedSpeaker,
+            "dialogue_sentence" to dialogueSentence,
+            "prev_dialogue_sentence" to prevDialogueSentence,
+            "addressed_speaker" to addressedSpeaker,
             "topic" to topic,
-            "prevTopic" to prevTopic,
-            "sentenceType" to sentenceType,
+            "prev_topic" to prevTopic,
+            "sentence_type" to sentenceType,
             "pattern" to pattern,
             "bool" to bool,
             "familiarities" to familiarities,
             "flags" to flags,
-            "addressedCommunity" to addressedCommunity,
-            //"dialogueNuances" to dialogueNuances,
+            "addressed_community" to addressedCommunity,
             "dialogue_nuances" to mapOf(
                 "flags" to dialogueNuances.flags,
                 "values" to dialogueNuances.values
             ),
-            "conversationHistory" to conversationHistory,
-            "ongoingConversation" to ongoingConversation
+            "conversation_history" to conversationHistory,
+            "ongoing_conversation" to ongoingConversation
         )
     }
 
-    // Function to update the dialogue state from a JSON object
+    // Update dialogue state from JSON (handles snake_case from the server)
+    // Update dialogue state from JSON (handles snake_case from the server)
     fun updateFromJson(json: JSONObject): DialogueState {
-        this.dialogueSentence = json.optString("dialogueSentence", this.dialogueSentence)
-        this.addressedSpeaker = json.optString("addressedSpeaker", this.addressedSpeaker)
-        this.topic = json.optString("topic", this.topic)
-        this.prevTopic = json.optString("prevTopic", this.prevTopic)
-        this.sentenceType = json.optString("sentenceType", this.sentenceType)
+        Log.d("updateFromJson", "Received JSON: $json")
 
+        // Copy current dialogueSentence into prevDialogueSentence before updating
+        this.prevDialogueSentence = this.dialogueSentence
+
+        // Update dialogueSentence
+        this.dialogueSentence = json.optJSONArray("dialogue_sentence")?.let { jsonArray ->
+            (0 until jsonArray.length()).mapNotNull { idx ->
+                val innerArray = jsonArray.optJSONArray(idx)
+                if (innerArray != null) {
+                    (0 until innerArray.length()).map { innerArray.optString(it, "") }
+                } else {
+                    null
+                }
+            }
+        } ?: this.dialogueSentence
+
+        // Update prevDialogueSentence
+        this.prevDialogueSentence = json.optJSONArray("prev_dialogue_sentence")?.let { jsonArray ->
+            (0 until jsonArray.length()).mapNotNull { idx ->
+                val innerArray = jsonArray.optJSONArray(idx)
+                if (innerArray != null) {
+                    (0 until innerArray.length()).map { innerArray.optString(it, "") }
+                } else {
+                    null
+                }
+            }
+        } ?: this.prevDialogueSentence
+
+        // Update addressedSpeaker
+        this.addressedSpeaker = this.addressedSpeaker?.let {
+            json.optString("addressed_speaker",
+                it
+            )
+        }
+
+        // Update topic
+        this.topic = if (json.has("topic")) {
+            json.optInt("topic", this.topic ?: 0)
+        } else {
+            this.topic
+        }
+
+        // Update prevTopic
+        this.prevTopic = if (json.has("prev_topic")) {
+            json.optInt("prev_topic", this.prevTopic ?: 0)
+        } else {
+            this.prevTopic
+        }
+
+        // Update sentenceType
+        this.sentenceType = this.sentenceType?.let { json.optString("sentence_type", it) }
+
+        // Update pattern
         this.pattern = json.optJSONArray("pattern")?.let { jsonArray ->
             (0 until jsonArray.length()).map { jsonArray.getString(it) }
-        }
+        } ?: this.pattern
 
-        this.bool = json.optBoolean("bool", this.bool ?: false)
+        // Update bool
+        this.bool = if (json.has("bool")) json.optBoolean("bool") else this.bool
 
+        // Update familiarities
         this.familiarities = json.optJSONObject("familiarities")?.let { familiaritiesJson ->
             familiaritiesJson.keys().asSequence().associateWith { familiaritiesJson[it] as Any }
-        }
+        } ?: this.familiarities
 
+        // Update flags
         this.flags = json.optJSONObject("flags")?.let { flagsJson ->
             flagsJson.keys().asSequence().associateWith { flagsJson[it] as Any }
+        } ?: this.flags
+
+        // Update addressedCommunity
+        this.addressedCommunity =
+            this.addressedCommunity?.let { json.optString("addressed_community", it) }
+
+        // Update dialogueNuances (assuming it has its own updateFromJson method)
+        json.optJSONObject("dialogue_nuances")?.let {
+            this.dialogueNuances.updateFromJson(it)
         }
 
-        this.addressedCommunity = json.optString("addressedCommunity", this.addressedCommunity)
-
-        // Assuming DialogueNuances has an updateFromJson method
-        this.dialogueNuances.updateFromJson(json.optJSONObject("dialogueNuances") ?: JSONObject())
-
-        this.conversationHistory = json.optJSONArray("conversationHistory")?.let { historyJson ->
+        // Update conversationHistory
+        this.conversationHistory = json.optJSONArray("conversation_history")?.let { historyJson ->
             (0 until historyJson.length()).map { idx ->
                 val historyItem = historyJson.getJSONObject(idx)
                 historyItem.keys().asSequence().associateWith { historyItem.getString(it) }.toMutableMap()
             }.toMutableList()
         } ?: this.conversationHistory
 
-        this.ongoingConversation = json.optBoolean("ongoingConversation", this.ongoingConversation ?: false)
+        // Update ongoingConversation
+        this.ongoingConversation = if (json.has("ongoing_conversation")) json.optBoolean("ongoing_conversation") else this.ongoingConversation
 
         return this
-    }
-
-    override fun toString(): String {
-        return """
-            DialogueState(
-                dialogueSentence=$dialogueSentence,
-                prevDialogueSentence=${prevDialogueSentence.joinToString { "(${it.first}, ${it.second})" }},
-                addressedSpeaker=$addressedSpeaker,
-                topic=$topic,
-                prevTopic=$prevTopic,
-                sentenceType=$sentenceType,
-                pattern=${pattern?.joinToString()},
-                bool=$bool,
-                familiarities=${familiarities?.entries?.joinToString { "${it.key}=${it.value}" }},
-                flags=${flags?.entries?.joinToString { "${it.key}=${it.value}" }},
-                addressedCommunity=$addressedCommunity,
-                dialogueNuances=Nuances(
-                flags=${dialogueNuances.flags.entries.joinToString { "${it.key}=${it.value}" }},
-                values=${dialogueNuances.values.entries.joinToString { "${it.key}=${it.value}" }}
-                ),
-                conversationHistory=${conversationHistory.joinToString { it.toString() }},
-                ongoingConversation=$ongoingConversation
-            )
-        """.trimIndent()
-
-        //dialogueNuances=${dialogueNuances.joinToString()},
     }
 }

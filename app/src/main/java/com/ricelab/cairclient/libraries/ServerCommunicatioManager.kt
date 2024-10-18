@@ -11,10 +11,13 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
+import java.util.zip.DataFormatException
 import java.util.zip.Deflater
+import java.util.zip.Inflater
 import javax.net.ssl.*
 
 data class FirstServerResponse(
@@ -134,7 +137,7 @@ class ServerCommunicationManager(
             val dialogueState = (responseData["dialogue_state"] as? Map<*, *>)?.mapKeys { it.key.toString() }
                 ?.mapValues { it.value ?: throw Exception("Null value found in dialogue_state") }
                 ?: throw Exception("Invalid dialogue_state format")
-
+            Log.i("ServerCommunication", "Received dialogue_state: $dialogueState")
             FirstServerResponse(firstSentence = firstSentence, dialogueState = dialogueState)
         } catch (e: Exception) {
             Log.e("ServerCommunication", "Error parsing JSON response: ${e.message}")
@@ -147,13 +150,20 @@ class ServerCommunicationManager(
         language: String,
         conversationState: ConversationState,
         prevSpeakerId: String,
-        prevSpeakerTopic: String?,
+        prevSpeakerTopic: Int?,
         denseCapResult: List<String>,
-        dueIntervention: Boolean
+        dueIntervention: DueIntervention
     ): ConversationState? {
 
         val url = "https://$serverIp:$serverPort/CAIR_hub"
-        Log.d("ServerCommunication", "Url for hub request: $url")
+        Log.d("ServerCommunication", "Performing request to: $url")
+
+        // Convert DueIntervention to a map
+        val dueInterventionMap = mapOf(
+            "type" to dueIntervention.type,
+            "sentence" to dueIntervention.sentence,
+            "exclusive" to dueIntervention.exclusive
+        )
 
         // Compose the data payload to be sent
         val data = mapOf(
@@ -161,7 +171,7 @@ class ServerCommunicationManager(
             "openai_api_key" to openAIApiKey,
             "client_sentence" to xmlString,
             "language" to language,
-            "due_intervention" to dueIntervention,
+            "due_intervention" to dueInterventionMap,
             "dialogue_state" to conversationState.dialogueState.toMap(),
             "dialogue_statistics" to conversationState.dialogueStatistics.toMap(),
             "speakers_info" to conversationState.speakersInfo.toMap(),
@@ -194,8 +204,10 @@ class ServerCommunicationManager(
 
                 if (response.isSuccessful) {
                     Log.i("ServerCommunicationManager", "Successful")
-                    val responseBody = response.body?.string() ?: throw Exception("Empty response")
-                    val jsonResponse = JSONObject(responseBody)
+                    val responseBodyBytes = response.body?.bytes() ?: throw Exception("Empty response")
+                    val decompressedData = decompressData(responseBodyBytes)
+                    val responseBodyString = String(decompressedData, Charsets.UTF_8)
+                    val jsonResponse = JSONObject(responseBodyString)
                     val error = jsonResponse.optString("error", "")
 
                     if (error.isNotEmpty()) {
@@ -224,6 +236,7 @@ class ServerCommunicationManager(
             }
         }
     }
+
     // Compress the data using zlib
     private fun compressData(data: ByteArray): ByteArray {
         val deflater = Deflater()
@@ -233,5 +246,23 @@ class ServerCommunicationManager(
         val compressedLength = deflater.deflate(compressedData)
         deflater.end()
         return compressedData.copyOf(compressedLength)
+    }
+
+    private fun decompressData(data: ByteArray): ByteArray {
+        val inflater = Inflater()
+        inflater.setInput(data)
+        val outputStream = ByteArrayOutputStream()
+        val buffer = ByteArray(1024)
+        try {
+            while (!inflater.finished()) {
+                val count = inflater.inflate(buffer)
+                outputStream.write(buffer, 0, count)
+            }
+        } catch (e: DataFormatException) {
+            inflater.end()
+            throw RuntimeException("Failed to decompress data: ${e.message}", e)
+        }
+        inflater.end()
+        return outputStream.toByteArray()
     }
 }

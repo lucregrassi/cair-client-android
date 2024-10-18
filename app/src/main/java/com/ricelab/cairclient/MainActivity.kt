@@ -23,6 +23,7 @@ import kotlinx.coroutines.*
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import org.w3c.dom.Element
+import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
 
 private const val TAG = "MainActivity"
@@ -174,7 +175,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     // Function to parse the XML string and extract content
-    fun parseXmlString(xmlString: String): String {
+    private fun parseXmlString(xmlString: String): String {
         // Create a new Document from the XML string
         val factory = DocumentBuilderFactory.newInstance()
         val builder = factory.newDocumentBuilder()
@@ -184,10 +185,19 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         // Extract the profile_id element
         val profileIdElement = document.getElementsByTagName("profile_id").item(0) as Element
-        val profileId = profileIdElement.getAttribute("value")
 
-        // Extract the spoken sentence (text content of profile_id)
-        val sentence = profileIdElement.firstChild.nodeValue.trim()
+        // Extract the text content before any child elements (e.g., before <language> and <speaking_time>)
+        val sentenceBuilder = StringBuilder()
+        val nodeList = profileIdElement.childNodes
+
+        for (i in 0 until nodeList.length) {
+            val currentNode = nodeList.item(i)
+            if (currentNode.nodeType == Node.TEXT_NODE) {
+                sentenceBuilder.append(currentNode.nodeValue.trim())
+            }
+        }
+
+        val sentence = sentenceBuilder.toString()
 
         // Extract the language element
         val languageElement = profileIdElement.getElementsByTagName("language").item(0).textContent
@@ -216,7 +226,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         while (isAlive) {
             // Check if the conversation is ongoing
             if ((System.currentTimeMillis() - lastActiveSpeakerTime) > SILENCE_THRESHOLD * 1000) {
-                log("Silence threshold exceeded - setting ongoing conversation to false.")
+                Log.i("MainActivity", "Silence threshold exceeded - setting ongoing conversation to false.")
                 sayMessage("It seems the conversation has ended due to silence.")
                 break
             }
@@ -261,11 +271,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             val userName = if (language == "it-IT") "Utente" else "User"
 
             // Create the SpeakerInfo object
-            val speakerInfo = SpeakerInfo(
-                profileId = profileId,
-                name = userName,
-                gender = "nb",  // 'nb' stands for non-binary, based on your original code
-                age = "nd"      // 'nd' stands for 'not determined' or undefined
+            // Create the map of speaker attributes
+            val speakerAttributes = mapOf(
+                "name" to userName,
+                "gender" to "nb",  // 'nb' stands for non-binary
+                "age" to "nd"      // 'nd' stands for 'not determined'
+            )
+
+            // Create the SpeakersInfo object and add the speaker
+            val speakersInfo = SpeakersInfo(
+                speakers = mutableMapOf(profileId to speakerAttributes)
             )
 
             // Initialize DialogueStatistics with the profileId
@@ -283,7 +298,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             // Save the received data to files
             withContext(Dispatchers.IO) {
                 fileStorageManager.writeToFile(dialogueState)
-                fileStorageManager.writeToFile(speakerInfo)
+                fileStorageManager.writeToFile(speakersInfo)
                 fileStorageManager.writeToFile(dialogueStatistics)
             }
         } else {
@@ -304,11 +319,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private fun generateSimpleXmlString(sentence: String): String {
         return """
-            <profile_id value="00000000-0000-0000-0000-000000000000">
-                $sentence
-                <language>$language</language>
-                <speaking_time>0.0</speaking_time>
-            </profile_id>
+            <response><profile_id value="00000000-0000-0000-0000-000000000000">$sentence<language>$language</language><speaking_time>0.0</speaking_time></profile_id></response>
     """.trimIndent()
     }
 
@@ -388,19 +399,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
 
         // Normal interaction
-        if (!sentence.isBlank()){
-            sayMessage("Hai detto: $sentence")
+        if (sentence.isNotBlank()){
             previousSentence = sentence
 
             val profileId = "00000000-0000-0000-0000-000000000000"
-            // Simulate sending data to the server or processing the input
+            // Perform reply request
             serverCommunicationManager.hubRequest(xmlString, language, conversationState, profileId,
-                conversationState.dialogueState.topic, listOf(), false)
-            println("SENDING $sentence to server")
+                conversationState.dialogueState.topic, listOf(), DueIntervention(type = null, exclusive = false, sentence = "")
+            )
+            Log.i("MainActivity", "Dialogue Sentence: ${conversationState.dialogueState.dialogueSentence[0][1]}")
+            sayMessage(conversationState.dialogueState.dialogueSentence[0][1])
         }
-    }
-
-    private fun log(message: String) {
-        Log.d("CAIRclientAPP", message)
     }
 }

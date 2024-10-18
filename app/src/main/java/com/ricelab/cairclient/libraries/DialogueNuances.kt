@@ -1,7 +1,6 @@
 package com.ricelab.cairclient.libraries
 
 import org.json.JSONObject
-import java.util.Random
 
 data class DialogueNuances (
     var flags: Map<String, List<Int>> = emptyMap(),
@@ -9,32 +8,41 @@ data class DialogueNuances (
 ) {
 
     fun updateFromJson(json: JSONObject): DialogueNuances {
-        // Update flags (Map<String, List<Int>>)
-        val flagsJson = json.optJSONObject("flags")
-        if (flagsJson != null) {
+        // Update flags
+        json.optJSONObject("flags")?.let { flagsJson ->
             val updatedFlags = mutableMapOf<String, List<Int>>()
-            flagsJson.keys().forEach { key ->
+            val keys = flagsJson.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
                 val jsonArray = flagsJson.optJSONArray(key)
                 if (jsonArray != null) {
-                    updatedFlags[key] = (0 until jsonArray.length()).map { jsonArray.getInt(it) }
+                    val list = mutableListOf<Int>()
+                    for (i in 0 until jsonArray.length()) {
+                        list.add(jsonArray.getInt(i))
+                    }
+                    updatedFlags[key] = list
                 }
             }
             this.flags = updatedFlags
         }
 
-        // Update values (Map<String, List<String>>)
-        val valuesJson = json.optJSONObject("values")
-        if (valuesJson != null) {
+        // Update values
+        json.optJSONObject("values")?.let { valuesJson ->
             val updatedValues = mutableMapOf<String, List<String>>()
-            valuesJson.keys().forEach { key ->
+            val keys = valuesJson.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
                 val jsonArray = valuesJson.optJSONArray(key)
                 if (jsonArray != null) {
-                    updatedValues[key] = (0 until jsonArray.length()).map { jsonArray.getString(it) }
+                    val list = mutableListOf<String>()
+                    for (i in 0 until jsonArray.length()) {
+                        list.add(jsonArray.getString(i))
+                    }
+                    updatedValues[key] = list
                 }
             }
             this.values = updatedValues
         }
-
         return this
     }
 
