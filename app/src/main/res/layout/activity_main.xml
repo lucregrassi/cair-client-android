@@ -1,37 +1,51 @@
-<?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
+    <!-- TextView to display user speech -->
     <TextView
-        android:id="@+id/textView"
+        android:id="@+id/userSpeechTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Recognized text:"
+        android:text="Sto ascoltando..."
         android:textSize="24sp"
         android:layout_alignParentTop="true"
         android:layout_centerHorizontal="true"
+        android:padding="16dp"
+        android:layout_marginTop="30dp" />
+
+    <!-- TextView to display the robot's speech -->
+    <TextView
+        android:id="@+id/robotSpeechTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textSize="24sp"
+        android:layout_below="@id/userSpeechTextView"
+        android:layout_centerHorizontal="true"
         android:padding="16dp" />
 
+    <!-- TextView to display the threshold -->
     <TextView
         android:id="@+id/thresholdTextView"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Threshold: "
+        android:text="Soglia del rumore: "
         android:textSize="18sp"
-        android:layout_below="@id/textView"
         android:layout_centerHorizontal="true"
-        android:padding="16dp" />
+        android:padding="16dp"
+        android:layout_alignParentBottom="true"
+        android:layout_marginBottom="80dp" />
 
+    <!-- Button placed at the bottom -->
     <Button
         android:id="@+id/recalibrateButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Recalibrate Threshold"
-        android:layout_below="@id/thresholdTextView"
+        android:text="Ricalibra soglia"
+        android:layout_alignParentBottom="true"
         android:layout_centerHorizontal="true"
         android:padding="16dp"
-        android:layout_marginTop="16dp"/>
-
+        android:layout_marginBottom="16dp" />
 </RelativeLayout>

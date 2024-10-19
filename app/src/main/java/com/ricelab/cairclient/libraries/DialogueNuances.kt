@@ -46,14 +46,6 @@ data class DialogueNuances (
         return this
     }
 
-    // Convert current nuances to a map (for sending back to the server)
-    fun toMap(): Map<String, Any?> {
-        return mapOf(
-            "flags" to flags,
-            "values" to values
-        )
-    }
-
     override fun toString(): String {
         return """
             Nuances(

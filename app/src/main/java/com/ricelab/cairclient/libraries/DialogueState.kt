@@ -3,6 +3,8 @@ package com.ricelab.cairclient.libraries
 import android.util.Log
 import org.json.JSONObject
 
+private const val TAG = "DialogueState"
+
 data class DialogueState(
     var dialogueSentence: List<List<String>> = listOf(),
     var prevDialogueSentence: List<List<String>> = listOf(),
@@ -83,9 +85,8 @@ data class DialogueState(
     }
 
     // Update dialogue state from JSON (handles snake_case from the server)
-    // Update dialogue state from JSON (handles snake_case from the server)
     fun updateFromJson(json: JSONObject): DialogueState {
-        Log.d("updateFromJson", "Received JSON: $json")
+        Log.d(TAG, "Received JSON to update DialogueState: $json")
 
         // Copy current dialogueSentence into prevDialogueSentence before updating
         this.prevDialogueSentence = this.dialogueSentence
@@ -101,18 +102,6 @@ data class DialogueState(
                 }
             }
         } ?: this.dialogueSentence
-
-        // Update prevDialogueSentence
-        this.prevDialogueSentence = json.optJSONArray("prev_dialogue_sentence")?.let { jsonArray ->
-            (0 until jsonArray.length()).mapNotNull { idx ->
-                val innerArray = jsonArray.optJSONArray(idx)
-                if (innerArray != null) {
-                    (0 until innerArray.length()).map { innerArray.optString(it, "") }
-                } else {
-                    null
-                }
-            }
-        } ?: this.prevDialogueSentence
 
         // Update addressedSpeaker
         this.addressedSpeaker = this.addressedSpeaker?.let {
@@ -164,14 +153,6 @@ data class DialogueState(
         json.optJSONObject("dialogue_nuances")?.let {
             this.dialogueNuances.updateFromJson(it)
         }
-
-        // Update conversationHistory
-        this.conversationHistory = json.optJSONArray("conversation_history")?.let { historyJson ->
-            (0 until historyJson.length()).map { idx ->
-                val historyItem = historyJson.getJSONObject(idx)
-                historyItem.keys().asSequence().associateWith { historyItem.getString(it) }.toMutableMap()
-            }.toMutableList()
-        } ?: this.conversationHistory
 
         // Update ongoingConversation
         this.ongoingConversation = if (json.has("ongoing_conversation")) json.optBoolean("ongoing_conversation") else this.ongoingConversation

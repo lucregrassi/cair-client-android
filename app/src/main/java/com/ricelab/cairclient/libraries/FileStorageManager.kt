@@ -4,9 +4,9 @@ import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import com.google.gson.reflect.TypeToken
 import java.io.File
-import java.io.InputStream
+
+private const val TAG = "FileStorageManager"
 
 class FileStorageManager(
     val filesDir: File,
@@ -42,7 +42,7 @@ class FileStorageManager(
 
     // Read data from file
     fun <T> readFromFile(classOfT: Class<T>): T? {
-        Log.d("ConversationState", "inside readFromFile")
+        Log.d(TAG, "Reading from file")
         return when {
             isDialogueState(classOfT) -> {
                 dialogueStateFile?.let {
@@ -69,7 +69,7 @@ class FileStorageManager(
                 }
             }
             else -> {
-                Log.d("ConversationState", "class is not recognized")
+                Log.d(TAG, "Class type not recognized")
                 null
             }
         }

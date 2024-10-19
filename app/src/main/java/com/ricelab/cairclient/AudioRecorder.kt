@@ -83,7 +83,7 @@ class AudioRecorder(private val context: Context) {
         // Update the threshold value in the UI if the context is an Activity
         (context as? Activity)?.runOnUiThread {
             val thresholdTextView: TextView? = context.findViewById(R.id.thresholdTextView)
-            thresholdTextView?.text = "Threshold: $speechDetectionThreshold"
+            thresholdTextView?.text = "Soglia del rumore: $speechDetectionThreshold"
         }
 
         return speechDetectionThreshold

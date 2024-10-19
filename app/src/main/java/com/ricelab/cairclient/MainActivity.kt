@@ -36,7 +36,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     // Needed for the microphone
     private lateinit var audioRecorder: AudioRecorder
-    private lateinit var textView: TextView
+    private lateinit var userSpeechTextView: TextView
+    private lateinit var robotSpeechTextView: TextView
     private lateinit var thresholdTextView: TextView
     private lateinit var recalibrateButton: Button
 
@@ -80,11 +81,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         retrieveStoredValues()
 
         // Initialize file paths and other components that don't need qiContext
-
-
         fileStorageManager = FileStorageManager(this, filesDir)
 
-        textView = findViewById(R.id.textView)
+        userSpeechTextView = findViewById(R.id.userSpeechTextView)
+        robotSpeechTextView = findViewById(R.id.robotSpeechTextView)
         thresholdTextView = findViewById(R.id.thresholdTextView)
         recalibrateButton = findViewById(R.id.recalibrateButton)
         audioRecorder = AudioRecorder(this)
@@ -106,7 +106,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         return when (item.itemId) {
             R.id.action_setup -> {
                 // Launch SetupActivity when the "Setup" menu item is clicked
-                val intent = Intent(this, ConnectionSettingsActivity::class.java)
+                val intent = Intent(this, SettingsActivity::class.java)
                 intent.putExtra("fromMenu", true)  // Important for not redirecting back to MainActivity
                 startActivity(intent)
                 true
@@ -137,7 +137,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
             // Redirect back to SetupActivity if values are missing
-            val intent = Intent(this, ConnectionSettingsActivity::class.java)
+            val intent = Intent(this, SettingsActivity::class.java)
             startActivity(intent)
             finish()
         }
@@ -147,7 +147,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         lifecycleScope.launch(Dispatchers.IO) {
             val newThreshold = audioRecorder.recalibrateThreshold()
             withContext(Dispatchers.Main) {
-                thresholdTextView.text = "Threshold: $newThreshold"
+                thresholdTextView.text = "Soglia del rumore: $newThreshold"
             }
         }
     }
@@ -163,7 +163,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onRobotFocusGained(qiContext: QiContext) {
         this.qiContext = qiContext
 
-        Log.i("MainActivity", "Entering onRobotFocusGained and creating ServerCommunicationManager")
+        Log.i(TAG, "Entering onRobotFocusGained and creating ServerCommunicationManager")
 
         // Initialize ServerCommunicationManager now that qiContext is available
         serverCommunicationManager = ServerCommunicationManager(this, serverIp, serverPort, openAIApiKey)
@@ -226,7 +226,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         while (isAlive) {
             // Check if the conversation is ongoing
             if ((System.currentTimeMillis() - lastActiveSpeakerTime) > SILENCE_THRESHOLD * 1000) {
-                Log.i("MainActivity", "Silence threshold exceeded - setting ongoing conversation to false.")
+                Log.i(TAG, "Silence threshold exceeded - setting ongoing conversation to false.")
                 sayMessage("It seems the conversation has ended due to silence.")
                 break
             }
@@ -241,7 +241,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private suspend fun initializeUserSession() {
         val firstSentence: String
 
-        if (true /*!fileStorageManager.filesExist()*/) {
+        if (!fileStorageManager.filesExist()) {
             // First-time user
             Log.i(TAG, "First user!")
 
@@ -312,6 +312,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
 
         // Say the welcome message using Pepper's text-to-speech
+        robotSpeechTextView.text = "Pepper: $firstSentence"
         sayMessage(firstSentence)
         // Store the welcome message in previousSentence
         previousSentence = firstSentence
@@ -325,17 +326,29 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private suspend fun startListening(): String {
         Log.i(TAG, "Begin startListening.")
+
+        // Show the "Listening..." status in textView and clear the robot's speech TextView
+        withContext(Dispatchers.Main) {
+            //robotSpeechTextView.text = ""  // Clear the robot's speech TextView
+            userSpeechTextView.text = "Sto ascoltando..."  // Show "Listening..." in the user input TextView
+        }
+
+        // Perform the listening operation in the background
         val result = withContext(Dispatchers.IO) {
             audioRecorder.listenAndSplit() // Start listening and get the result
         }
+
+        // After listening is done, update the UI with the result
         withContext(Dispatchers.Main) {
-            textView.text = "Result: $result" // Update the UI with the result
+            userSpeechTextView.text = "Utente: $result"  // Update the user input TextView with the recognized result
         }
 
-        // TODO: do this in the audio recorder with real data
+        // Simulate XML result generation (or actual logic)
         val xmlString = generateSimpleXmlString(result)
+
+        // Restart listening if the result is blank
         return xmlString.ifBlank {
-            startListening() // Restart listening if there's no result to say
+            startListening()
         }
     }
 
@@ -350,17 +363,17 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         .build()
                     say.run()
                 } catch (e: Exception) {
-                    Log.e("MainActivity", "Errore durante Say: ${e.message}")
+                    Log.e(TAG, "Errore durante Say: ${e.message}")
                 }
             } else {
-                Log.e("MainActivity", "Il focus non è disponibile, Say non può essere eseguito.")
+                Log.e(TAG, "Il focus non è disponibile, Say non può essere eseguito.")
             }
         }
     }
 
     override fun onPause() {
         super.onPause()
-        Log.d("MainActivity", "OnPause, cancelling coroutine")
+        Log.i(TAG, "OnPause, cancelling coroutine")
         // Cancel the coroutine when the activity is paused
         coroutineJob?.cancel()
     }
@@ -399,16 +412,118 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
 
         // Normal interaction
-        if (sentence.isNotBlank()){
+        if (sentence.isNotBlank() && sentence != "Timeout") {
             previousSentence = sentence
 
             val profileId = "00000000-0000-0000-0000-000000000000"
-            // Perform reply request
-            serverCommunicationManager.hubRequest(xmlString, language, conversationState, profileId,
-                conversationState.dialogueState.topic, listOf(), DueIntervention(type = null, exclusive = false, sentence = "")
+
+            // Add the user's sentence to conversationHistory before the request
+            conversationState.dialogueState.conversationHistory.add(
+                mapOf("role" to "user", "content" to sentence)
             )
-            Log.i("MainActivity", "Dialogue Sentence: ${conversationState.dialogueState.dialogueSentence[0][1]}")
-            sayMessage(conversationState.dialogueState.dialogueSentence[0][1])
+
+            // Ensure only the last 5 entries are kept
+            if (conversationState.dialogueState.conversationHistory.size > 5) {
+                conversationState.dialogueState.conversationHistory =
+                    conversationState.dialogueState.conversationHistory.takeLast(5).toMutableList()
+            }
+
+            // Perform the first hubRequest and capture the updated conversationState
+            val updatedConversationState = serverCommunicationManager.hubRequest("reply",
+                xmlString, language, conversationState, profileId,
+                conversationState.dialogueState.topic, listOf(),
+                DueIntervention(type = null, exclusive = false, sentence = "")
+            )
+
+            if (updatedConversationState != null) {
+                conversationState = updatedConversationState
+
+                // Get the assistant's first sentence
+                var replySentence = conversationState.dialogueState.dialogueSentence[0][1]
+                // Replace any $prevspk tags
+                // Replace any $prevspk tags, preserving surrounding spaces
+                val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
+                replySentence = replySentence.replace(patternPrevspk, " ")
+
+                // Add the assistant's sentence to conversationHistory after the response
+                conversationState.dialogueState.conversationHistory.add(
+                    mapOf("role" to "assistant", "content" to replySentence)
+                )
+
+                // Ensure only the last 5 entries are kept
+                if (conversationState.dialogueState.conversationHistory.size > 5) {
+                    conversationState.dialogueState.conversationHistory =
+                        conversationState.dialogueState.conversationHistory.takeLast(5).toMutableList()
+                }
+
+                Log.i(TAG, "Reply sentence: $replySentence")
+
+                // Copy conversationState for the second hubRequest
+                val conversationStateCopy = conversationState.copy()
+
+                // Start sayMessage and second hubRequest concurrently
+                coroutineScope {
+                    // Launch sayMessage in the main thread
+                    robotSpeechTextView.text = ("Pepper: $replySentence")
+                    val sayJob = launch(Dispatchers.Main) {
+                        sayMessage(replySentence)
+                    }
+
+                    // Launch second hubRequest in IO thread
+                    val secondHubRequestJob = async(Dispatchers.IO) {
+                        serverCommunicationManager.hubRequest(
+                            "continuation", // Pass "continuation" as the reqType
+                            xmlString, language, conversationStateCopy, profileId,
+                            conversationStateCopy.dialogueState.topic, listOf(),
+                            DueIntervention(type = null, exclusive = false, sentence = "")
+                        )
+                    }
+
+                    // Wait for both to complete
+                    sayJob.join()
+                    val continuationConversationState = secondHubRequestJob.await()
+
+                    if (continuationConversationState != null) {
+                        // Update conversationState with the result from the second hubRequest
+                        conversationState = continuationConversationState
+
+                        // Get the assistant's second sentence
+                        if (conversationState.dialogueState.dialogueSentence.size > 1 &&
+                            conversationState.dialogueState.dialogueSentence[1].size > 1) {
+
+                            var continuationSentence = conversationState.dialogueState.dialogueSentence[1][1]
+
+                            // Replace any $desspk tags
+                            val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
+                            continuationSentence = continuationSentence.replace(patternDesspk, " ")
+
+                            // Add the assistant's second sentence to conversationHistory
+                            conversationState.dialogueState.conversationHistory.add(
+                                mapOf("role" to "assistant", "content" to continuationSentence)
+                            )
+
+                            // Ensure only the last 5 entries are kept
+                            if (conversationState.dialogueState.conversationHistory.size > 5) {
+                                conversationState.dialogueState.conversationHistory =
+                                    conversationState.dialogueState.conversationHistory.takeLast(5).toMutableList()
+                            }
+
+                            Log.i(TAG, "Continuation sentence: $continuationSentence")
+
+                            // Now say the second assistant sentence
+                            robotSpeechTextView.text = ("Pepper: $continuationSentence")
+                            sayMessage(continuationSentence)
+                        } else {
+                            Log.e(TAG, "Dialogue sentence structure is unexpected. Cannot find assistant's second sentence.")
+                        }
+                    } else {
+                        Log.e(TAG, "Failed to perform continuation hub request.")
+                    }
+                }
+            } else {
+                // Handle the case where the updated conversation state is null
+                Log.e(TAG, "Failed to update conversation state.")
+            }
         }
     }
 }

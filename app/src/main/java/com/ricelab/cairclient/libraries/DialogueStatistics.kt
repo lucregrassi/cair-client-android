@@ -1,7 +1,5 @@
 package com.ricelab.cairclient.libraries
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 data class DialogueStatistics(
@@ -16,12 +14,6 @@ data class DialogueStatistics(
 ) {
     constructor(profileId: String) : this() {
         mappingIndexSpeaker = mutableListOf(profileId)
-    }
-
-    suspend fun saveDialogueData(fileStorageManager: FileStorageManager) {
-        withContext(Dispatchers.IO) {
-            fileStorageManager.writeToFile(this)
-        }
     }
 
     fun toMap(): Map<String, Any?> {

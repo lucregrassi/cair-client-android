@@ -13,7 +13,9 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import java.io.IOException
 
-class ConnectionSettingsActivity : AppCompatActivity() {
+private const val TAG = "SettingsActivity"
+
+class SettingsActivity : AppCompatActivity() {
 
     private lateinit var serverIpSpinner: Spinner
     private lateinit var serverPortEditText: EditText
@@ -63,7 +65,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
                     //val intent = Intent(this, MainActivity::class.java)
                     //intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
                     if (!fromMenu) {
-                        Log.i("MainActivity", "FromMenu False, spawning new MainActivity")
+                        Log.i(TAG, "FromMenu False, spawning new MainActivity")
                         val intent = Intent(this, MainActivity::class.java)
                         startActivity(intent)
                     }
@@ -110,7 +112,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
         if (!fromMenu && !savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
             // Values exist, proceed to MainActivity
             val intent = Intent(this, MainActivity::class.java)
-            Log.i("MainActivity", "Spawing MainActivity ONLY THE FIRST TIME")
+            Log.i(TAG, "Spawing MainActivity ONLY THE FIRST TIME")
             startActivity(intent)
             finish()
         } else {
@@ -149,7 +151,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
             if (serverIpList.isEmpty()) {
                 // No certificates found
                 Toast.makeText(this, "No server certificates found.", Toast.LENGTH_LONG).show()
-                Log.e("SetupActivity", "No server certificates found in assets/certificates/")
+                Log.e(TAG, "No server certificates found in assets/certificates/")
             } else {
                 // Populate the Spinner with the server IPs
                 val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, serverIpList)
@@ -158,7 +160,7 @@ class ConnectionSettingsActivity : AppCompatActivity() {
             }
         } catch (e: IOException) {
             Toast.makeText(this, "Error loading server IPs: ${e.message}", Toast.LENGTH_LONG).show()
-            Log.e("SetupActivity", "Error loading server IPs", e)
+            Log.e(TAG, "Error loading server IPs", e)
         }
     }
 

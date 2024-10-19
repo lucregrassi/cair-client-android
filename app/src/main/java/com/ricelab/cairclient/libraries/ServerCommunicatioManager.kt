@@ -1,4 +1,3 @@
-// ServerCommunicationManager.kt
 package com.ricelab.cairclient.libraries
 
 import android.content.Context
@@ -19,6 +18,8 @@ import java.util.zip.DataFormatException
 import java.util.zip.Deflater
 import java.util.zip.Inflater
 import javax.net.ssl.*
+
+private const val TAG = "ServerCommunicationManager"
 
 data class FirstServerResponse(
     val firstSentence: String,
@@ -92,7 +93,7 @@ class ServerCommunicationManager(
     suspend fun firstServerRequest(language: String): FirstServerResponse {
         val url = "https://$serverIp:$serverPort/CAIR_hub/start"
 
-        Log.d("ServerCommunication","Url for server connect: $url")
+        Log.d(TAG,"Url for server connect: $url")
 
         // Preparare il payload della richiesta come stringa JSON
         val jsonPayloadString = gson.toJson(
@@ -146,6 +147,7 @@ class ServerCommunicationManager(
     }
 
     suspend fun hubRequest(
+        requestType: String,
         xmlString: String,
         language: String,
         conversationState: ConversationState,
@@ -167,7 +169,7 @@ class ServerCommunicationManager(
 
         // Compose the data payload to be sent
         val data = mapOf(
-            "req_type" to "reply",
+            "req_type" to requestType,
             "openai_api_key" to openAIApiKey,
             "client_sentence" to xmlString,
             "language" to language,
@@ -179,12 +181,12 @@ class ServerCommunicationManager(
             "dense_cap_result" to denseCapResult
         )
 
-        Log.d("ServerCommunicationManager", "xmlString = $xmlString")
-        Log.d("ServerCommunicationManager", "client_sentence = ${data["client_sentence"]}")
+        Log.d(TAG, "xmlString = $xmlString")
+        Log.d(TAG, "client_sentence = ${data["client_sentence"]}")
         val jsonData = JSONObject(data).toString().toByteArray(Charsets.UTF_8)
         val jsonstring = JSONObject(data).toString()
 
-        Log.d("ServerCommunicationManager", "jsonData = $jsonstring")
+        Log.d(TAG, "jsonData = $jsonstring")
         val compressedData = compressData(jsonData)
 
         // Create a POST request
@@ -198,20 +200,21 @@ class ServerCommunicationManager(
 
         return withContext(Dispatchers.IO) {
             try {
-                Log.i("ServerCommunicationManager", "Calling execute")
+                Log.i(TAG, "Performing $requestType request...")
                 val response = client.newCall(request).execute()
                 val endTime = System.currentTimeMillis()
 
                 if (response.isSuccessful) {
-                    Log.i("ServerCommunicationManager", "Successful")
+                    Log.i(TAG, "$requestType request performed successfully!")
                     val responseBodyBytes = response.body?.bytes() ?: throw Exception("Empty response")
                     val decompressedData = decompressData(responseBodyBytes)
                     val responseBodyString = String(decompressedData, Charsets.UTF_8)
                     val jsonResponse = JSONObject(responseBodyString)
+                    Log.i(TAG, "Received JSON: $jsonResponse")
                     val error = jsonResponse.optString("error", "")
 
                     if (error.isNotEmpty()) {
-                        Log.e("ServerCommunication", "Error from Hub: $error")
+                        Log.e(TAG, "Error from Hub: $error")
                         return@withContext null
                     }
 
@@ -219,7 +222,7 @@ class ServerCommunicationManager(
                     val updatedDialogueState = conversationState.dialogueState.updateFromJson(jsonResponse.getJSONObject("dialogue_state"))
                     val updatedDialogueStatistics = conversationState.dialogueStatistics.updateFromJson(jsonResponse.getJSONObject("dialogue_statistics"))
 
-                    Log.i("ServerCommunication", "Request response time: ${endTime - startTime}ms")
+                    Log.i(TAG, "$requestType request response time: ${endTime - startTime}ms")
 
                     // Return updated conversation state
                     return@withContext conversationState.copy(
@@ -227,11 +230,11 @@ class ServerCommunicationManager(
                         dialogueStatistics = updatedDialogueStatistics
                     )
                 } else {
-                    Log.i("ServerCommunicationManager", "Calling execute gave an error")
+                    Log.i(TAG, "Calling execute gave an error")
                     throw Exception("Server returned an error: ${response.code}")
                 }
             } catch (e: Exception) {
-                Log.e("ServerCommunication", "Failed to acquire updated state: ${e.message}")
+                Log.e(TAG, "Failed to acquire updated state: ${e.message}")
                 null
             }
         }

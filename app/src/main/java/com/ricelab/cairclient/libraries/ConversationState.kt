@@ -1,6 +1,9 @@
 package com.ricelab.cairclient.libraries
 
 import android.util.Log
+
+private const val TAG = "ConversationState"
+
 class ConversationState(
     private var fileStorageManager: FileStorageManager,
     private var previousSentence: String
@@ -13,17 +16,17 @@ class ConversationState(
     // Function to load conversation state
     fun loadConversationState() {
         // Step 1: Retrieve the state of the conversation
-        Log.i("ConversationState", "Loading conversation state elements")
+        Log.i(TAG, "Loading conversation state elements")
         dialogueState = fileStorageManager.readFromFile(DialogueState::class.java)!!
 
-        Log.i("ConversationState", "dialogueState = $dialogueState")
+        Log.i(TAG, "dialogueState = $dialogueState")
 
         // Step 2: If it's the first time, initialize dialogueNuances
         if (dialogueState.dialogueNuances.flags.isEmpty() && dialogueState.dialogueNuances.values.isEmpty()) {
-            Log.i("ConversationState", "dialogueState.dialogueNuances is empty, loading from file")
+            Log.i(TAG, "dialogueState.dialogueNuances is empty, loading from file")
             val dialogueNuances = fileStorageManager.readFromFile(DialogueNuances::class.java)!!
             dialogueState.dialogueNuances = dialogueNuances
-            Log.i("ConversationState", "dialogueState.dialogueNuances initialized")
+            Log.i(TAG, "dialogueState.dialogueNuances initialized")
         }
 
         // Step 3: Store the welcome or welcome back message in the conversation history
@@ -31,13 +34,11 @@ class ConversationState(
 
         // Step 4: Retrieve user info and store it
         speakersInfo = fileStorageManager.readFromFile(SpeakersInfo::class.java)!!
-
-        Log.i("ConversationState", "speakersInfo = $speakersInfo")
+        Log.i(TAG, "speakersInfo = $speakersInfo")
 
         // Step 5: Load dialogue statistics
         dialogueStatistics = fileStorageManager.readFromFile(DialogueStatistics::class.java)!!
-
-        Log.i("ConversationState", "dialogueStatistics = $dialogueStatistics")
+        Log.i(TAG, "dialogueStatistics = $dialogueStatistics")
 
         // Step 6: Set the previous dialogue sentence
         dialogueState.prevDialogueSentence = listOf(listOf("s", previousSentence))
