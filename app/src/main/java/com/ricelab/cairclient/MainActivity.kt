@@ -483,21 +483,32 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     robotSpeechTextView.text = ("Pepper: $replySentence")
                     sayMessage(replySentence)
 
-                    when (conversationState.plan) {
-                        "#action=hello" -> {
-                            Log.d(TAG, "Executing action: hello")
-                            // Perform the hello animation
-                            performAnimation(R.raw.hello)
-                        }
-                        "#action=hug" -> {
-                            Log.d(TAG, "Executing action: hug")
+                    val job = launch(Dispatchers.IO) {
+                        Log.d(TAG, "Launched the Animation job")
+                        when (conversationState.plan) {
+                            "#action=hello" -> {
+                                Log.d(TAG, "Executing action: hello")
+                                // Perform the hello animation
+                                performAnimation(R.raw.hello)
+                            }
+                            "#action=hug" -> {
+                                Log.d(TAG, "Executing action: hug")
+                                // Perform the hug animation (replace with actual hug animation resource)
+                                performAnimation(R.raw.hug)
+                            }
+                            "#action=handhake" -> {
+                            Log.d(TAG, "Executing action: handshake")
                             // Perform the hug animation (replace with actual hug animation resource)
-                            performAnimation(R.raw.hug)
-                        }
-                        else -> {
-                            Log.d(TAG, "No plan to perform")
+                            performAnimation(R.raw.handshake)
+                            }
+                            else -> {
+                                Log.d(TAG, "No plan to perform")
+                            }
                         }
                     }
+                    Log.d(TAG, "Joining on the Animation job")
+                    job.join()
+                    Log.d(TAG, "Joined the Animation job")
 
                     // Wait for the second hub request to complete
                     val continuationConversationState = secondHubRequestJob.await()
@@ -568,14 +579,15 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     .build()
             }
 
+            Log.i(TAG, "About to start Animation")
             // Run the animation synchronously (blocks until the animation is complete)
             animate.run()
 
             // Once the animation completes successfully, you can proceed
-            Log.i("MainActivity", "Animation completed successfully.")
+            Log.i(TAG, "Animation completed successfully.")
         } catch (e: Exception) {
             // Handle errors in the animation process
-            Log.e("MainActivity", "Error during animation: ${e.message}", e)
+            Log.e(TAG, "Error during animation: ${e.message}", e)
         }
     }
 }
