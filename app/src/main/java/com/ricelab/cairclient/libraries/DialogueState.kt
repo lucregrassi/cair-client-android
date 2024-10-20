@@ -19,7 +19,8 @@ data class DialogueState(
     var addressedCommunity: String? = null,
     var dialogueNuances: DialogueNuances = DialogueNuances(),
     var conversationHistory: MutableList<Map<String, String>> = mutableListOf(),
-    var ongoingConversation: Boolean? = null
+    var ongoingConversation: Boolean? = null,
+
 ) {
     // Constructor using snake_case from server-side
     constructor(dialogueState: Map<String, Any?>) : this(
@@ -80,7 +81,7 @@ data class DialogueState(
                 "values" to dialogueNuances.values
             ),
             "conversation_history" to conversationHistory,
-            "ongoing_conversation" to ongoingConversation
+            "ongoing_conversation" to ongoingConversation,
         )
     }
 

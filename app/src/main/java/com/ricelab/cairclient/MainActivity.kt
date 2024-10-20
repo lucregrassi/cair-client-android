@@ -22,6 +22,10 @@ import kotlinx.coroutines.*
 
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.aldebaran.qi.sdk.`object`.actuation.Animate
+import com.aldebaran.qi.sdk.`object`.actuation.Animation
+import com.aldebaran.qi.sdk.builder.AnimateBuilder
+import com.aldebaran.qi.sdk.builder.AnimationBuilder
 import org.w3c.dom.Element
 import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
@@ -352,25 +356,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private suspend fun sayMessage(text: String) {
-        // Build the Say action off the main thread
-        withContext(Dispatchers.IO) {
-            if (qiContext != null) {
-                try {
-                    Log.i("MainActivity", "Try sayMessage")
-                    val say = SayBuilder.with(qiContext)
-                        .withText(text)
-                        .build()
-                    say.run()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Errore durante Say: ${e.message}")
-                }
-            } else {
-                Log.e(TAG, "Il focus non è disponibile, Say non può essere eseguito.")
-            }
-        }
-    }
-
     override fun onPause() {
         super.onPause()
         Log.i(TAG, "OnPause, cancelling coroutine")
@@ -391,6 +376,25 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onRobotFocusRefused(reason: String) {
         Log.e(TAG, "Robot focus refused: $reason")
+    }
+
+    private suspend fun sayMessage(text: String) {
+        // Build the Say action off the main thread
+        withContext(Dispatchers.IO) {
+            if (qiContext != null) {
+                try {
+                    Log.i("MainActivity", "Try sayMessage")
+                    val say = SayBuilder.with(qiContext)
+                        .withText(text)
+                        .build()
+                    say.run()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Errore durante Say: ${e.message}")
+                }
+            } else {
+                Log.e(TAG, "Il focus non è disponibile, Say non può essere eseguito.")
+            }
+        }
     }
 
     private suspend fun handleUserInput(xmlString: String) {
@@ -437,10 +441,14 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
             if (updatedConversationState != null) {
                 conversationState = updatedConversationState
+                var replySentence = ""
+                if (conversationState.plan != ""){
+                    replySentence = conversationState.planSentence.toString()
+                } else {
+                    replySentence = conversationState.dialogueState.dialogueSentence[0][1]
+                }
+                Log.i(TAG, "Reply sentence: $replySentence")
 
-                // Get the assistant's first sentence
-                var replySentence = conversationState.dialogueState.dialogueSentence[0][1]
-                // Replace any $prevspk tags
                 // Replace any $prevspk tags, preserving surrounding spaces
                 val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
                 replySentence = replySentence.replace(patternPrevspk, " ")
@@ -456,20 +464,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         conversationState.dialogueState.conversationHistory.takeLast(5).toMutableList()
                 }
 
-                Log.i(TAG, "Reply sentence: $replySentence")
-
                 // Copy conversationState for the second hubRequest
                 val conversationStateCopy = conversationState.copy()
 
                 // Start sayMessage and second hubRequest concurrently
                 coroutineScope {
-                    // Launch sayMessage in the main thread
-                    robotSpeechTextView.text = ("Pepper: $replySentence")
-                    val sayJob = launch(Dispatchers.Main) {
-                        sayMessage(replySentence)
-                    }
-
-                    // Launch second hubRequest in IO thread
+                    // Launch the second hub request in the background
                     val secondHubRequestJob = async(Dispatchers.IO) {
                         serverCommunicationManager.hubRequest(
                             "continuation", // Pass "continuation" as the reqType
@@ -479,8 +479,27 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         )
                     }
 
-                    // Wait for both to complete
-                    sayJob.join()
+                    // Say the replySentence synchronously
+                    robotSpeechTextView.text = ("Pepper: $replySentence")
+                    sayMessage(replySentence)
+
+                    when (conversationState.plan) {
+                        "#action=hello" -> {
+                            Log.d(TAG, "Executing action: hello")
+                            // Perform the hello animation
+                            performAnimation(R.raw.hello)
+                        }
+                        "#action=hug" -> {
+                            Log.d(TAG, "Executing action: hug")
+                            // Perform the hug animation (replace with actual hug animation resource)
+                            performAnimation(R.raw.hug)
+                        }
+                        else -> {
+                            Log.d(TAG, "No plan to perform")
+                        }
+                    }
+
+                    // Wait for the second hub request to complete
                     val continuationConversationState = secondHubRequestJob.await()
 
                     if (continuationConversationState != null) {
@@ -510,7 +529,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
                             Log.i(TAG, "Continuation sentence: $continuationSentence")
 
-                            // Now say the second assistant sentence
+                            // Now say the second assistant sentence after the animation is completed
                             robotSpeechTextView.text = ("Pepper: $continuationSentence")
                             sayMessage(continuationSentence)
                         } else {
@@ -524,6 +543,39 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 // Handle the case where the updated conversation state is null
                 Log.e(TAG, "Failed to update conversation state.")
             }
+        }
+    }
+
+    // Mark the function as 'suspend' to allow coroutine-based waiting
+    private suspend fun performAnimation(animationRes: Int) {
+        if (qiContext == null) {
+            Log.e("MainActivity", "QiContext is not initialized.")
+            return
+        }
+
+        try {
+            // Build the animation off the main thread
+            val myAnimation: Animation = withContext(Dispatchers.IO) {
+                AnimationBuilder.with(qiContext)
+                    .withResources(animationRes)
+                    .build()
+            }
+
+            // Build the Animate action off the main thread
+            val animate: Animate = withContext(Dispatchers.IO) {
+                AnimateBuilder.with(qiContext)
+                    .withAnimation(myAnimation)
+                    .build()
+            }
+
+            // Run the animation synchronously (blocks until the animation is complete)
+            animate.run()
+
+            // Once the animation completes successfully, you can proceed
+            Log.i("MainActivity", "Animation completed successfully.")
+        } catch (e: Exception) {
+            // Handle errors in the animation process
+            Log.e("MainActivity", "Error during animation: ${e.message}", e)
         }
     }
 }

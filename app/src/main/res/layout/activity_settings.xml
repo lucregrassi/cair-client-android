@@ -17,7 +17,7 @@
             android:id="@+id/setupTitleTextView"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Connection settings"
+            android:text="Impostazioni"
             android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="@color/black"
@@ -29,7 +29,7 @@
             android:id="@+id/serverIpLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Select Server IP Address"
+            android:text="IP del server"
             android:textSize="16sp"
             android:textColor="@color/black" />
 
@@ -44,7 +44,7 @@
             android:id="@+id/serverPortLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Server Port Number"
+            android:text="Porta per connettersi al server"
             android:textSize="16sp"
             android:textColor="@color/black" />
 
@@ -52,7 +52,7 @@
             android:id="@+id/serverPortEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Enter the server port number"
+            android:hint="Inserisci la porta"
             android:inputType="number"
             android:text="12345"
         android:layout_marginBottom="16dp" />
@@ -62,7 +62,7 @@
             android:id="@+id/openAIApiKeyLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="OpenAI API Key"
+            android:text="Chiave per le API di OpenAI"
             android:textSize="16sp"
             android:textColor="@color/black" />
 
@@ -70,7 +70,7 @@
             android:id="@+id/openAIApiKeyEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Enter your OpenAI API key"
+            android:hint="Inserisci la chiave"
             android:inputType="textPassword"
             android:layout_marginBottom="24dp" />
 

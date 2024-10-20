@@ -11,6 +11,8 @@ class ConversationState(
     var dialogueState: DialogueState = DialogueState()
     var speakersInfo = SpeakersInfo()
     var dialogueStatistics = DialogueStatistics()
+    var planSentence: String? = null
+    var plan: String? = null
     // Remove dialogueNuances variable
 
     // Function to load conversation state
@@ -50,12 +52,16 @@ class ConversationState(
         previousSentence: String = this.previousSentence,
         dialogueState: DialogueState = this.dialogueState.copy(),
         speakersInfo: SpeakersInfo = this.speakersInfo.copy(),
-        dialogueStatistics: DialogueStatistics = this.dialogueStatistics.copy()
+        dialogueStatistics: DialogueStatistics = this.dialogueStatistics.copy(),
+        plan: String? = this.plan,
+        planSentence: String? = this.planSentence
     ): ConversationState {
         val newConversationState = ConversationState(fileStorageManager, previousSentence)
         newConversationState.dialogueState = dialogueState
         newConversationState.speakersInfo = speakersInfo
         newConversationState.dialogueStatistics = dialogueStatistics
+        newConversationState.plan = plan
+        newConversationState.planSentence = planSentence
         return newConversationState
     }
 }

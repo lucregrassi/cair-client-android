@@ -222,12 +222,21 @@ class ServerCommunicationManager(
                     val updatedDialogueState = conversationState.dialogueState.updateFromJson(jsonResponse.getJSONObject("dialogue_state"))
                     val updatedDialogueStatistics = conversationState.dialogueStatistics.updateFromJson(jsonResponse.getJSONObject("dialogue_statistics"))
 
+                    Log.d(TAG, "updateFromJson: json.plan=${jsonResponse.optString("plan", "fallback")}")
+                    Log.d(TAG, "updateFromJson: josn.plan_sentence=${jsonResponse.optString("plan_sentence", "fallback")}")
+                    val updatedPlanSentence = jsonResponse.optString("plan_sentence", conversationState.planSentence ?: "")
+                    val updatedPlan =  jsonResponse.optString("plan", conversationState.plan?: "")
+                    Log.d(TAG, "updateFromJson: dialogueState.plan=$updatedPlan")
+                    Log.d(TAG, "updateFromJson: dialogueState.plan_sentence=$updatedPlanSentence")
+
                     Log.i(TAG, "$requestType request response time: ${endTime - startTime}ms")
 
                     // Return updated conversation state
                     return@withContext conversationState.copy(
                         dialogueState = updatedDialogueState,
-                        dialogueStatistics = updatedDialogueStatistics
+                        dialogueStatistics = updatedDialogueStatistics,
+                        planSentence = updatedPlanSentence,
+                        plan = updatedPlan
                     )
                 } else {
                     Log.i(TAG, "Calling execute gave an error")
