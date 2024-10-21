@@ -174,6 +174,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         // Start dialogue with Pepper when QiContext is ready
         coroutineJob = lifecycleScope.launch {
+            Log.d(TAG, "Starting Dialogue in a Coroutine")
             startDialogue()
         }
     }
@@ -222,7 +223,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             previousSentence
         )
         withContext(Dispatchers.IO) {
-            conversationState.loadConversationState()
+            conversationState.loadFromFile()
         }
 
         lastActiveSpeakerTime = System.currentTimeMillis()
@@ -239,12 +240,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             val xmlString = startListening()
             lastActiveSpeakerTime = System.currentTimeMillis()
             handleUserInput(xmlString)
+            withContext(Dispatchers.IO) {
+                conversationState.writeToFile()
+            }
         }
     }
 
     private suspend fun initializeUserSession() {
         val firstSentence: String
 
+        Log.d(TAG, "Initializing user session")
         if (!fileStorageManager.filesExist()) {
             // First-time user
             Log.i(TAG, "First user!")
@@ -417,7 +422,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         // Normal interaction
         if (sentence.isNotBlank() && sentence != "Timeout") {
-            previousSentence = sentence
 
             val profileId = "00000000-0000-0000-0000-000000000000"
 
@@ -496,13 +500,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                 // Perform the hug animation (replace with actual hug animation resource)
                                 performAnimation(R.raw.hug)
                             }
-                            "#action=handhake" -> {
-                            Log.d(TAG, "Executing action: handshake")
-                            // Perform the hug animation (replace with actual hug animation resource)
-                            performAnimation(R.raw.handshake)
+                            "#action=handshake" -> {
+                                Log.d(TAG, "Executing action: handshake")
+                                // Perform the hug animation (replace with actual hug animation resource)
+                                performAnimation(R.raw.handshake)
                             }
                             else -> {
-                                Log.d(TAG, "No plan to perform")
+                                Log.e(TAG, "No plan to perform")
                             }
                         }
                     }
@@ -543,6 +547,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             // Now say the second assistant sentence after the animation is completed
                             robotSpeechTextView.text = ("Pepper: $continuationSentence")
                             sayMessage(continuationSentence)
+                            Log.d(TAG, "Setting previousSentence as ${continuationSentence}")
+                            previousSentence = continuationSentence
+
                         } else {
                             Log.e(TAG, "Dialogue sentence structure is unexpected. Cannot find assistant's second sentence.")
                         }

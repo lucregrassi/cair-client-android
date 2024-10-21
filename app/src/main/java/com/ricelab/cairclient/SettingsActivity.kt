@@ -7,10 +7,12 @@ import android.util.Log
 import android.view.MenuItem
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
 
 // Libraries for secure storage
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.ricelab.cairclient.libraries.FileStorageManager
 import java.io.IOException
 
 private const val TAG = "SettingsActivity"
@@ -39,6 +41,10 @@ class SettingsActivity : AppCompatActivity() {
 
         // Check if SetupActivity was opened from the menu or on first launch
         val fromMenu = intent.getBooleanExtra("fromMenu", false)
+        val deleteAllButton: Button = findViewById(R.id.deleteAllButton)
+        deleteAllButton.setOnClickListener {
+            showDeleteConfirmationDialog()
+        }
 
         // Load saved values
         loadSavedValues(fromMenu)
@@ -73,6 +79,24 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    // Function to show a confirmation dialog before deleting all data
+    private fun showDeleteConfirmationDialog() {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Conferma cancellazione")
+        builder.setMessage("Sei sicuro di voler cancellare tutti i dati?")
+
+        builder.setPositiveButton("Sì") { dialog, which ->
+            deleteAllData()
+        }
+
+        builder.setNegativeButton("No") { dialog, which ->
+            dialog.dismiss() // Do nothing on "No"
+        }
+
+        val dialog: AlertDialog = builder.create()
+        dialog.show()
     }
 
     // Handle the "Up" button press
@@ -187,5 +211,39 @@ class SettingsActivity : AppCompatActivity() {
             putInt("server_port", serverPort)
             apply()
         }
+    }
+
+    private fun deleteAllData() {
+        // Initialize FileStorageManager
+        Log.i(TAG, "deleteAllData() with filesDir=$filesDir")
+        var fileStorageManager = FileStorageManager(null, filesDir)
+
+        Log.i(TAG, "File exists? ${fileStorageManager.filesExist()}")
+        // Delete all the files managed by FileStorageManager
+        fileStorageManager.dialogueStateFile?.delete()
+        fileStorageManager.speakersInfoFile?.delete()
+        fileStorageManager.dialogueStatisticsFile?.delete()
+        Log.i(TAG, "File exists? ${fileStorageManager.filesExist()}")
+
+        // Clear EncryptedSharedPreferences
+        val masterKeyAlias = MasterKey.Builder(this)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        val sharedPreferences = EncryptedSharedPreferences.create(
+            this,
+            "secure_prefs",
+            masterKeyAlias,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+
+        with(sharedPreferences.edit()) {
+            clear()
+            apply()
+        }
+
+        // Show a confirmation toast or log
+        Toast.makeText(this, "Tutti i dati sono stati cancellati.", Toast.LENGTH_LONG).show()
     }
 }

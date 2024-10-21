@@ -16,7 +16,7 @@ class ConversationState(
     // Remove dialogueNuances variable
 
     // Function to load conversation state
-    fun loadConversationState() {
+    fun loadFromFile() {
         // Step 1: Retrieve the state of the conversation
         Log.i(TAG, "Loading conversation state elements")
         dialogueState = fileStorageManager.readFromFile(DialogueState::class.java)!!
@@ -44,6 +44,16 @@ class ConversationState(
 
         // Step 6: Set the previous dialogue sentence
         dialogueState.prevDialogueSentence = listOf(listOf("s", previousSentence))
+    }
+
+    fun writeToFile() {
+        Log.i(TAG, "Writing conversation state elements")
+        fileStorageManager.writeToFile(dialogueState)
+        Log.i(TAG, "dialogueState = $dialogueState")
+        fileStorageManager.writeToFile(speakersInfo)
+        Log.i(TAG, "speakersInfo = $speakersInfo")
+        fileStorageManager.writeToFile(dialogueStatistics)
+        Log.i(TAG, "dialogueStatistics = $dialogueStatistics")
     }
 
     // Custom copy method

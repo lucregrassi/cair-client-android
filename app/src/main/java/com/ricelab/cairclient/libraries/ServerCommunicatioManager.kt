@@ -158,7 +158,7 @@ class ServerCommunicationManager(
     ): ConversationState? {
 
         val url = "https://$serverIp:$serverPort/CAIR_hub"
-        Log.d("ServerCommunication", "Performing request to: $url")
+        Log.d(TAG, "Performing request to: $url")
 
         // Convert DueIntervention to a map
         val dueInterventionMap = mapOf(

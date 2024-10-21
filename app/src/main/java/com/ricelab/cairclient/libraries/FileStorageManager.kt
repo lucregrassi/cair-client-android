@@ -17,13 +17,15 @@ class FileStorageManager(
     var mycontext: Context? = null
 ) {
     // Secondary constructor that takes Context and filesDir
-    constructor(context: Context, filesDir: File) : this(
+    constructor(context: Context?, filesDir: File) : this(
         filesDir = filesDir,
         dialogueStateFile = File(filesDir, "dialogue_state.json"),
         speakersInfoFile = File(filesDir, "speakers_info.json"),
         dialogueStatisticsFile = File(filesDir, "dialogue_statistics.json"),
         mycontext = context
-    )
+    ) {
+        Log.d(TAG, "FileStorageManager Constructor with filesDir=$filesDir")
+    }
 
     // Write data to file
     inline fun <reified T> writeToFile(data: T) {
