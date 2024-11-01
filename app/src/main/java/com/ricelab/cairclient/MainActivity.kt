@@ -314,7 +314,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             // Returning user
             Log.i(TAG, "Returning user")
             firstSentence = if (language == "it-IT") {
-                "È bello rivedervi! Di cosa vorreste parlare?"
+                "È bello rivederti! Di cosa vorresti parlare?"
             } else {
                 "Welcome back! I missed you. What would you like to talk about?"
             }

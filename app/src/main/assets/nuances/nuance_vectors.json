@@ -9,10 +9,10 @@
     },
     "values": {
         "diversity": ["any", "good mental health", "no physical problems"],
-        "time": ["morning", "autumn", "October"],
-        "place": ["Maker Faire an annual faire dedicated to innovation, technology, and creativity", "Rome, at the Gasometer", "Italy"],
+        "time": ["morning", "October", "the day after Halloween night"],
+        "place": ["Festival della Scienza in the demo area of the RAISE project", "Palazzo Ducale in Genoa", "Italy"],
         "tone": ["humorous", "kind", "dramatic", "controversial", "aggressive", "teasing", "alarmist",
-                 "worried", "neutral"],
+            "worried", "neutral"],
         "positive_speech_act": ["assertive", "commissive", "expressive"],
         "contextual_speech_act": ["assertive", "commissive", "expressive", "declarative"]
     }
