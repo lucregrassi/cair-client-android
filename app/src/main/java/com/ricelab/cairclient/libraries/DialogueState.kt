@@ -19,7 +19,7 @@ data class DialogueState(
     var addressedCommunity: String? = null,
     var dialogueNuances: DialogueNuances = DialogueNuances(),
     var conversationHistory: MutableList<Map<String, String>> = mutableListOf(),
-    var ongoingConversation: Boolean? = null,
+    var ongoingConversation: Boolean = true,
 
 ) {
     // Constructor using snake_case from server-side
@@ -42,7 +42,7 @@ data class DialogueState(
             DialogueNuances(flags, values)
         } ?: DialogueNuances(),
         conversationHistory = (dialogueState["conversation_history"] as? List<*>)?.filterIsInstance<Map<String, String>>()?.toMutableList() ?: mutableListOf(),
-        ongoingConversation = dialogueState["ongoing_conversation"] as? Boolean
+        ongoingConversation = dialogueState["ongoing_conversation"] as Boolean
     )
     companion object {
         fun parseDialogueSentence(data: Any?): List<List<String>> {

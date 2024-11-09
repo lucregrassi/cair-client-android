@@ -3,6 +3,7 @@ plugins {
     id 'com.android.application'
     // Apply the Kotlin Android plugin, which is required for using Kotlin in Android projects.
     id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.serialization'
 }
 
 // Load the properties file where the API keys are stored
@@ -112,4 +113,5 @@ dependencies {
 
     // To serialize and deserialize json
     implementation 'com.google.code.gson:gson:2.10.1'
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1"
 }
