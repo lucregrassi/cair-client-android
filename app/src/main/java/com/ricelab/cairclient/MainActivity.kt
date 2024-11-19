@@ -30,7 +30,7 @@ import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
 
 private const val TAG = "MainActivity"
-private const val SILENCE_THRESHOLD: Long = 10 // in seconds
+private const val SILENCE_THRESHOLD: Long = 300 // in seconds
 
 class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
@@ -250,6 +250,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         )
         withContext(Dispatchers.IO) {
             conversationState.loadFromFile()
+            Log.d(TAG, "After loading from file")
+            conversationState.dialogueState.printDebug()
         }
 
         lastActiveSpeakerTime = System.currentTimeMillis()
@@ -307,6 +309,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 pepperInterface.sayMessage("Mi dispiace, non riesco a connettermi al server.")
                 return
             }
+            Log.d(TAG, "After first request")
+            conversationState.dialogueState.printDebug()
 
             // Extract the welcome message and dialogue state from the server response
             firstSentence = firstRequestResponse.firstSentence
@@ -347,6 +351,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 latestTurns = mutableListOf()
             )
 
+            Log.d(TAG, "Saving to file")
+            dialogueState.printDebug()
             // Save the received data to files
             withContext(Dispatchers.IO) {
                 fileStorageManager.writeToFile(dialogueState)

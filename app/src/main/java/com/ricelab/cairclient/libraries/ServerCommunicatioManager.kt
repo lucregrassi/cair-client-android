@@ -131,18 +131,21 @@ class ServerCommunicationManager(
     }
 
     private fun parseFirstServerResponse(responseBody: String): FirstServerResponse {
+
+
         return try {
             // Analizzare la risposta JSON in una mappa
             val responseData = gson.fromJson(responseBody, Map::class.java) as Map<*, *>
+            Log.d(TAG, "First server response dialogue_state = ${responseData["dialogue_state"]}")
             val firstSentence = responseData["first_sentence"] as? String
                 ?: throw Exception("Invalid first_sentence format")
             val dialogueState = (responseData["dialogue_state"] as? Map<*, *>)?.mapKeys { it.key.toString() }
                 ?.mapValues { it.value ?: throw Exception("Null value found in dialogue_state") }
                 ?: throw Exception("Invalid dialogue_state format")
-            Log.i("ServerCommunication", "Received dialogue_state: $dialogueState")
+            Log.i(TAG, "Received dialogue_state: $dialogueState")
             FirstServerResponse(firstSentence = firstSentence, dialogueState = dialogueState)
         } catch (e: Exception) {
-            Log.e("ServerCommunication", "Error parsing JSON response: ${e.message}")
+            Log.e(TAG, "Error parsing JSON response: ${e.message}")
             throw Exception("Error parsing JSON response: ${e.message}", e)
         }
     }
@@ -210,6 +213,7 @@ class ServerCommunicationManager(
                     val responseBodyBytes = response.body?.bytes() ?: throw Exception("Empty response")
                     val decompressedData = decompressData(responseBodyBytes)
                     val responseBodyString = String(decompressedData, Charsets.UTF_8)
+                    Log.i(TAG, "Received JSON string: $responseBodyString")
                     val jsonResponse = JSONObject(responseBodyString)
                     Log.i(TAG, "Received JSON: $jsonResponse")
                     val error = jsonResponse.optString("error", "")

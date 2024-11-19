@@ -62,6 +62,11 @@ data class DialogueState(
         }
     }
 
+    fun printDebug() {
+        Log.d(TAG, "familiarities: $familiarities")
+        Log.d(TAG, "flags: $flags")
+    }
+
     // Serializing camelCase fields to snake_case for server-side
     fun toMap(): Map<String, Any?> {
         return mapOf(
