@@ -137,14 +137,18 @@ data class DialogueState(
         this.bool = if (json.has("bool")) json.optBoolean("bool") else this.bool
 
         // Update familiarities
+        Log.d(TAG, "familiarities before updateFromJSON: $familiarities")
         this.familiarities = json.optJSONObject("familiarities")?.let { familiaritiesJson ->
             familiaritiesJson.keys().asSequence().associateWith { familiaritiesJson[it] as Any }
         } ?: this.familiarities
+        Log.d(TAG, "familiarities after updateFromJSON: $familiarities")
 
+        Log.d(TAG, "Flags before updateFromJSON: $flags")
         // Update flags
         this.flags = json.optJSONObject("flags")?.let { flagsJson ->
             flagsJson.keys().asSequence().associateWith { flagsJson[it] as Any }
         } ?: this.flags
+        Log.d(TAG, "Flags after updateFromJSON: $flags")
 
         // Update addressedCommunity
         this.addressedCommunity =

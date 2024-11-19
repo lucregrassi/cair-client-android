@@ -9,8 +9,8 @@
     },
     "values": {
         "diversity": ["any", "good mental health", "no physical problems"],
-        "time": ["morning", "October", "the day after Halloween night"],
-        "place": ["Festival della Scienza in the demo area of the RAISE project", "Palazzo Ducale in Genoa", "Italy"],
+        "time": ["afternoon", "November", "during the party for Lucrezia's birthday"],
+        "place": ["Enrico's home", "Genoa", "Italy"],
         "tone": ["humorous", "kind", "dramatic", "controversial", "aggressive", "teasing", "alarmist",
             "worried", "neutral"],
         "positive_speech_act": ["assertive", "commissive", "expressive"],
