@@ -242,12 +242,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private suspend fun startDialogue() {
-        initializeUserSession()
-
         conversationState = ConversationState(
             fileStorageManager,
             previousSentence
         )
+
+        initializeUserSession()
+
         withContext(Dispatchers.IO) {
             conversationState.loadFromFile()
             Log.d(TAG, "After loading from file")

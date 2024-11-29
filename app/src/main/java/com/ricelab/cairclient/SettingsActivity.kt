@@ -53,10 +53,16 @@ class SettingsActivity : AppCompatActivity() {
         loadServerIpsFromCertificates()
 
         // Set click listener for the proceed button
+
         proceedButton.setOnClickListener {
             val serverIp = serverIpSpinner.selectedItem as String
             val openAIApiKey = openAIApiKeyEditText.text.toString().trim()
             val serverPortText = serverPortEditText.text.toString().trim()
+
+            // Log the input values for debugging
+            Log.d(TAG, "Server IP: $serverIp")
+            Log.d(TAG, "OpenAI API Key: $openAIApiKey")
+            Log.d(TAG, "Server Port Text: $serverPortText")
 
             if (openAIApiKey.isEmpty() || serverPortText.isEmpty()) {
                 Toast.makeText(this, "Please enter your OpenAI API Key and Server Port.", Toast.LENGTH_SHORT).show()
@@ -65,11 +71,13 @@ class SettingsActivity : AppCompatActivity() {
                 if (serverPort == null || serverPort <= 0 || serverPort > 65535) {
                     Toast.makeText(this, "Please enter a valid port number (1-65535).", Toast.LENGTH_SHORT).show()
                 } else {
+                    // Log the validated server port
+                    Log.d(TAG, "Validated Server Port: $serverPort")
+
                     // Save the values securely
                     saveValues(serverIp, openAIApiKey, serverPort)
+
                     // Proceed to MainActivity
-                    //val intent = Intent(this, MainActivity::class.java)
-                    //intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP
                     if (!fromMenu) {
                         Log.i(TAG, "FromMenu False, spawning new MainActivity")
                         val intent = Intent(this, MainActivity::class.java)

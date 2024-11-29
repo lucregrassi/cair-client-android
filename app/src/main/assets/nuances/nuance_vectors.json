@@ -9,8 +9,8 @@
     },
     "values": {
         "diversity": ["any", "good mental health", "no physical problems"],
-        "time": ["afternoon", "November", "during the party for Lucrezia's birthday"],
-        "place": ["Enrico's home", "Genoa", "Italy"],
+        "time": ["afternoon", "November", "almost Christmas"],
+        "place": ["RICE lab - a robotics lab", "University of Genoa", "Italy"],
         "tone": ["humorous", "kind", "dramatic", "controversial", "aggressive", "teasing", "alarmist",
             "worried", "neutral"],
         "positive_speech_act": ["assertive", "commissive", "expressive"],
