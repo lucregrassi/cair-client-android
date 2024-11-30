@@ -23,6 +23,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var serverPortEditText: EditText
     private lateinit var openAIApiKeyEditText: EditText
     private lateinit var proceedButton: Button
+    private lateinit var fillerSentenceSwitch: Switch // Added line
 
     private val serverIpList = mutableListOf<String>()
 
@@ -38,6 +39,7 @@ class SettingsActivity : AppCompatActivity() {
         serverPortEditText = findViewById(R.id.serverPortEditText)
         openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
         proceedButton = findViewById(R.id.proceedButton)
+        fillerSentenceSwitch = findViewById(R.id.fillerSentenceSwitch) // Added line
 
         // Check if SetupActivity was opened from the menu or on first launch
         val fromMenu = intent.getBooleanExtra("fromMenu", false)
@@ -53,16 +55,17 @@ class SettingsActivity : AppCompatActivity() {
         loadServerIpsFromCertificates()
 
         // Set click listener for the proceed button
-
         proceedButton.setOnClickListener {
             val serverIp = serverIpSpinner.selectedItem as String
             val openAIApiKey = openAIApiKeyEditText.text.toString().trim()
             val serverPortText = serverPortEditText.text.toString().trim()
+            val useFillerSentence = fillerSentenceSwitch.isChecked // Added line
 
             // Log the input values for debugging
             Log.d(TAG, "Server IP: $serverIp")
             Log.d(TAG, "OpenAI API Key: $openAIApiKey")
             Log.d(TAG, "Server Port Text: $serverPortText")
+            Log.d(TAG, "Use Filler Sentence: $useFillerSentence") // Added line
 
             if (openAIApiKey.isEmpty() || serverPortText.isEmpty()) {
                 Toast.makeText(this, "Please enter your OpenAI API Key and Server Port.", Toast.LENGTH_SHORT).show()
@@ -75,7 +78,7 @@ class SettingsActivity : AppCompatActivity() {
                     Log.d(TAG, "Validated Server Port: $serverPort")
 
                     // Save the values securely
-                    saveValues(serverIp, openAIApiKey, serverPort)
+                    saveValues(serverIp, openAIApiKey, serverPort, useFillerSentence) // Modified line
 
                     // Proceed to MainActivity
                     if (!fromMenu) {
@@ -139,6 +142,7 @@ class SettingsActivity : AppCompatActivity() {
         val savedServerIp = sharedPreferences.getString("server_ip", null)
         val savedOpenAIApiKey = sharedPreferences.getString("openai_api_key", null)
         val savedServerPort = sharedPreferences.getInt("server_port", -1)
+        val useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", false) // Added line
 
         // If opened for the first time (not from the menu) and values exist, proceed to MainActivity
         if (!fromMenu && !savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
@@ -155,6 +159,7 @@ class SettingsActivity : AppCompatActivity() {
             if (savedServerPort != -1) {
                 serverPortEditText.setText(savedServerPort.toString())
             }
+            fillerSentenceSwitch.isChecked = useFillerSentence // Added line
         }
     }
 
@@ -197,7 +202,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     // Function to save values securely
-    private fun saveValues(serverIp: String, openAIApiKey: String, serverPort: Int) {
+    private fun saveValues(serverIp: String, openAIApiKey: String, serverPort: Int, useFillerSentence: Boolean) {
         // Initialize MasterKey for encryption
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -212,11 +217,12 @@ class SettingsActivity : AppCompatActivity() {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
 
-        // Save the server IP, OpenAI API key, and server port securely
+        // Save the server IP, OpenAI API key, server port, and filler sentence usage securely
         with(sharedPreferences.edit()) {
             putString("server_ip", serverIp)
             putString("openai_api_key", openAIApiKey)
             putInt("server_port", serverPort)
+            putBoolean("use_filler_sentence", useFillerSentence) // Added line
             apply()
         }
     }
@@ -224,7 +230,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun deleteAllData() {
         // Initialize FileStorageManager
         Log.i(TAG, "deleteAllData() with filesDir=$filesDir")
-        var fileStorageManager = FileStorageManager(null, filesDir)
+        val fileStorageManager = FileStorageManager(null, filesDir)
 
         Log.i(TAG, "File exists? ${fileStorageManager.filesExist()}")
         // Delete all the files managed by FileStorageManager

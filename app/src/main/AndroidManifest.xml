@@ -10,7 +10,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.CAIRclient"
+        android:theme="@style/Theme.CAIRclient.Christmas"
         tools:targetApi="31">
 
         <!-- ServerIpActivity to be launched when the app starts -->

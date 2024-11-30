@@ -74,12 +74,21 @@
             android:inputType="textPassword"
             android:layout_marginBottom="24dp" />
 
+
+        <Switch
+            android:id="@+id/fillerSentenceSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Filler sentence"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Proceed Button -->
         <Button
             android:id="@+id/proceedButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Avanti"
-            android:backgroundTint="@color/purple_500"
+            android:backgroundTint="@color/christmas_green"
             android:textColor="@color/white"
             android:layout_gravity="center_horizontal"
             android:paddingStart="24dp"
@@ -98,6 +107,6 @@
             android:paddingStart="24dp"
             android:paddingEnd="24dp"
             android:paddingTop="12dp"
-            android:paddingBottom="12dp"/>
+            android:paddingBottom="12dp" />
     </LinearLayout>
 </ScrollView>

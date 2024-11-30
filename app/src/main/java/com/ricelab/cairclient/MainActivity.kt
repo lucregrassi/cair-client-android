@@ -16,17 +16,13 @@ import androidx.lifecycle.lifecycleScope
 import com.aldebaran.qi.sdk.QiContext
 import com.aldebaran.qi.sdk.QiSDK
 import com.aldebaran.qi.sdk.RobotLifecycleCallbacks
-import com.aldebaran.qi.sdk.builder.SayBuilder
 import com.ricelab.cairclient.libraries.*
 import kotlinx.coroutines.*
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
-import com.aldebaran.qi.sdk.`object`.actuation.Animate
-import com.aldebaran.qi.sdk.`object`.actuation.Animation
-import com.aldebaran.qi.sdk.builder.AnimateBuilder
-import com.aldebaran.qi.sdk.builder.AnimationBuilder
 import org.w3c.dom.Element
 import org.w3c.dom.Node
+import java.io.IOException
 import javax.xml.parsers.DocumentBuilderFactory
 
 private const val TAG = "MainActivity"
@@ -76,6 +72,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private lateinit var pepperInterface: PepperInterface
 
+    // Variable for filler sentence usage
+    private var useFillerSentence: Boolean = false
+    private lateinit var fillerSentences: List<String>
+
     // Register for the audio permission request result
     private val requestAudioPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -97,7 +97,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         setContentView(R.layout.activity_main)
         QiSDK.register(this, this)
 
-        // Retrieve stored server IP and OpenAI API key
+        loadFillerSentences()
+
+        // Retrieve stored server IP, OpenAI API key, and filler sentence usage
         retrieveStoredValues()
 
         // Initialize file paths and other components that don't need qiContext
@@ -113,6 +115,19 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             recalibrateThreshold()
         }
         checkAndRequestAudioPermission()
+    }
+
+    private fun loadFillerSentences() {
+        try {
+            val inputStream = assets.open("dialogue_data/filler_sentences.txt")
+            fillerSentences = inputStream.bufferedReader().useLines { lines ->
+                lines.map { it.trim() }.filter { it.isNotEmpty() }.toList()
+            }
+            Log.d(TAG, "Filler sentences loaded: ${fillerSentences.size} sentences")
+        } catch (e: IOException) {
+            Log.e(TAG, "Error loading filler sentences: ${e.message}")
+            fillerSentences = listOf("Fammi riflettere") // Default sentence if file can't be read
+        }
     }
 
     // Inflate the menu
@@ -153,10 +168,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
 
-        // Retrieve the stored server IP, OpenAI API key, and server port
+        // Retrieve the stored server IP, OpenAI API key, server port, and filler sentence usage
         serverIp = sharedPreferences.getString("server_ip", null) ?: ""
         openAIApiKey = sharedPreferences.getString("openai_api_key", null) ?: ""
         serverPort = sharedPreferences.getInt("server_port", -1)
+        useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", false)
+        Log.d(TAG, "useFillerSentence retrieved: $useFillerSentence") // Add this line
 
         if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
             // Redirect back to SetupActivity if values are missing
@@ -188,10 +205,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     override fun onRobotFocusGained(qiContext: QiContext) {
+        Log.i(TAG, "Entering onRobotFocusGained")
         this.qiContext = qiContext
         pepperInterface.setContext(this.qiContext)
 
-        Log.i(TAG, "Entering onRobotFocusGained and creating ServerCommunicationManager")
+        // retrieve the stored values for when you come from the settingsActivity and you don't
+        // retrieve them in the onCreate
+        retrieveStoredValues()
 
         // Initialize ServerCommunicationManager now that qiContext is available
         serverCommunicationManager =
@@ -439,7 +459,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         Log.e(TAG, "Robot focus refused: $reason")
     }
 
-
     private suspend fun handleUserInput(xmlString: String) {
         val sentence = parseXmlString(xmlString)
 
@@ -482,17 +501,48 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             // Add the parameter ongoingConversation to the dialogue state
             conversationState.dialogueState.ongoingConversation = ongoingConversation
 
-            // Perform the first hubRequest and capture the updated conversationState
-            val updatedConversationState = serverCommunicationManager.hubRequest(
-                "reply",
-                xmlString,
-                language,
-                conversationState,
-                prevTurnLastSpeaker,
-                prevSpeakerTopic,
-                listOf(),
-                DueIntervention(type = null, exclusive = false, sentence = "")
-            )
+            val updatedConversationState: ConversationState?
+
+            Log.d(TAG, "useFillerSentence in handleUserInput: $useFillerSentence") // Add this line
+            if (useFillerSentence) {
+                // Start the hub request in the background
+                val hubRequestDeferred = coroutineScope {
+                    async(Dispatchers.IO) {
+                        serverCommunicationManager.hubRequest(
+                            "reply",
+                            xmlString,
+                            language,
+                            conversationState,
+                            prevTurnLastSpeaker,
+                            prevSpeakerTopic,
+                            listOf(),
+                            DueIntervention(type = null, exclusive = false, sentence = "")
+                        )
+                    }
+                }
+                // Randomly select a filler sentence
+                val randomFillerSentence = fillerSentences.random()
+                // Meanwhile, make the robot say the filler sentence and wait for it to finish
+                withContext(Dispatchers.Main) {
+                    robotSpeechTextView.text = "Pepper: $randomFillerSentence"
+                }
+                pepperInterface.sayMessage(randomFillerSentence) // Ensure this waits until completion
+
+                // Wait for the hub request to complete
+                updatedConversationState = hubRequestDeferred.await()
+            } else {
+                // If not using filler sentence, make the hub request directly
+                updatedConversationState = serverCommunicationManager.hubRequest(
+                    "reply",
+                    xmlString,
+                    language,
+                    conversationState,
+                    prevTurnLastSpeaker,
+                    prevSpeakerTopic,
+                    listOf(),
+                    DueIntervention(type = null, exclusive = false, sentence = "")
+                )
+            }
 
             if (updatedConversationState != null) {
                 conversationState = updatedConversationState
@@ -763,9 +813,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 Log.e(TAG, "Plan is null or empty")
             }
 
-
-
-
             if (dueIntervention.type == "topic") {
                 Log.d(TAG, "intervention == topic")
                 // Now perform the second hub request for continuation
@@ -879,12 +926,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             conversationState.dialogueState.prevDialogueSentence.lastOrNull()
                                 ?.getOrNull(1) ?: ""
 
-
                         // Replace any $desspk tags
                         val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
                         lastContinuationSentence =
                             lastContinuationSentence.replace(patternDesspk, " ")
-
 
                         val repeatContinuation = "$prefix $lastContinuationSentence"
 
@@ -893,7 +938,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         pepperInterface.sayMessage(repeatContinuation)
                     }
                 } else {
-                    Log.d(TAG,"Ongoing conversation = false && intervention == action")
+                    Log.d(TAG, "Ongoing conversation = false && intervention == action")
                 }
 
             }

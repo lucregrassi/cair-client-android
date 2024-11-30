@@ -36,7 +36,7 @@ class FileStorageManager(
             isDialogueStatistics(data) -> dialogueStatisticsFile?.writeText(jsonData)
             isDialogueNuances(data) -> {
                 // Nuances are stored in internal storage since assets are read-only
-                val nuanceVectorsFile = File(filesDir, "nuances/nuance_vectors.json")
+                val nuanceVectorsFile = File(filesDir, "dialogue_data/nuance_vectors.json")
                 nuanceVectorsFile.writeText(jsonData)
             }
         }
@@ -65,7 +65,7 @@ class FileStorageManager(
                 }
             }
             isDialogueNuances(classOfT) -> {
-                mycontext!!.assets.open("nuances/nuance_vectors.json").bufferedReader().use { reader ->
+                mycontext!!.assets.open("dialogue_data/nuance_vectors.json").bufferedReader().use { reader ->
                     val jsonData = reader.readText()
                     gson.fromJson(jsonData, classOfT)
                 }

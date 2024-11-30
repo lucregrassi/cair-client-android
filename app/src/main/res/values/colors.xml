@@ -7,4 +7,10 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Christmas Colors -->
+    <color name="christmas_red">#D10000</color>
+    <color name="christmas_dark_red">#B71C1C</color>
+    <color name="christmas_green">#388E3C</color>
+    <color name="christmas_dark_green">#1B5E20</color>
 </resources>

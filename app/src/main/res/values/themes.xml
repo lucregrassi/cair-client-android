@@ -1,5 +1,5 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
+    <!-- Default application theme. -->
     <style name="Theme.CAIRclient" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/purple_500</item>
@@ -11,6 +11,21 @@
         <item name="colorOnSecondary">@color/black</item>
         <!-- Status bar color. -->
         <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
-        <!-- Customize your theme here. -->
+    </style>
+
+    <!-- Christmas theme. -->
+    <style name="Theme.CAIRclient.Christmas" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <!-- Primary brand color: Christmas Red -->
+        <item name="colorPrimary">@color/christmas_dark_red</item>
+        <item name="colorPrimaryVariant">@color/christmas_dark_red</item>
+        <item name="colorOnPrimary">@color/white</item>
+
+        <!-- Secondary brand color: Christmas Green -->
+        <item name="colorSecondary">@color/christmas_green</item>
+        <item name="colorSecondaryVariant">@color/christmas_dark_green</item>
+        <item name="colorOnSecondary">@color/white</item>
+
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
     </style>
 </resources>
