@@ -60,7 +60,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     // Declare the variables without initializing them
     private lateinit var serverCommunicationManager: ServerCommunicationManager
-    private lateinit var serverIp: String  // Declare serverIp as a class property
+    private lateinit var serverIp: String
     private lateinit var openAIApiKey: String
 
     private lateinit var fileStorageManager: FileStorageManager
@@ -75,6 +75,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     // Variable for filler sentence usage
     private var useFillerSentence: Boolean = false
     private lateinit var fillerSentences: List<String>
+
+    // TeleoperationManager
+    private var teleoperationManager: TeleoperationManager? = null
 
     // Register for the audio permission request result
     private val requestAudioPermission = registerForActivityResult(
@@ -173,7 +176,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         openAIApiKey = sharedPreferences.getString("openai_api_key", null) ?: ""
         serverPort = sharedPreferences.getInt("server_port", -1)
         useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", false)
-        Log.d(TAG, "useFillerSentence retrieved: $useFillerSentence") // Add this line
+        Log.d(TAG, "useFillerSentence retrieved: $useFillerSentence")
 
         if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
             // Redirect back to SetupActivity if values are missing
@@ -209,8 +212,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         this.qiContext = qiContext
         pepperInterface.setContext(this.qiContext)
 
-        // retrieve the stored values for when you come from the settingsActivity and you don't
-        // retrieve them in the onCreate
+        // Initialize TeleoperationManager
+        teleoperationManager = TeleoperationManager(this, qiContext, pepperInterface)
+        teleoperationManager?.startUdpListener()
+
+        // Retrieve the stored values
         retrieveStoredValues()
 
         // Initialize ServerCommunicationManager now that qiContext is available
@@ -222,6 +228,18 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             Log.d(TAG, "Starting Dialogue in a Coroutine")
             startDialogue()
         }
+    }
+
+    override fun onRobotFocusLost() {
+        teleoperationManager?.stopUdpListener()
+        teleoperationManager = null
+        this.qiContext = null
+        pepperInterface.setContext(null)
+        Log.i(TAG, "Robot focus lost, stopping or pausing operations if necessary.")
+    }
+
+    override fun onRobotFocusRefused(reason: String) {
+        Log.e(TAG, "Robot focus refused: $reason")
     }
 
     // Function to parse the XML string and extract content
@@ -444,19 +462,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         super.onDestroy()
         QiSDK.unregister(this, this)
         audioRecorder.stopRecording() // Stop any ongoing recording
-
+        teleoperationManager?.stopUdpListener()
         // Stop the PersonalizationServer
         personalizationServer.stopServer()
-    }
-
-    override fun onRobotFocusLost() {
-        this.qiContext = null
-        pepperInterface.setContext(this.qiContext)
-        Log.i(TAG, "Robot focus lost, stopping or pausing operations if necessary.")
-    }
-
-    override fun onRobotFocusRefused(reason: String) {
-        Log.e(TAG, "Robot focus refused: $reason")
     }
 
     private suspend fun handleUserInput(xmlString: String) {
