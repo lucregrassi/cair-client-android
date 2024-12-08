@@ -82,6 +82,12 @@
             android:text="Filler sentence"
             android:layout_marginBottom="24dp" />
 
+        <Switch
+            android:id="@+id/autoDetectLanguageSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Auto Detect Language" />
+
         <!-- Proceed Button -->
         <Button
             android:id="@+id/proceedButton"

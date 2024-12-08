@@ -5,6 +5,9 @@ import com.aldebaran.qi.Future
 import com.aldebaran.qi.sdk.QiContext
 import com.aldebaran.qi.sdk.`object`.actuation.*
 import com.aldebaran.qi.sdk.`object`.geometry.Transform
+import com.aldebaran.qi.sdk.`object`.locale.Language
+import com.aldebaran.qi.sdk.`object`.locale.Locale
+import com.aldebaran.qi.sdk.`object`.locale.Region
 import com.aldebaran.qi.sdk.builder.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -22,12 +25,19 @@ class PepperInterface(
         this.qiContext = qiContext
     }
 
-    suspend fun sayMessage(text: String) {
+    suspend fun sayMessage(text: String, lang: String) {
         if (qiContext != null) {
             try {
                 withContext(Dispatchers.IO) {
+                    val locale = if (lang == "en-US") {
+                        Locale(Language.ENGLISH, Region.UNITED_STATES)
+                    } else {
+                        Locale(Language.ITALIAN, Region.ITALY)
+                    }
+
                     val say = SayBuilder.with(qiContext)
                         .withText(text)
+                        .withLocale(locale)
                         .build()
                     say.run()
                 }

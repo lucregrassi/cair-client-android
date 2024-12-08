@@ -6,10 +6,8 @@ import android.os.Bundle
 import android.util.Log
 import android.view.MenuItem
 import android.widget.*
-import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
-
-// Libraries for secure storage
+import androidx.appcompat.app.AppCompatActivity
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.ricelab.cairclient.libraries.FileStorageManager
@@ -23,7 +21,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var serverPortEditText: EditText
     private lateinit var openAIApiKeyEditText: EditText
     private lateinit var proceedButton: Button
-    private lateinit var fillerSentenceSwitch: Switch // Added line
+    private lateinit var fillerSentenceSwitch: Switch
+    private lateinit var autoDetectLanguageSwitch: Switch // Added line for auto language detection
 
     private val serverIpList = mutableListOf<String>()
 
@@ -39,9 +38,9 @@ class SettingsActivity : AppCompatActivity() {
         serverPortEditText = findViewById(R.id.serverPortEditText)
         openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
         proceedButton = findViewById(R.id.proceedButton)
-        fillerSentenceSwitch = findViewById(R.id.fillerSentenceSwitch) // Added line
+        fillerSentenceSwitch = findViewById(R.id.fillerSentenceSwitch)
+        autoDetectLanguageSwitch = findViewById(R.id.autoDetectLanguageSwitch) // Initialize the switch
 
-        // Check if SetupActivity was opened from the menu or on first launch
         val fromMenu = intent.getBooleanExtra("fromMenu", false)
         val deleteAllButton: Button = findViewById(R.id.deleteAllButton)
         deleteAllButton.setOnClickListener {
@@ -54,18 +53,18 @@ class SettingsActivity : AppCompatActivity() {
         // Load server IPs from certificates
         loadServerIpsFromCertificates()
 
-        // Set click listener for the proceed button
         proceedButton.setOnClickListener {
             val serverIp = serverIpSpinner.selectedItem as String
             val openAIApiKey = openAIApiKeyEditText.text.toString().trim()
             val serverPortText = serverPortEditText.text.toString().trim()
-            val useFillerSentence = fillerSentenceSwitch.isChecked // Added line
+            val useFillerSentence = fillerSentenceSwitch.isChecked
+            val autoDetectLanguage = autoDetectLanguageSwitch.isChecked // Get the switch state
 
-            // Log the input values for debugging
             Log.d(TAG, "Server IP: $serverIp")
             Log.d(TAG, "OpenAI API Key: $openAIApiKey")
             Log.d(TAG, "Server Port Text: $serverPortText")
-            Log.d(TAG, "Use Filler Sentence: $useFillerSentence") // Added line
+            Log.d(TAG, "Use Filler Sentence: $useFillerSentence")
+            Log.d(TAG, "Auto Detect Language: $autoDetectLanguage")
 
             if (openAIApiKey.isEmpty() || serverPortText.isEmpty()) {
                 Toast.makeText(this, "Please enter your OpenAI API Key and Server Port.", Toast.LENGTH_SHORT).show()
@@ -74,13 +73,11 @@ class SettingsActivity : AppCompatActivity() {
                 if (serverPort == null || serverPort <= 0 || serverPort > 65535) {
                     Toast.makeText(this, "Please enter a valid port number (1-65535).", Toast.LENGTH_SHORT).show()
                 } else {
-                    // Log the validated server port
                     Log.d(TAG, "Validated Server Port: $serverPort")
 
-                    // Save the values securely
-                    saveValues(serverIp, openAIApiKey, serverPort, useFillerSentence) // Modified line
+                    // Save the values securely including the autoDetectLanguage parameter
+                    saveValues(serverIp, openAIApiKey, serverPort, useFillerSentence, autoDetectLanguage)
 
-                    // Proceed to MainActivity
                     if (!fromMenu) {
                         Log.i(TAG, "FromMenu False, spawning new MainActivity")
                         val intent = Intent(this, MainActivity::class.java)
@@ -92,7 +89,6 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // Function to show a confirmation dialog before deleting all data
     private fun showDeleteConfirmationDialog() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Conferma cancellazione")
@@ -103,14 +99,13 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         builder.setNegativeButton("No") { dialog, which ->
-            dialog.dismiss() // Do nothing on "No"
+            dialog.dismiss()
         }
 
         val dialog: AlertDialog = builder.create()
         dialog.show()
     }
 
-    // Handle the "Up" button press
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             android.R.id.home -> {
@@ -122,14 +117,11 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // Function to load saved values based on the 'fromMenu' flag
     private fun loadSavedValues(fromMenu: Boolean) {
-        // Initialize MasterKey for encryption
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
 
-        // Initialize EncryptedSharedPreferences
         val sharedPreferences = EncryptedSharedPreferences.create(
             this,
             "secure_prefs",
@@ -138,32 +130,27 @@ class SettingsActivity : AppCompatActivity() {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
 
-        // Load saved server IP, OpenAI API key, and server port if they exist
         val savedServerIp = sharedPreferences.getString("server_ip", null)
         val savedOpenAIApiKey = sharedPreferences.getString("openai_api_key", null)
         val savedServerPort = sharedPreferences.getInt("server_port", -1)
-        val useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", false) // Added line
+        val useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", false)
+        val autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", true) // Default true if not set
 
-        // If opened for the first time (not from the menu) and values exist, proceed to MainActivity
         if (!fromMenu && !savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
-            // Values exist, proceed to MainActivity
             val intent = Intent(this, MainActivity::class.java)
-            Log.i(TAG, "Spawing MainActivity ONLY THE FIRST TIME")
             startActivity(intent)
             finish()
         } else {
-            // If the activity is opened from the menu, or no saved values exist,
-            // populate the fields with saved values or leave them empty for input
             savedServerIp?.let { setSelectedServerIp(it) }
             savedOpenAIApiKey?.let { openAIApiKeyEditText.setText(it) }
             if (savedServerPort != -1) {
                 serverPortEditText.setText(savedServerPort.toString())
             }
-            fillerSentenceSwitch.isChecked = useFillerSentence // Added line
+            fillerSentenceSwitch.isChecked = useFillerSentence
+            autoDetectLanguageSwitch.isChecked = autoDetectLanguage
         }
     }
 
-    // Set the selected server IP in the spinner
     private fun setSelectedServerIp(ip: String) {
         val index = serverIpList.indexOf(ip)
         if (index != -1) {
@@ -171,26 +158,20 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // Function to load server IPs from certificate filenames
     private fun loadServerIpsFromCertificates() {
         try {
             val assetManager: AssetManager = assets
-            // List the files in the 'certificates' directory
             val certificateFiles = assetManager.list("certificates") ?: arrayOf()
             for (filename in certificateFiles) {
-                // Check if filename matches the pattern 'server_<ip>.crt'
                 if (filename.startsWith("server_") && filename.endsWith(".crt")) {
-                    // Extract the IP address
                     val ip = filename.removePrefix("server_").removeSuffix(".crt").replace("_", ".")
                     serverIpList.add(ip)
                 }
             }
             if (serverIpList.isEmpty()) {
-                // No certificates found
                 Toast.makeText(this, "No server certificates found.", Toast.LENGTH_LONG).show()
                 Log.e(TAG, "No server certificates found in assets/certificates/")
             } else {
-                // Populate the Spinner with the server IPs
                 val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, serverIpList)
                 adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
                 serverIpSpinner.adapter = adapter
@@ -201,14 +182,11 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    // Function to save values securely
-    private fun saveValues(serverIp: String, openAIApiKey: String, serverPort: Int, useFillerSentence: Boolean) {
-        // Initialize MasterKey for encryption
+    private fun saveValues(serverIp: String, openAIApiKey: String, serverPort: Int, useFillerSentence: Boolean, autoDetectLanguage: Boolean) {
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
 
-        // Initialize EncryptedSharedPreferences
         val sharedPreferences = EncryptedSharedPreferences.create(
             this,
             "secure_prefs",
@@ -217,29 +195,24 @@ class SettingsActivity : AppCompatActivity() {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
 
-        // Save the server IP, OpenAI API key, server port, and filler sentence usage securely
         with(sharedPreferences.edit()) {
             putString("server_ip", serverIp)
             putString("openai_api_key", openAIApiKey)
             putInt("server_port", serverPort)
-            putBoolean("use_filler_sentence", useFillerSentence) // Added line
+            putBoolean("use_filler_sentence", useFillerSentence)
+            putBoolean("auto_detect_language", autoDetectLanguage)
             apply()
         }
     }
 
     private fun deleteAllData() {
-        // Initialize FileStorageManager
         Log.i(TAG, "deleteAllData() with filesDir=$filesDir")
         val fileStorageManager = FileStorageManager(null, filesDir)
 
-        Log.i(TAG, "File exists? ${fileStorageManager.filesExist()}")
-        // Delete all the files managed by FileStorageManager
         fileStorageManager.dialogueStateFile?.delete()
         fileStorageManager.speakersInfoFile?.delete()
         fileStorageManager.dialogueStatisticsFile?.delete()
-        Log.i(TAG, "File exists? ${fileStorageManager.filesExist()}")
 
-        // Clear EncryptedSharedPreferences
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
@@ -257,7 +230,6 @@ class SettingsActivity : AppCompatActivity() {
             apply()
         }
 
-        // Show a confirmation toast or log
         Toast.makeText(this, "Tutti i dati sono stati cancellati.", Toast.LENGTH_LONG).show()
     }
 }

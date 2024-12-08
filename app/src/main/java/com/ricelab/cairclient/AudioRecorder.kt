@@ -10,59 +10,64 @@ import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import com.microsoft.cognitiveservices.speech.*
+import com.microsoft.cognitiveservices.speech.audio.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.*
-import okhttp3.MediaType.Companion.toMediaTypeOrNull
-import okhttp3.RequestBody.Companion.asRequestBody
-import org.json.JSONObject
-import java.io.*
+import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 
 private const val TAG = "AudioRecorder"
+private const val DEFAULT_LANGUAGE = "it-IT"
 
-class AudioRecorder(private val context: Context) {
+class AudioRecorder(private val context: Context, private val autoDetectLanguage: Boolean) {
 
-    // Audio recording configuration parameters
+    // Audio recording configuration
     private val sampleRate = 16000
     private val audioSource = MediaRecorder.AudioSource.MIC
     private val channelConfig = android.media.AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = android.media.AudioFormat.ENCODING_PCM_16BIT
-    private val bufferSize = 4 * AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-    private val microsoftApiKey = BuildConfig.MICROSOFT_SPEECH_API_KEY
-    private var speechDetectionThreshold = 2000 // Default threshold, adjusted after background noise measurement
-    private val thresholdAdjustmentValue = 1500 // Value added to the background noise level to determine the threshold
-    private val shortSilenceDurationMillis = 500L
-    private val longSilenceDurationMillis = 2000L
+    private val bufferSize = 4 * android.media.AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+
+    // Detection thresholds
+    private var speechDetectionThreshold = 2000
+    private val thresholdAdjustmentValue = 1500
+    private val shortSilenceDurationMillis = 100L
+    private val longSilenceDurationMillis = 1000L
     private val initialTimeoutMillis = 30000L
 
     @Volatile
     private var isRecording = false
 
+    private val subscriptionKey = BuildConfig.MICROSOFT_SPEECH_API_KEY
+    private val serviceRegion = "westeurope"
+
+    // Store detected languages for all chunks
+    private val detectedLanguages = mutableListOf<String>()
+
     init {
-        // Initial threshold calibration
+        Log.d(TAG, "AudioRecorder initialized. Starting initial threshold calibration.")
         recalibrateThreshold()
     }
 
-    /**
-     * Measures the background noise level using the microphone and returns the maximum amplitude detected.
-     * @return The measured maximum amplitude of background noise.
-     */
     private fun measureBackgroundNoise(): Int {
+        Log.d(TAG, "Measuring background noise level.")
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             Log.e(TAG, "Permission to record audio was denied.")
-            return -1 // Return an error code if permission is not granted
+            return -1
         }
 
         val audioRecord = AudioRecord(audioSource, sampleRate, channelConfig, audioFormat, bufferSize)
         val audioBuffer = ShortArray(bufferSize)
         var maxAmplitude = 0
-
         try {
             audioRecord.startRecording()
             audioRecord.read(audioBuffer, 0, bufferSize)
             maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
         } catch (e: Exception) {
-            Log.e(TAG, "Error measuring background noise: ${e.message}")
+            Log.e(TAG, "Error measuring background noise: ${e.message}", e)
         } finally {
             audioRecord.stop()
             audioRecord.release()
@@ -72,15 +77,11 @@ class AudioRecorder(private val context: Context) {
         return maxAmplitude
     }
 
-    /**
-     * Recalibrates the speech detection threshold based on the current background noise.
-     * @return The new threshold value.
-     */
     fun recalibrateThreshold(): Int {
         val backgroundNoiseLevel = measureBackgroundNoise()
         speechDetectionThreshold = backgroundNoiseLevel + thresholdAdjustmentValue
+        Log.d(TAG, "Recalibrated threshold: $speechDetectionThreshold (background noise: $backgroundNoiseLevel)")
 
-        // Update the threshold value in the UI if the context is an Activity
         (context as? Activity)?.runOnUiThread {
             val thresholdTextView: TextView? = context.findViewById(R.id.thresholdTextView)
             thresholdTextView?.text = "Soglia del rumore: $speechDetectionThreshold"
@@ -89,30 +90,23 @@ class AudioRecorder(private val context: Context) {
         return speechDetectionThreshold
     }
 
-    /**
-     * Starts listening and splitting the audio input, processing the audio in 0.5-second intervals.
-     * @return The final transcribed text after processing the audio input.
-     */
     suspend fun listenAndSplit(): String {
-        if (ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        Log.d(TAG, "Starting listenAndSplit method.")
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             Log.d(TAG, "Permission to record audio was denied.")
-            return "Permission to record audio was denied."
+            return generateXmlString("Permission to record audio was denied.", "und")
         }
+
+        // Clear detectedLanguages from previous runs
+        detectedLanguages.clear()
 
         return withContext(Dispatchers.IO) {
             val audioRecord = AudioRecord(audioSource, sampleRate, channelConfig, audioFormat, bufferSize)
-
-            // Enable NoiseSuppressor if available
             val noiseSuppressor: NoiseSuppressor? = if (NoiseSuppressor.isAvailable()) {
-                NoiseSuppressor.create(audioRecord.audioSessionId).apply {
-                    Log.i(TAG, "NoiseSuppressor enabled")
-                }
+                Log.d(TAG, "NoiseSuppressor enabled.")
+                NoiseSuppressor.create(audioRecord.audioSessionId)
             } else {
-                Log.w(TAG, "NoiseSuppressor not supported on this device")
+                Log.w(TAG, "NoiseSuppressor not supported on this device.")
                 null
             }
 
@@ -122,112 +116,171 @@ class AudioRecorder(private val context: Context) {
             val byteArrayStream = ByteArrayOutputStream()
             var lastSpeechTime: Long? = null
             val startTime = System.currentTimeMillis()
+            Log.d(TAG, "Starting recording loop.")
 
             try {
                 audioRecord.startRecording()
                 isRecording = true
+                Log.d(TAG, "Audio recording started.")
 
                 while (isRecording) {
                     val currentTime = System.currentTimeMillis()
                     val ret = audioRecord.read(audioBuffer, 0, audioBuffer.size)
 
                     if (ret < 0) {
-                        Log.d(TAG, "audioRecord read error $ret")
-                        return@withContext "Error reading audio"
+                        Log.e(TAG, "audioRecord read error $ret")
+                        return@withContext generateXmlString("Error reading audio", "und")
                     }
 
                     val maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
                     if (maxAmplitude > speechDetectionThreshold) {
+                        // Speech detected
                         lastSpeechTime = currentTime
                         byteArrayStream.write(shortsToBytes(audioBuffer))
                     }
 
-                    // If no speech is detected within the initial timeout, stop recording
                     if (lastSpeechTime == null && currentTime - startTime > initialTimeoutMillis) {
                         Log.d(TAG, "Timeout due to no speech detected.")
                         isRecording = false
-                        return@withContext "Timeout"
+                        return@withContext generateXmlString("Timeout", "und")
                     }
 
-                    // Split the audio every 0.5 seconds and send it for processing
+                    // Short silence - process chunk if we have data
                     if (lastSpeechTime != null) {
                         if (currentTime - lastSpeechTime > shortSilenceDurationMillis && byteArrayStream.size() > 0) {
+                            Log.d(TAG, "Short silence detected. Processing chunk.")
                             val audioBytes = byteArrayStream.toByteArray()
-                            val partialResult = sendToMicrosoftSpeechRecognition(audioBytes)
-                            if (partialResult.isNotEmpty()) {
-                                currentPartialResult.append(partialResult).append(" ")
+                            val (partialText, partialLang) = recognizeChunk(audioBytes)
+                            Log.d(TAG, "Partial result: $partialText, language: $partialLang")
+
+                            if (partialText.isNotEmpty()) {
+                                currentPartialResult.append(partialText).append(" ")
                                 byteArrayStream.reset()
                             } else {
+                                Log.w(TAG, "Partial result is empty. Stopping recording.")
                                 isRecording = false
-                                return@withContext ""
+                                return@withContext generateXmlString("", "und")
                             }
                         }
 
-                        // Finalize the result if there is a long silence
+                        // Long silence
                         if (currentTime - lastSpeechTime > longSilenceDurationMillis) {
+                            Log.d(TAG, "Long silence detected. Finalizing result.")
                             finalResult.append(currentPartialResult.toString().trim()).append(" ")
                             break
                         }
                     }
                 }
 
-                // Send any remaining audio for processing
-                if (byteArrayStream.size() > 0) {
-                    val audioBytes = byteArrayStream.toByteArray()
-                    val partialResult = sendToMicrosoftSpeechRecognition(audioBytes)
-                    finalResult.append(partialResult)
-                }
+                val finalText = finalResult.toString().trim()
+                Log.d(TAG, "Final recognized text: $finalText")
 
-                return@withContext finalResult.toString().trim()
+                // Determine majority language
+                val finalLanguage = determineMajorityLanguage()
+
+                return@withContext generateXmlString(finalText, finalLanguage)
 
             } catch (e: IOException) {
                 Log.e(TAG, "Error recording audio: ${e.message}", e)
-                return@withContext "Error recording audio: ${e.message}"
+                return@withContext generateXmlString("Error recording audio: ${e.message}", "und")
             } finally {
+                Log.d(TAG, "Stopping and releasing AudioRecord.")
                 isRecording = false
                 audioRecord.stop()
                 audioRecord.release()
-                noiseSuppressor?.release() // Release NoiseSuppressor when done
+                noiseSuppressor?.release()
             }
         }
     }
 
-    /**
-     * Sends the recorded audio bytes to Microsoft Speech Recognition for transcription.
-     * @param audioBytes The audio data to be sent for transcription.
-     * @return The transcribed text from Microsoft Speech Recognition.
-     */
-    private fun sendToMicrosoftSpeechRecognition(audioBytes: ByteArray): String {
-        val client = OkHttpClient()
-        val mediaType = "audio/wav".toMediaTypeOrNull()
-        val tempFile = File.createTempFile("speech_chunk", ".wav", context.cacheDir)
+    private fun recognizeChunk(audioBytes: ByteArray): Pair<String, String> {
+        if (audioBytes.isEmpty()) return Pair("", "")
 
+        val tempFile = File.createTempFile("speech_chunk", ".wav", context.cacheDir)
         writeWavFile(audioBytes, tempFile)
 
-        val requestBody = tempFile.asRequestBody(mediaType)
-        val request = Request.Builder()
-            .url("https://westeurope.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=it-IT")
-            .post(requestBody)
-            .addHeader("Content-Type", "audio/wav")
-            .addHeader("Ocp-Apim-Subscription-Key", microsoftApiKey)
-            .build()
+        val speechConfig = SpeechConfig.fromSubscription(subscriptionKey, serviceRegion)
+        val audioConfig = AudioConfig.fromWavFileInput(tempFile.absolutePath)
 
-        Log.d(TAG, "Sending audio data to Microsoft Speech Recognition...")
-        val response = client.newCall(request).execute()
-        return if (response.isSuccessful) {
-            val responseBody = response.body?.string()
-            responseBody?.let { extractTextFromResponse(it) } ?: ""
+        val recognizer: SpeechRecognizer
+        var autoDetectSourceLanguageConfig: AutoDetectSourceLanguageConfig? = null
+
+        if (autoDetectLanguage) {
+            // Use auto language detection
+            autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.fromLanguages(listOf("en-US", "it-IT"))
+            recognizer = SpeechRecognizer(speechConfig, autoDetectSourceLanguageConfig, audioConfig)
         } else {
-            Log.e(TAG, "Failed to get response from Microsoft Speech Recognition. Code: ${response.code}")
-            ""
+            // No auto detection, use default language
+            speechConfig.speechRecognitionLanguage = DEFAULT_LANGUAGE // e.g. "it-IT"
+            recognizer = SpeechRecognizer(speechConfig, audioConfig)
         }
+
+        var recognizedText = ""
+        var detectedLang = "und"
+
+        // We'll store the cleanup actions and run them after returning the result.
+        val cleanupActions: () -> Unit = {
+            recognizer.close()
+            autoDetectSourceLanguageConfig?.close()
+            speechConfig.close()
+            audioConfig.close()
+            if (tempFile.exists()) tempFile.delete()
+        }
+
+        try {
+            val result = recognizer.recognizeOnceAsync().get()
+            when (result.reason) {
+                ResultReason.RecognizedSpeech -> {
+                    recognizedText = result.text ?: ""
+                    if (autoDetectLanguage) {
+                        val autoLangResult = AutoDetectSourceLanguageResult.fromResult(result)
+                        val lang = autoLangResult.language
+                        if (!lang.isNullOrEmpty()) {
+                            detectedLang = lang
+                            detectedLanguages.add(lang) // Store for majority decision later
+                        }
+                        Log.d(TAG, "SDK recognized text: $recognizedText")
+                        Log.d(TAG, "Detected language via SDK: $detectedLang")
+                    } else {
+                        // If not auto-detecting, we know the language is DEFAULT_LANGUAGE.
+                        detectedLang = speechConfig.speechRecognitionLanguage
+                    }
+                }
+                ResultReason.NoMatch -> {
+                    Log.w(TAG, "No speech recognized.")
+                }
+                ResultReason.Canceled -> {
+                    val cancellation = CancellationDetails.fromResult(result)
+                    Log.e(TAG, "Recognition canceled: ${cancellation.reason}, ${cancellation.errorDetails}")
+                }
+                else -> {
+                    Log.w(TAG, "Recognition finished with reason: ${result.reason}")
+                }
+            }
+            result.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during speech recognition: ${e.message}", e)
+        }
+
+        // Return the result immediately to speed up robot's response
+        val finalText = recognizedText
+        val finalLang = detectedLang
+
+        // Perform cleanup asynchronously after returning
+        // You can run it in a coroutine if you have one, or just in a thread:
+        Thread {
+            cleanupActions()
+        }.start()
+
+        return Pair(finalText, finalLang)
     }
 
-    /**
-     * Writes the recorded audio data to a WAV file.
-     * @param audioBytes The audio data to be written.
-     * @param file The file where the audio data will be written.
-     */
+    private fun determineMajorityLanguage(): String {
+        if (detectedLanguages.isEmpty()) return "und"
+        val langCount = detectedLanguages.groupingBy { it }.eachCount()
+        return langCount.maxByOrNull { it.value }?.key ?: "und"
+    }
+
     private fun writeWavFile(audioBytes: ByteArray, file: File) {
         try {
             FileOutputStream(file).use { fos ->
@@ -255,40 +308,6 @@ class AudioRecorder(private val context: Context) {
         }
     }
 
-    /**
-     * Extracts the transcribed text from the JSON response returned by Microsoft Speech Recognition.
-     * @param response The JSON response string from the API.
-     * @return The extracted transcribed text.
-     */
-    private fun extractTextFromResponse(response: String): String {
-        return try {
-            val jsonObject = JSONObject(response)
-            jsonObject.optString("DisplayText", "")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing response JSON: ${e.message}", e)
-            ""
-        }
-    }
-
-    /**
-     * Converts an array of shorts to an array of bytes.
-     * @param sData The short array to be converted.
-     * @return The resulting byte array.
-     */
-    private fun shortsToBytes(sData: ShortArray): ByteArray {
-        val bytes = ByteArray(sData.size * 2)
-        for (i in sData.indices) {
-            bytes[i * 2] = (sData[i].toInt() and 0x00FF).toByte()
-            bytes[i * 2 + 1] = (sData[i].toInt() shr 8).toByte()
-        }
-        return bytes
-    }
-
-    /**
-     * Converts an integer to a byte array.
-     * @param value The integer to be converted.
-     * @return The resulting byte array.
-     */
     private fun intToByteArray(value: Int): ByteArray {
         return byteArrayOf(
             (value shr 0).toByte(),
@@ -298,11 +317,6 @@ class AudioRecorder(private val context: Context) {
         )
     }
 
-    /**
-     * Converts a short value to a byte array.
-     * @param value The short to be converted.
-     * @return The resulting byte array.
-     */
     private fun shortToByteArray(value: Short): ByteArray {
         return byteArrayOf(
             (value.toInt() shr 0).toByte(),
@@ -310,9 +324,22 @@ class AudioRecorder(private val context: Context) {
         )
     }
 
-    /**
-     * Stops the audio recording.
-     */
+    private fun shortsToBytes(sData: ShortArray): ByteArray {
+        val bytes = ByteArray(sData.size * 2)
+        for (i in sData.indices) {
+            bytes[i * 2] = (sData[i].toInt() and 0x00FF).toByte()
+            bytes[i * 2 + 1] = (sData[i].toInt() shr 8).toByte()
+        }
+        return bytes
+    }
+
+    private fun generateXmlString(sentence: String, lang: String): String {
+        Log.d(TAG, "Generating XML string for sentence: '$sentence' in language: '$lang'")
+        return """
+            <response><profile_id value="00000000-0000-0000-0000-000000000000">$sentence<language>$lang</language><speaking_time>0.0</speaking_time></profile_id></response>
+        """.trimIndent()
+    }
+
     fun stopRecording() {
         Log.d(TAG, "Stop recording requested.")
         isRecording = false

@@ -25,24 +25,26 @@ class TeleoperationManager(
         this.qiContext = qiContext
     }
 
-    fun startUdpListener() {
+    suspend fun startUdpListener() {
         // Cancel any existing job before starting a new one
         job?.cancel()
 
-        job = CoroutineScope(Dispatchers.IO).launch {
-            val socket = DatagramSocket(commandPort)
-            val buffer = ByteArray(1024)
-            try {
-                while (isActive) { // Check if the coroutine is still active
-                    val packet = DatagramPacket(buffer, buffer.size)
-                    socket.receive(packet)
-                    val command = String(packet.data, 0, packet.length).trim()
-                    handleCommand(command)
+        job = withContext(Dispatchers.IO) {
+            CoroutineScope(Dispatchers.IO).launch {
+                val socket = DatagramSocket(commandPort)
+                val buffer = ByteArray(1024)
+                try {
+                    while (isActive) { // Check if the coroutine is still active
+                        val packet = DatagramPacket(buffer, buffer.size)
+                        socket.receive(packet)
+                        val command = String(packet.data, 0, packet.length).trim()
+                        handleCommand(command)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "UDP listener error: ${e.message}", e)
+                } finally {
+                    socket.close()
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "UDP listener error: ${e.message}", e)
-            } finally {
-                socket.close()
             }
         }
     }
@@ -66,7 +68,8 @@ class TeleoperationManager(
             }
             else -> {
                 // For sayMessage, since it's a suspend function
-                CoroutineScope(Dispatchers.Main).launch { pepperInterface.sayMessage(command) }
+                // TODO: manage messages sentences in different languages
+                CoroutineScope(Dispatchers.Main).launch { pepperInterface.sayMessage(command, "it-IT") }
             }
         }
     }
