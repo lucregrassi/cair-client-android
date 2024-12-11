@@ -283,6 +283,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             }
 
             val xmlString = startListening()
+            val (sentence, detectedLang) = parseXmlForSentenceAndLanguage(xmlString)
+
             handleUserInput(xmlString)
 
             withContext(Dispatchers.IO) {
@@ -416,10 +418,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
             conversationState.dialogueState.ongoingConversation = ongoingConversation
 
+            var updatedConversationState: ConversationState? = null
             // Launch the hub request asynchronously
-            val hubRequestDeferred = coroutineScope {
+            coroutineScope {
                 async(Dispatchers.IO) {
-                    serverCommunicationManager.hubRequest(
+                    updatedConversationState = serverCommunicationManager.hubRequest(
                         "reply",
                         xmlString,
                         language,
@@ -430,26 +433,22 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         DueIntervention(type = null, exclusive = false, sentence = "")
                     )
                 }
-            }
 
-            // If using filler sentences, say one immediately in parallel with the hub request
-            if (useFillerSentence) {
-                coroutineScope {
-                    launch(Dispatchers.Main) {
-                        val fillerList = fillerSentencesMap[language] ?: fillerSentencesMap["it-IT"]!!
-                        val randomFillerSentence = fillerList.random()
-                        robotSpeechTextView.text = "Pepper: $randomFillerSentence"
-                        // Speak the filler sentence now (blocking this coroutine only)
-                        pepperInterface.sayMessage(randomFillerSentence, language)
-                    }
+                // If using filler sentences, say one immediately in parallel with the hub request
+                if (useFillerSentence) {
+                        launch(Dispatchers.Main) {
+                            val fillerList = fillerSentencesMap[language] ?: fillerSentencesMap["it-IT"]!!
+                            val randomFillerSentence = fillerList.random()
+                            robotSpeechTextView.text = "Pepper: $randomFillerSentence"
+                            // Speak the filler sentence now (blocking this coroutine only)
+                            pepperInterface.sayMessage(randomFillerSentence, language)
+                        }
                 }
             }
 
             // Now await the hub request result; the filler sentence was spoken in parallel
-            val updatedConversationState = hubRequestDeferred.await()
-
             if (updatedConversationState != null) {
-                conversationState = updatedConversationState
+                conversationState = updatedConversationState!!
                 var replySentence = if (conversationState.plan?.isNotEmpty() == true) {
                     conversationState.planSentence.toString()
                 } else {

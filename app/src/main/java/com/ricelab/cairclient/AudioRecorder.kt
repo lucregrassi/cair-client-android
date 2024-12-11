@@ -14,10 +14,12 @@ import com.microsoft.cognitiveservices.speech.*
 import com.microsoft.cognitiveservices.speech.audio.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "AudioRecorder"
 private const val DEFAULT_LANGUAGE = "it-IT"
@@ -29,13 +31,13 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     private val audioSource = MediaRecorder.AudioSource.MIC
     private val channelConfig = android.media.AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = android.media.AudioFormat.ENCODING_PCM_16BIT
-    private val bufferSize = 4 * android.media.AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+    private val bufferSize = 2*android.media.AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
 
     // Detection thresholds
     private var speechDetectionThreshold = 2000
     private val thresholdAdjustmentValue = 1500
-    private val shortSilenceDurationMillis = 100L
-    private val longSilenceDurationMillis = 1000L
+    private val shortSilenceDurationMillis = 500L
+    private val longSilenceDurationMillis = 2000L
     private val initialTimeoutMillis = 30000L
 
     @Volatile
@@ -116,6 +118,9 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
             val byteArrayStream = ByteArrayOutputStream()
             var lastSpeechTime: Long? = null
             val startTime = System.currentTimeMillis()
+            val jobs = mutableListOf<Job>()
+            val results = ConcurrentHashMap<Int, String>()
+            var chunkIndex = 0
             Log.d(TAG, "Starting recording loop.")
 
             try {
@@ -123,9 +128,13 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                 isRecording = true
                 Log.d(TAG, "Audio recording started.")
 
+                val scope = CoroutineScope(Dispatchers.Default)
                 while (isRecording) {
                     val currentTime = System.currentTimeMillis()
                     val ret = audioRecord.read(audioBuffer, 0, audioBuffer.size)
+                    val testTime = System.currentTimeMillis()
+                    val audioReadTime = testTime-currentTime
+                    //Log.w(TAG, "AudioRecord.Read time = $currentTime time taken =  $audioReadTime")
 
                     if (ret < 0) {
                         Log.e(TAG, "audioRecord read error $ret")
@@ -135,7 +144,9 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                     val maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
                     if (maxAmplitude > speechDetectionThreshold) {
                         // Speech detected
+
                         lastSpeechTime = currentTime
+                        //Log.d(TAG,"Speech detected above threshold time = $lastSpeechTime")
                         byteArrayStream.write(shortsToBytes(audioBuffer))
                     }
 
@@ -145,34 +156,64 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                         return@withContext generateXmlString("Timeout", "und")
                     }
 
+                    //if (lastSpeechTime != null)
+                        //Log.e(TAG, "Current-LastSpeech = ${currentTime-lastSpeechTime}")
                     // Short silence - process chunk if we have data
                     if (lastSpeechTime != null) {
                         if (currentTime - lastSpeechTime > shortSilenceDurationMillis && byteArrayStream.size() > 0) {
-                            Log.d(TAG, "Short silence detected. Processing chunk.")
                             val audioBytes = byteArrayStream.toByteArray()
-                            val (partialText, partialLang) = recognizeChunk(audioBytes)
-                            Log.d(TAG, "Partial result: $partialText, language: $partialLang")
+                            byteArrayStream.reset()
+                            val index = chunkIndex
+                            chunkIndex++
+                            val job = scope.launch {
+                                Log.d(TAG, "Short silence detected. Processing chunk in a coroutine.")
+                                val beforeChunkTime = System.currentTimeMillis()
+                                val (partialText, partialLang) = recognizeChunk(audioBytes)
+                                val afterChunkTime = System.currentTimeMillis()
+                                Log.d(
+                                    TAG,
+                                    "Time taken to process chunk = ${afterChunkTime - beforeChunkTime} Partial result: $partialText, language: $partialLang"
+                                )
 
-                            if (partialText.isNotEmpty()) {
-                                currentPartialResult.append(partialText).append(" ")
-                                byteArrayStream.reset()
-                            } else {
-                                Log.w(TAG, "Partial result is empty. Stopping recording.")
-                                isRecording = false
-                                return@withContext generateXmlString("", "und")
+                                if (partialText.isNotEmpty()) {
+                                    synchronized(currentPartialResult) {
+                                        //currentPartialResult.append(partialText).append(" ")
+                                        results[index] = partialText
+                                        Log.w(TAG, "current partial result: $currentPartialResult")
+                                    }
+                                    //byteArrayStream.reset()
+                                } /*else if (currentPartialResult.isNotEmpty()) {
+                                    Log.w(
+                                        TAG,
+                                        "Partial result is empty, returning current partial result"
+                                    )
+                                    finalResult.append(currentPartialResult.toString().trim())
+                                        .append(" ")
+                                    //break
+                                } else {
+                                    Log.w(TAG, "Partial result is empty. Stopping recording.")
+                                    isRecording = false
+                                    //return@withContext generateXmlString("", "und")
+                                }*/
                             }
+                            jobs.add(job)
                         }
 
                         // Long silence
                         if (currentTime - lastSpeechTime > longSilenceDurationMillis) {
                             Log.d(TAG, "Long silence detected. Finalizing result.")
-                            finalResult.append(currentPartialResult.toString().trim()).append(" ")
+                            val beforeJoinTime = System.currentTimeMillis()
+                            jobs.forEach { it.join() }
+                            val afterJoinTime = System.currentTimeMillis()
+                            Log.d(TAG, "Waited for all coroutines (time taken =${afterJoinTime-beforeJoinTime})")
+                            //finalResult.append(currentPartialResult.toString().trim()).append(" ")
                             break
                         }
                     }
                 }
 
-                val finalText = finalResult.toString().trim()
+                //val finalText = finalResult.toString().trim()
+                val finalText = results.toSortedMap().values.joinToString("")
                 Log.d(TAG, "Final recognized text: $finalText")
 
                 // Determine majority language
