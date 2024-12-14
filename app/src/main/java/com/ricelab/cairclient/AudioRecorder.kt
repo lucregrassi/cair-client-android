@@ -182,19 +182,22 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                                         Log.w(TAG, "current partial result: $currentPartialResult")
                                     }
                                     //byteArrayStream.reset()
-                                } /*else if (currentPartialResult.isNotEmpty()) {
+                                } else if (currentPartialResult.isNotEmpty()) {
                                     Log.w(
                                         TAG,
                                         "Partial result is empty, returning current partial result"
                                     )
-                                    finalResult.append(currentPartialResult.toString().trim())
-                                        .append(" ")
+                                    results[index] = ""
+                                    isRecording = false
+                                    //finalResult.append(currentPartialResult.toString().trim())
+                                    //    .append(" ")
                                     //break
                                 } else {
                                     Log.w(TAG, "Partial result is empty. Stopping recording.")
+                                    results[index] = ""
                                     isRecording = false
                                     //return@withContext generateXmlString("", "und")
-                                }*/
+                                }
                             }
                             jobs.add(job)
                         }
@@ -202,18 +205,20 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                         // Long silence
                         if (currentTime - lastSpeechTime > longSilenceDurationMillis) {
                             Log.d(TAG, "Long silence detected. Finalizing result.")
-                            val beforeJoinTime = System.currentTimeMillis()
-                            jobs.forEach { it.join() }
-                            val afterJoinTime = System.currentTimeMillis()
-                            Log.d(TAG, "Waited for all coroutines (time taken =${afterJoinTime-beforeJoinTime})")
+
                             //finalResult.append(currentPartialResult.toString().trim()).append(" ")
                             break
                         }
                     }
                 }
 
+                val beforeJoinTime = System.currentTimeMillis()
+                jobs.forEach { it.join() }
+                val afterJoinTime = System.currentTimeMillis()
+                Log.d(TAG, "Waited for all coroutines (time taken =${afterJoinTime-beforeJoinTime})")
+
                 //val finalText = finalResult.toString().trim()
-                val finalText = results.toSortedMap().values.joinToString("")
+                val finalText = results.toSortedMap().values.joinToString(" ")
                 Log.d(TAG, "Final recognized text: $finalText")
 
                 // Determine majority language

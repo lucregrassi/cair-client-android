@@ -18,6 +18,7 @@ class TeleoperationManager(
     private var job: Job? = null // Job for the UDP listener coroutine
     private val audioManager: AudioManager =
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var socket: DatagramSocket? = null
 
     private val TAG = "TeleoperationManager"
 
@@ -28,21 +29,20 @@ class TeleoperationManager(
     fun startUdpListener() {
         // Cancel any existing job before starting a new one
         job?.cancel()
-
+        socket = DatagramSocket(commandPort)
         job = CoroutineScope(Dispatchers.IO).launch {
-            val socket = DatagramSocket(commandPort)
             val buffer = ByteArray(1024)
             try {
                 while (isActive) { // Check if the coroutine is still active
                     val packet = DatagramPacket(buffer, buffer.size)
-                    socket.receive(packet)
+                    socket?.receive(packet)
                     val command = String(packet.data, 0, packet.length).trim()
                     handleCommand(command)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "UDP listener error: ${e.message}", e)
             } finally {
-                socket.close()
+                socket?.close()
             }
         }
     }
@@ -78,6 +78,7 @@ class TeleoperationManager(
 
     fun stopUdpListener() {
         job?.cancel()
+        socket?.close()
         job = null
     }
 }
