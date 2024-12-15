@@ -176,7 +176,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         openAIApiKey = sharedPreferences.getString("openai_api_key", null) ?: ""
         serverPort = sharedPreferences.getInt("server_port", -1)
         useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", false)
-        autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", true) // Load the setting
+        autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false) // Load the setting
+        Log.i(TAG, "autodetect=$autoDetectLanguage")
 
         if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
             val intent = Intent(this, SettingsActivity::class.java)
@@ -515,6 +516,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
                             val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
                             continuationSentence = continuationSentence.replace(patternDesspk, " ")
+                            val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
+                            continuationSentence =
+                                continuationSentence.replace(patternPrevspk, " ")
 
                             if (continuationSentence != "") {
                                 conversationState.dialogueState.conversationHistory.add(
@@ -695,8 +699,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         if (!continuationSentence.isNullOrEmpty()) {
                             // Replace any $desspk tags
                             val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
-                            val processedContinuationSentence =
+                            var processedContinuationSentence =
                                 continuationSentence.replace(patternDesspk, " ")
+                            processedContinuationSentence =
+                                processedContinuationSentence.replace(patternPrevspk, " ")
 
                             // Add the assistant's second sentence to conversationHistory
                             conversationState.dialogueState.conversationHistory.add(
@@ -775,6 +781,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
                         lastContinuationSentence =
                             lastContinuationSentence.replace(patternDesspk, " ")
+                        lastContinuationSentence =
+                            lastContinuationSentence.replace(patternPrevspk, " ")
 
                         val repeatContinuation = "$prefix $lastContinuationSentence"
 

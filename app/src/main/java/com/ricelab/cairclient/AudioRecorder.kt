@@ -31,7 +31,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     private val audioSource = MediaRecorder.AudioSource.MIC
     private val channelConfig = android.media.AudioFormat.CHANNEL_IN_MONO
     private val audioFormat = android.media.AudioFormat.ENCODING_PCM_16BIT
-    private val bufferSize = 2*android.media.AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
+    private val bufferSize = 2*AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
 
     // Detection thresholds
     private var speechDetectionThreshold = 2000
@@ -253,10 +253,12 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
 
         if (autoDetectLanguage) {
             // Use auto language detection
+            Log.i(TAG, "Using autodetection of language")
             autoDetectSourceLanguageConfig = AutoDetectSourceLanguageConfig.fromLanguages(listOf("en-US", "it-IT"))
             recognizer = SpeechRecognizer(speechConfig, autoDetectSourceLanguageConfig, audioConfig)
         } else {
             // No auto detection, use default language
+            Log.i(TAG, "Not using autodetection of language")
             speechConfig.speechRecognitionLanguage = DEFAULT_LANGUAGE // e.g. "it-IT"
             recognizer = SpeechRecognizer(speechConfig, audioConfig)
         }
