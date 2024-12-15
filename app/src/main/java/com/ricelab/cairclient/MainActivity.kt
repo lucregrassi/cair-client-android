@@ -269,11 +269,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         lastActiveSpeakerTime = System.currentTimeMillis()
 
         while (isAlive) {
-            if ((System.currentTimeMillis() - lastActiveSpeakerTime) > SILENCE_THRESHOLD * 1000) {
-                ongoingConversation = false
-            } else {
-                ongoingConversation = true
-            }
+            ongoingConversation =
+                (System.currentTimeMillis() - lastActiveSpeakerTime) <= SILENCE_THRESHOLD * 1000
 
             val dueIntervention = personalizationServer.getDueIntervention()
             if (dueIntervention != null) {
@@ -281,12 +278,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 lastActiveSpeakerTime = System.currentTimeMillis()
                 continue
             }
-
             val xmlString = startListening()
-            val (sentence, detectedLang) = parseXmlForSentenceAndLanguage(xmlString)
-
             handleUserInput(xmlString)
-
             withContext(Dispatchers.IO) {
                 conversationState.writeToFile()
             }
@@ -341,10 +334,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         } else {
             firstSentence = getFixedMessage("welcome_back")
         }
-
-        robotSpeechTextView.text = "Pepper: $firstSentence"
-        pepperInterface.sayMessage(firstSentence, language)
-        previousSentence = firstSentence
+        if(firstSentence != "") {
+            robotSpeechTextView.text = "Pepper: $firstSentence"
+            pepperInterface.sayMessage(firstSentence, language)
+            previousSentence = firstSentence
+        }
     }
 
     private suspend fun startListening(): String {
@@ -456,16 +450,18 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 }
                 Log.i(TAG, "Reply sentence: $replySentence")
 
-                val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
-                replySentence = replySentence.replace(patternPrevspk, " ")
+                if (replySentence != ""){
+                    val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
+                    replySentence = replySentence.replace(patternPrevspk, " ")
 
-                conversationState.dialogueState.conversationHistory.add(
-                    mapOf("role" to "assistant", "content" to replySentence)
-                )
+                    conversationState.dialogueState.conversationHistory.add(
+                        mapOf("role" to "assistant", "content" to replySentence)
+                    )
 
-                if (conversationState.dialogueState.conversationHistory.size > 5) {
-                    conversationState.dialogueState.conversationHistory =
-                        conversationState.dialogueState.conversationHistory.takeLast(5).toMutableList()
+                    if (conversationState.dialogueState.conversationHistory.size > 5) {
+                        conversationState.dialogueState.conversationHistory =
+                            conversationState.dialogueState.conversationHistory.takeLast(5).toMutableList()
+                    }
                 }
 
                 val conversationStateCopy = conversationState.copy()
@@ -484,9 +480,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             DueIntervention(type = null, exclusive = false, sentence = "")
                         )
                     }
-
-                    robotSpeechTextView.text = ("Pepper: $replySentence")
-                    pepperInterface.sayMessage(replySentence, language)
+                    if (replySentence != "") {
+                        robotSpeechTextView.text = ("Pepper: $replySentence")
+                        pepperInterface.sayMessage(replySentence, language)
+                    }
 
                     val job = launch(Dispatchers.IO) {
                         when (conversationState.plan) {
@@ -519,22 +516,26 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
                             continuationSentence = continuationSentence.replace(patternDesspk, " ")
 
-                            conversationState.dialogueState.conversationHistory.add(
-                                mapOf("role" to "assistant", "content" to continuationSentence)
-                            )
+                            if (continuationSentence != "") {
+                                conversationState.dialogueState.conversationHistory.add(
+                                    mapOf("role" to "assistant", "content" to continuationSentence)
+                                )
 
-                            if (conversationState.dialogueState.conversationHistory.size > 5) {
-                                conversationState.dialogueState.conversationHistory =
-                                    conversationState.dialogueState.conversationHistory.takeLast(5)
-                                        .toMutableList()
+                                if (conversationState.dialogueState.conversationHistory.size > 5) {
+                                    conversationState.dialogueState.conversationHistory =
+                                        conversationState.dialogueState.conversationHistory.takeLast(5)
+                                            .toMutableList()
+                                }
+
+                                robotSpeechTextView.text = ("Pepper: $continuationSentence")
+                                pepperInterface.sayMessage(continuationSentence, language)
+                                previousSentence = continuationSentence
+                                conversationState.dialogueState.prevDialogueSentence =
+                                    conversationState.dialogueState.dialogueSentence
                             }
-
-                            robotSpeechTextView.text = ("Pepper: $continuationSentence")
-                            pepperInterface.sayMessage(continuationSentence, language)
-                            previousSentence = continuationSentence
-
-                            conversationState.dialogueState.prevDialogueSentence =
-                                conversationState.dialogueState.dialogueSentence
+                            else {
+                                Log.i(TAG, "No continuation sentence")
+                            }
 
                         } else {
                             Log.e(TAG, "No continuation sentence found")
@@ -568,18 +569,21 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         val xmlString = """
             <response><profile_id value="00000000-0000-0000-0000-000000000000">${dueIntervention.sentence}<language>$language</language><speaking_time>0.0</speaking_time></profile_id></response>
         """.trimIndent()
-
+// Add the intervention's sentence to the conversation history
         conversationState.dialogueState.conversationHistory.add(
             mapOf("role" to "user", "content" to dueIntervention.sentence)
         )
 
+        // Ensure only the last 5 entries are kept
         if (conversationState.dialogueState.conversationHistory.size > 5) {
             conversationState.dialogueState.conversationHistory =
                 conversationState.dialogueState.conversationHistory.takeLast(5).toMutableList()
         }
 
+        // Update ongoingConversation
         conversationState.dialogueState.ongoingConversation = ongoingConversation
 
+        // Perform the first hubRequest and capture the updated conversationState
         val updatedConversationState = serverCommunicationManager.hubRequest(
             "reply",
             xmlString,
@@ -594,6 +598,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         if (updatedConversationState != null) {
             conversationState = updatedConversationState
 
+            // Determine the reply sentence
             val planSentence = conversationState.planSentence
             val dialogueSentence =
                 conversationState.dialogueState.dialogueSentence.getOrNull(0)?.getOrNull(1)
@@ -603,19 +608,24 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 !dialogueSentence.isNullOrEmpty() -> dialogueSentence
                 else -> ""
             }
+            Log.i(TAG, "Reply sentence (intervention): $replySentence")
 
+            // Replace any $prevspk tags
             val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
             val processedReplySentence = replySentence.replace(patternPrevspk, " ")
 
+            // Add the assistant's sentence to conversationHistory
             conversationState.dialogueState.conversationHistory.add(
                 mapOf("role" to "assistant", "content" to processedReplySentence)
             )
 
+            // Ensure only the last 5 entries are kept
             if (conversationState.dialogueState.conversationHistory.size > 5) {
                 conversationState.dialogueState.conversationHistory =
                     conversationState.dialogueState.conversationHistory.takeLast(5).toMutableList()
             }
 
+            // Say the reply sentence
             robotSpeechTextView.text = "Pepper: $processedReplySentence"
             pepperInterface.sayMessage(processedReplySentence, language)
             previousSentence = processedReplySentence
@@ -625,6 +635,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             if (!plan.isNullOrEmpty()) {
                 val planItems = plan.split("#").drop(1)
                 val job = lifecycleScope.launch(Dispatchers.IO) {
+                    Log.d(TAG, "Launched the Animation job")
                     for (item in planItems) {
                         val actionMatch = "action=(\\w+)".toRegex().find(item)
                         val action = actionMatch?.groupValues?.get(1)
@@ -634,7 +645,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                 "attention" -> pepperInterface.performAnimation(R.raw.hello)
                                 "hug" -> pepperInterface.performAnimation(R.raw.hug)
                                 "handshake" -> pepperInterface.performAnimation(R.raw.handshake)
-                                else -> Log.e(TAG, "Unknown action: $action")
+                                else -> {
+                                    Log.e(TAG, "Unknown action: $action")
+                                }
                             }
                         } else {
                             Log.e(TAG, "No action found in plan item: $item")
@@ -642,8 +655,141 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     }
                 }
                 job.join()
+                Log.d(TAG, "Joined the Animation job")
             } else {
                 Log.e(TAG, "Plan is null or empty")
+            }
+
+            if (dueIntervention.type == "topic") {
+                Log.d(TAG, "intervention == topic")
+                // Now perform the second hub request for continuation
+                // Copy conversationState for the second hubRequest
+                val conversationStateCopy = conversationState.copy()
+
+                // Start sayMessage and second hubRequest concurrently
+                coroutineScope {
+                    // Launch the second hub request in the background
+                    val secondHubRequestJob = async(Dispatchers.IO) {
+                        // Update ongoingConversation before second request
+                        conversationStateCopy.dialogueState.ongoingConversation =
+                            ongoingConversation
+                        serverCommunicationManager.hubRequest(
+                            "continuation", // Pass "continuation" as the reqType
+                            xmlString, language, conversationStateCopy, prevTurnLastSpeaker,
+                            prevSpeakerTopic, listOf(),
+                            DueIntervention(type = null, exclusive = false, sentence = "")
+                        )
+                    }
+
+                    // Wait for the second hub request to complete
+                    val continuationConversationState = secondHubRequestJob.await()
+
+                    if (continuationConversationState != null) {
+                        // Update conversationState with the result from the second hubRequest
+                        conversationState = continuationConversationState
+
+                        // Get the assistant's second sentence
+                        val continuationSentence =
+                            conversationState.dialogueState.dialogueSentence.getOrNull(1)
+                                ?.getOrNull(1)
+                        if (!continuationSentence.isNullOrEmpty()) {
+                            // Replace any $desspk tags
+                            val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
+                            val processedContinuationSentence =
+                                continuationSentence.replace(patternDesspk, " ")
+
+                            // Add the assistant's second sentence to conversationHistory
+                            conversationState.dialogueState.conversationHistory.add(
+                                mapOf(
+                                    "role" to "assistant",
+                                    "content" to processedContinuationSentence
+                                )
+                            )
+
+                            // Ensure only the last 5 entries are kept
+                            if (conversationState.dialogueState.conversationHistory.size > 5) {
+                                conversationState.dialogueState.conversationHistory =
+                                    conversationState.dialogueState.conversationHistory.takeLast(
+                                        5
+                                    )
+                                        .toMutableList()
+                            }
+
+                            Log.i(TAG, "Continuation sentence: $processedContinuationSentence")
+
+                            // Now say the second assistant sentence
+                            robotSpeechTextView.text = "Pepper: $processedContinuationSentence"
+                            pepperInterface.sayMessage(processedContinuationSentence, language)
+                            previousSentence = processedContinuationSentence
+
+                            // Update prev_dialogue_sentence
+                            conversationState.dialogueState.prevDialogueSentence =
+                                conversationState.dialogueState.dialogueSentence
+
+                        } else {
+                            Log.e(
+                                TAG,
+                                "Dialogue sentence structure is unexpected. Cannot find assistant's second sentence."
+                            )
+                            // Handle no continuation response
+                            if (ongoingConversation) {
+                                val mapLanguageSentence = mapOf(
+                                    "it-IT" to "Dicevo...",
+                                    "en-US" to "I was saying..."
+                                    // Add other languages if needed
+                                )
+                                val prefix = mapLanguageSentence[language] ?: "I was saying..."
+                                val lastContinuationSentence =
+                                    conversationState.dialogueState.prevDialogueSentence.lastOrNull()
+                                        ?.getOrNull(1) ?: ""
+
+                                val repeatContinuation = "$prefix $lastContinuationSentence"
+
+                                Log.i(TAG, "Repeat continuation: $repeatContinuation")
+                                robotSpeechTextView.text = ("Pepper: $repeatContinuation")
+                                pepperInterface.sayMessage(repeatContinuation, language)
+                            } else {
+                                Log.d(TAG, "No ongoing conversation. Skipping continuation.")
+                            }
+                        }
+                    } else {
+                        Log.e(TAG, "Failed to perform continuation hub request.")
+                    }
+                }
+            } else {
+
+                if (conversationState.dialogueState.ongoingConversation) {
+                    Log.d(TAG, "Ongoing conversation = true && intervention == action")
+                    coroutineScope {
+                        val mapLanguageSentence = mapOf(
+                            "it-IT" to "Dicevo...",
+                            "en-US" to "I was saying..."
+                            // Add other languages if needed
+                        )
+                        val prefix = mapLanguageSentence[language] ?: "I was saying..."
+                        var lastContinuationSentence =
+                            conversationState.dialogueState.prevDialogueSentence.lastOrNull()
+                                ?.getOrNull(1) ?: ""
+
+                        // Replace any $desspk tags
+                        val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
+                        lastContinuationSentence =
+                            lastContinuationSentence.replace(patternDesspk, " ")
+
+                        val repeatContinuation = "$prefix $lastContinuationSentence"
+
+                        Log.i(TAG, "Repeat continuation: $repeatContinuation")
+                        robotSpeechTextView.text = ("Pepper: $repeatContinuation")
+                        pepperInterface.sayMessage(repeatContinuation, language)
+                    }
+                } else {
+                    Log.d(TAG, "Ongoing conversation = false && intervention == action")
+                }
+            }
+
+            // Save the conversation state
+            withContext(Dispatchers.IO) {
+                conversationState.writeToFile()
             }
         } else {
             Log.e(TAG, "Failed to handle due intervention.")
