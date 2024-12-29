@@ -57,11 +57,11 @@ class TeleoperationManager(
             "STOP" -> pepperInterface.stopRobot()
             "VOLUME_UP" -> changeVolume(AudioManager.ADJUST_RAISE)
             "VOLUME_DOWN" -> changeVolume(AudioManager.ADJUST_LOWER)
-            "HUG" -> CoroutineScope(Dispatchers.Main).launch { pepperInterface.performAnimation(R.raw.hug) }
-            "GREET" -> CoroutineScope(Dispatchers.Main).launch { pepperInterface.performAnimation(R.raw.hello) }
+            "HUG" -> CoroutineScope(Dispatchers.Main).launch { pepperInterface.performAnimation("hug") }
+            "GREET" -> CoroutineScope(Dispatchers.Main).launch { pepperInterface.performAnimation("hello") }
             "HANDSHAKE" -> CoroutineScope(Dispatchers.Main).launch {
                 pepperInterface.performAnimation(
-                    R.raw.handshake
+                    "handshake"
                 )
             }
             else -> {

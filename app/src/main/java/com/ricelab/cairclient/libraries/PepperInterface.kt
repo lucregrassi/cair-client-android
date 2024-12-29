@@ -9,6 +9,7 @@ import com.aldebaran.qi.sdk.`object`.locale.Language
 import com.aldebaran.qi.sdk.`object`.locale.Locale
 import com.aldebaran.qi.sdk.`object`.locale.Region
 import com.aldebaran.qi.sdk.builder.*
+import com.ricelab.cairclient.R
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -50,10 +51,30 @@ class PepperInterface(
     }
 
     // Function to perform animations
-    suspend fun performAnimation(animationRes: Int) {
+    suspend fun performAnimation(action: String) {
         if (qiContext == null) {
             Log.e(TAG, "QiContext is not initialized.")
             return
+        }
+
+        var animationRes: Int
+        when (action) {
+            "hello" -> {
+                animationRes = R.raw.hello
+            }
+            "attention" -> {
+                animationRes = R.raw.hello
+            }
+            "hug" -> {
+                animationRes = R.raw.hug
+            }
+            "handshake" -> {
+                animationRes = R.raw.handshake
+            }
+            else -> {
+                Log.e(TAG, "Action not found")
+                return
+            }
         }
 
         try {

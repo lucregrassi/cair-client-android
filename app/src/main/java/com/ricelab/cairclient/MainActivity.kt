@@ -486,23 +486,22 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         pepperInterface.sayMessage(replySentence, language)
                     }
 
-                    val job = launch(Dispatchers.IO) {
-                        when (conversationState.plan) {
-                            "#action=hello" -> {
-                                pepperInterface.performAnimation(R.raw.hello)
-                            }
-                            "#action=hug" -> {
-                                pepperInterface.performAnimation(R.raw.hug)
-                            }
-                            "#action=handshake" -> {
-                                pepperInterface.performAnimation(R.raw.handshake)
-                            }
-                            else -> {
-                                Log.e(TAG, "No plan to perform")
+                    if (!conversationState.plan.isNullOrEmpty()) {
+                        val plan = conversationState.plan!!
+                        val planItems = plan.split("#").drop(1)
+                        val job = lifecycleScope.launch(Dispatchers.IO) {
+                            for (item in planItems) {
+                                val actionMatch = "action=(\\w+)".toRegex().find(item)
+                                val action = actionMatch?.groupValues?.get(1)
+                                if (action != null) {
+                                    Log.d(TAG, "Launched the Animation job")
+                                    pepperInterface.performAnimation(action)
+                                }
                             }
                         }
+                        job.join()
                     }
-                    job.join()
+
 
                     val continuationConversationState = secondHubRequestJob.await()
 
@@ -639,12 +638,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             if (!plan.isNullOrEmpty()) {
                 val planItems = plan.split("#").drop(1)
                 val job = lifecycleScope.launch(Dispatchers.IO) {
-                    Log.d(TAG, "Launched the Animation job")
                     for (item in planItems) {
                         val actionMatch = "action=(\\w+)".toRegex().find(item)
                         val action = actionMatch?.groupValues?.get(1)
                         if (action != null) {
-                            when (action) {
+                            Log.d(TAG, "Launched the Animation job")
+                            pepperInterface.performAnimation(action)
+                            /*when (action) {
                                 "hello" -> pepperInterface.performAnimation(R.raw.hello)
                                 "attention" -> pepperInterface.performAnimation(R.raw.hello)
                                 "hug" -> pepperInterface.performAnimation(R.raw.hug)
@@ -652,7 +652,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                 else -> {
                                     Log.e(TAG, "Unknown action: $action")
                                 }
-                            }
+                            }*/
                         } else {
                             Log.e(TAG, "No action found in plan item: $item")
                         }
