@@ -131,8 +131,6 @@ class ServerCommunicationManager(
     }
 
     private fun parseFirstServerResponse(responseBody: String): FirstServerResponse {
-
-
         return try {
             // Analizzare la risposta JSON in una mappa
             val responseData = gson.fromJson(responseBody, Map::class.java) as Map<*, *>
@@ -155,8 +153,6 @@ class ServerCommunicationManager(
         xmlString: String,
         language: String,
         conversationState: ConversationState,
-        prevSpeakerId: String,
-        prevSpeakerTopic: Int?,
         denseCapResult: List<String>,
         dueIntervention: DueIntervention
     ): ConversationState? {
@@ -181,7 +177,7 @@ class ServerCommunicationManager(
             "dialogue_state" to conversationState.dialogueState.toMap(),
             "dialogue_statistics" to conversationState.dialogueStatistics.toMap(),
             "speakers_info" to conversationState.speakersInfo.toMap(),
-            "prev_speaker_info" to mapOf("id" to prevSpeakerId, "topic" to prevSpeakerTopic),
+            "prev_speaker_info" to mapOf("id" to conversationState.prevTurnLastSpeaker, "topic" to conversationState.prevSpeakerTopic),
             "dense_cap_result" to denseCapResult
         )
 

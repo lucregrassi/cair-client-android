@@ -1,9 +1,18 @@
 package com.ricelab.cairclient.libraries
 
 import android.util.Log
+import org.json.JSONArray
 import org.json.JSONObject
 
 private const val TAG = "DialogueState"
+
+fun jsonArrayToList(jsonArray: JSONArray): List<Int> {
+    val list = mutableListOf<Int>()
+    for (i in 0 until jsonArray.length()) {
+        list.add(jsonArray.optInt(i)) // Usa optInt per evitare eccezioni
+    }
+    return list
+}
 
 data class DialogueState(
     var dialogueSentence: List<List<String>> = listOf(),
@@ -15,7 +24,7 @@ data class DialogueState(
     var pattern: List<String>? = null,
     var bool: Boolean? = null,
     var familiarities: Map<String, Any>? = null,
-    var flags: Map<String, Any>? = null,
+    var flags: Map<String, List<Int>>? = null,
     var addressedCommunity: String? = null,
     var dialogueNuances: DialogueNuances = DialogueNuances(),
     var conversationHistory: MutableList<Map<String, String>> = mutableListOf(),
@@ -33,7 +42,8 @@ data class DialogueState(
         pattern = (dialogueState["pattern"] as? List<*>)?.filterIsInstance<String>() ?: listOf(),
         bool = dialogueState["bool"] as? Boolean,
         familiarities = (dialogueState["familiarities"] as? Map<*, *>)?.filterKeys { it is String }?.filterValues { it is Any }?.mapKeys { it.key as String }?.mapValues { it.value as Any } ?: mapOf(),
-        flags = (dialogueState["flags"] as? Map<*, *>)?.filterKeys { it is String }?.filterValues { it is Any }?.mapKeys { it.key as String }?.mapValues { it.value as Any } ?: mapOf(),
+        flags = (dialogueState["flags"] as? Map<*, *>)?.filterKeys { it is String }?.filterValues { it is Any }?.mapKeys { it.key as String }?.mapValues { it.value as Any } as Map<String, List<Int>>?
+            ?: mapOf(),
         addressedCommunity = dialogueState["addressed_community"] as? String,
         dialogueNuances = dialogueState["dialogue_nuances"]?.let { nuances ->
             val nuancesMap = nuances as? Map<String, Any?>
@@ -88,6 +98,18 @@ data class DialogueState(
             "conversation_history" to conversationHistory,
             "ongoing_conversation" to ongoingConversation,
         )
+    }
+
+    fun updateConversation(role: String, sentence: String) {
+        conversationHistory.add(
+            mapOf("role" to role, "content" to sentence)
+        )
+
+        if (conversationHistory.size > 5) {
+            conversationHistory = conversationHistory.takeLast(5).toMutableList()
+        }
+
+        Log.d(TAG, "Current conversationHistory: $conversationHistory")
     }
 
     // Update dialogue state from JSON (handles snake_case from the server)
@@ -150,9 +172,15 @@ data class DialogueState(
 
         Log.d(TAG, "Flags before updateFromJSON: $flags")
         // Update flags
+        /*this.flags = json.optJSONObject("flags")?.let { flagsJson ->
+            flagsJson.keys().asSequence().associateWith { flagsJson[it] as List<Int> }
+        } ?: this.flags*/
         this.flags = json.optJSONObject("flags")?.let { flagsJson ->
-            flagsJson.keys().asSequence().associateWith { flagsJson[it] as Any }
-        } ?: this.flags
+            flagsJson.keys().asSequence().associateWith { key ->
+                val jsonArray = flagsJson.optJSONArray(key)
+                jsonArray?.let { jsonArrayToList(it) } ?: emptyList()
+            }
+        }
         Log.d(TAG, "Flags after updateFromJSON: $flags")
 
         // Update addressedCommunity

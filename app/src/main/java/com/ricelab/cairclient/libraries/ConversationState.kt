@@ -13,7 +13,9 @@ class ConversationState(
     var dialogueStatistics = DialogueStatistics()
     var planSentence: String? = null
     var plan: String? = null
-    // Remove dialogueNuances variable
+    var lastActiveSpeakerTime: Long = 0
+    var prevTurnLastSpeaker: String = ""
+    var prevSpeakerTopic: Int? = null
 
     // Function to load conversation state
     fun loadFromFile() {
