@@ -177,7 +177,10 @@ class ServerCommunicationManager(
             "dialogue_state" to conversationState.dialogueState.toMap(),
             "dialogue_statistics" to conversationState.dialogueStatistics.toMap(),
             "speakers_info" to conversationState.speakersInfo.toMap(),
-            "prev_speaker_info" to mapOf("id" to conversationState.prevTurnLastSpeaker, "topic" to conversationState.prevSpeakerTopic),
+            "prev_speaker_info" to mapOf(
+                "id" to conversationState.prevTurnLastSpeaker,
+                "topic" to conversationState.prevSpeakerTopic
+            ),
             "dense_cap_result" to denseCapResult
         )
 
@@ -185,8 +188,8 @@ class ServerCommunicationManager(
         Log.d(TAG, "client_sentence = ${data["client_sentence"]}")
         val jsonData = JSONObject(data).toString().toByteArray(Charsets.UTF_8)
         val jsonstring = JSONObject(data).toString()
-
         Log.d(TAG, "jsonData = $jsonstring")
+
         val compressedData = compressData(jsonData)
 
         // Create a POST request
@@ -204,48 +207,80 @@ class ServerCommunicationManager(
                 val response = client.newCall(request).execute()
                 val endTime = System.currentTimeMillis()
 
-                if (response.isSuccessful) {
-                    Log.i(TAG, "$requestType request performed successfully!")
-                    val responseBodyBytes = response.body?.bytes() ?: throw Exception("Empty response")
-                    val decompressedData = decompressData(responseBodyBytes)
-                    val responseBodyString = String(decompressedData, Charsets.UTF_8)
-                    Log.i(TAG, "Received JSON string: $responseBodyString")
-                    val jsonResponse = JSONObject(responseBodyString)
-                    Log.i(TAG, "Received JSON: $jsonResponse")
-                    val error = jsonResponse.optString("error", "")
-
-                    if (error.isNotEmpty()) {
-                        Log.e(TAG, "Error from Hub: $error")
-                        return@withContext null
-                    }
-
-                    // Parse the updated conversation state
-                    val updatedDialogueState = conversationState.dialogueState.updateFromJson(jsonResponse.getJSONObject("dialogue_state"))
-                    val updatedDialogueStatistics = conversationState.dialogueStatistics.updateFromJson(jsonResponse.getJSONObject("dialogue_statistics"))
-
-                    Log.d(TAG, "updateFromJson: json.plan=${jsonResponse.optString("plan", "fallback")}")
-                    Log.d(TAG, "updateFromJson: josn.plan_sentence=${jsonResponse.optString("plan_sentence", "fallback")}")
-                    val updatedPlanSentence = jsonResponse.optString("plan_sentence", conversationState.planSentence ?: "")
-                    val updatedPlan =  jsonResponse.optString("plan", conversationState.plan?: "")
-                    Log.d(TAG, "updateFromJson: dialogueState.plan=$updatedPlan")
-                    Log.d(TAG, "updateFromJson: dialogueState.plan_sentence=$updatedPlanSentence")
-
-                    Log.i(TAG, "$requestType request response time: ${endTime - startTime}ms")
-
-                    // Return updated conversation state
-                    return@withContext conversationState.copy(
-                        dialogueState = updatedDialogueState,
-                        dialogueStatistics = updatedDialogueStatistics,
-                        planSentence = updatedPlanSentence,
-                        plan = updatedPlan
-                    )
-                } else {
-                    Log.i(TAG, "Calling execute gave an error")
-                    throw Exception("Server returned an error: ${response.code}")
+                if (!response.isSuccessful) {
+                    // The server returned a non-200 code
+                    val errorCode = response.code
+                    Log.e(TAG, "Server returned an error: $errorCode")
+                    throw Exception("Server error with code: $errorCode")
                 }
+
+                // Response was successful, parse it
+                val responseBodyBytes = response.body?.bytes()
+                    ?: throw Exception("Response body is null or empty")
+
+                // Decompress data
+                val decompressedData = try {
+                    decompressData(responseBodyBytes)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Decompression error: ${e.message}")
+                    throw Exception("Failed to decompress data", e)
+                }
+
+                // Convert to string
+                val responseBodyString = String(decompressedData, Charsets.UTF_8)
+                Log.i(TAG, "Received JSON string: $responseBodyString")
+
+                // Parse JSON
+                val jsonResponse = try {
+                    JSONObject(responseBodyString)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Invalid JSON format: ${e.message}")
+                    throw Exception("Failed to parse JSON", e)
+                }
+
+                Log.i(TAG, "Received JSON: $jsonResponse")
+                val error = jsonResponse.optString("error", "")
+                if (error.isNotEmpty()) {
+                    // The Hub sent back an explicit error
+                    Log.e(TAG, "Error from Hub: $error")
+                    return@withContext null
+                }
+
+                // Update the conversation state
+                try {
+                    conversationState.dialogueState.updateFromJson(
+                        jsonResponse.getJSONObject("dialogue_state")
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to update dialogue state: ${e.message}")
+                    throw Exception("Failed to update dialogue state", e)
+                }
+
+                try {
+                    conversationState.dialogueStatistics.updateFromJson(
+                        jsonResponse.getJSONObject("dialogue_statistics")
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to update dialogue statistics: ${e.message}")
+                    throw Exception("Failed to update dialogue statistics", e)
+                }
+
+                val updatedPlanSentence = jsonResponse.optString("plan_sentence", conversationState.planSentence ?: "")
+                val updatedPlan = jsonResponse.optString("plan", conversationState.plan ?: "")
+
+                Log.i(TAG, "$requestType request response time: ${endTime - startTime}ms")
+
+                // Return the updated conversation state
+                return@withContext conversationState.copy(
+                    planSentence = updatedPlanSentence,
+                    plan = updatedPlan
+                )
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to acquire updated state: ${e.message}")
-                null
+                // Detailed logs for exceptions
+                Log.e(TAG, "Failed to acquire updated state during $requestType. Exception: ${e.message}")
+                Log.e(TAG, "Stack trace:\n${Log.getStackTraceString(e)}")
+                e.printStackTrace()
+                null  // Return null if there are errors
             }
         }
     }

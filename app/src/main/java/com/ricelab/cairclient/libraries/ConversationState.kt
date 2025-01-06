@@ -76,4 +76,41 @@ class ConversationState(
         newConversationState.planSentence = planSentence
         return newConversationState
     }
+
+    fun getLastContinuationSentence(): String {
+        var lastContinuationSentence = dialogueState.dialogueSentence.lastOrNull()?.getOrNull(1) ?: ""
+        val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
+        val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
+        lastContinuationSentence = lastContinuationSentence.replace(patternDesspk, " ")
+        lastContinuationSentence = lastContinuationSentence.replace(patternPrevspk, " ")
+        return lastContinuationSentence
+    }
+
+    fun getPreviousContinuationSentence(): String {
+        var lastContinuationSentence = dialogueState.prevDialogueSentence.lastOrNull()?.getOrNull(1) ?: ""
+        val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
+        val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
+        lastContinuationSentence = lastContinuationSentence.replace(patternDesspk, " ")
+        lastContinuationSentence = lastContinuationSentence.replace(patternPrevspk, " ")
+        return lastContinuationSentence
+    }
+
+    fun getReplySentence(): String {
+        var replySentence = if (plan?.isNotEmpty() == true) {
+            planSentence.toString()
+        } else {
+            dialogueState.dialogueSentence[0][1]
+        }
+
+        Log.i(TAG, "Reply sentence: $replySentence")
+
+        // Clean up the reply sentence if needed
+        if (replySentence.isNotEmpty()) {
+            val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
+            replySentence = replySentence.replace(patternPrevspk, " ")
+            return replySentence
+        } else {
+            return ""
+        }
+    }
 }

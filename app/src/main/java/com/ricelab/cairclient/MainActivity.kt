@@ -50,9 +50,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private val repeatKeywords = listOf("puoi ripetere", "ripeti", "non ho capito")
     private var language = "it-IT" // Default language is Italian
 
-
-    //private var ongoingConversation: Boolean = true
-
     private lateinit var serverCommunicationManager: ServerCommunicationManager
     private lateinit var serverIp: String
     private lateinit var openAIApiKey: String
@@ -67,11 +64,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private var useFillerSentence: Boolean = false
 
-    // Instead of a single list for fillerSentences, we now have a map keyed by language
-    private val fillerSentencesMap = mutableMapOf<String, List<String>>()
     private var autoDetectLanguage = false // default
 
     private var teleoperationManager: TeleoperationManager? = null
+
+    private var sentenceGenerator: SentenceGenerator = SentenceGenerator()
 
     private val requestAudioPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -90,7 +87,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         setContentView(R.layout.activity_main)
         QiSDK.register(this, this)
-        loadFillerSentences()
+        sentenceGenerator.loadFillerSentences(this)
         retrieveStoredValues() // autoDetectLanguage is now loaded here
         fileStorageManager = FileStorageManager(this, filesDir)
 
@@ -107,34 +104,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             recalibrateThreshold()
         }
         checkAndRequestAudioPermission()
-    }
-
-    /**
-     * Load filler sentences from two separate files:
-     * - filler_sentences_it-IT.txt for Italian
-     * - filler_sentences_en-US.txt for English
-     * Store them in fillerSentencesMap with keys "it-IT" and "en-US".
-     */
-    private fun loadFillerSentences() {
-        fun loadSentencesForLang(fileName: String): List<String> {
-            return try {
-                val inputStream = assets.open("dialogue_data/$fileName")
-                inputStream.bufferedReader().useLines { lines ->
-                    lines.map { it.trim() }.filter { it.isNotEmpty() }.toList()
-                }
-            } catch (e: IOException) {
-                Log.e(TAG, "Error loading filler sentences from $fileName: ${e.message}")
-                listOf("...")
-            }
-        }
-
-        val itSentences = loadSentencesForLang("filler_sentences_it-IT.txt")
-        val enSentences = loadSentencesForLang("filler_sentences_en-US.txt")
-
-        fillerSentencesMap["it-IT"] = itSentences
-        fillerSentencesMap["en-US"] = enSentences
-
-        Log.d(TAG, "Filler sentences loaded: it-IT=${itSentences.size}, en-US=${enSentences.size}")
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -260,7 +229,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         withContext(Dispatchers.IO) {
           conversationState.loadFromFile()
-       }
+        }
 
         conversationState.lastActiveSpeakerTime = System.currentTimeMillis()
 
@@ -291,7 +260,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     serverCommunicationManager.firstServerRequest(language)
                 }
             } catch (e: Exception) {
-                pepperInterface.sayMessage(getFixedMessage("server_error"), language)
+                pepperInterface.sayMessage(sentenceGenerator.getPredefinedSentence(language,"server_error"), language)
                 return
             }
 
@@ -329,7 +298,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 fileStorageManager.writeToFile(dialogueStatistics)
             }
         } else {
-            firstSentence = getFixedMessage("welcome_back")
+            firstSentence = sentenceGenerator.getPredefinedSentence(language, "welcome_back")
         }
         if(firstSentence != "") {
             robotSpeechTextView.text = "Pepper: $firstSentence"
@@ -340,7 +309,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private suspend fun startListening(): String {
         while (true) {
-            userSpeechTextView.text = getFixedMessage("listening")
+            userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening")
 
             val xmlResult = withContext(Dispatchers.IO) {
                 audioRecorder.listenAndSplit()
@@ -375,97 +344,128 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private suspend fun handle(xmlStringInput: String, dueInterventionInput: DueIntervention) {
         val isIntervention = !dueInterventionInput.type.isNullOrEmpty()
-        val xmlString = when(isIntervention) {
-            false -> xmlStringInput
-            true ->  "<response><profile_id value=\"00000000-0000-0000-0000-000000000000\">${dueInterventionInput.sentence}<language>$language</language><speaking_time>0.0</speaking_time></profile_id></response>\n".trimIndent()
+        val xmlString = if (!isIntervention) {
+            xmlStringInput
+        } else {
+            """
+        <response>
+          <profile_id value="00000000-0000-0000-0000-000000000000">
+            ${dueInterventionInput.sentence}
+            <language>$language</language>
+            <speaking_time>0.0</speaking_time>
+          </profile_id>
+        </response>
+        """.trimIndent()
         }
-        val dueIntervention = when(isIntervention) {
-            false -> DueIntervention(type = null, exclusive = false, sentence = "")
-            true -> dueInterventionInput
+
+        val dueIntervention = if (!isIntervention) {
+            DueIntervention(type = null, exclusive = false, sentence = "")
+        } else {
+            dueInterventionInput
         }
 
         val (sentence, detectedLang) = parseXmlForSentenceAndLanguage(xmlString)
-
         if (detectedLang.isNotEmpty() && detectedLang != "und") {
             language = detectedLang
         }
 
+        // Check for special keywords
         if (exitKeywords.any { sentence.contains(it, ignoreCase = true) }) {
-            pepperInterface.sayMessage(getFixedMessage("goodbye"), language)
+            pepperInterface.sayMessage(sentenceGenerator.getPredefinedSentence(language, "goodbye"), language)
             isAlive = false
             return
         }
 
         if (repeatKeywords.any { sentence.contains(it, ignoreCase = true) }) {
             if (previousSentence.isNotEmpty()) {
-                pepperInterface.sayMessage(getFixedMessage("repeat_previous") + " $previousSentence", language)
+                pepperInterface.sayMessage(sentenceGenerator.getPredefinedSentence(language, "repeat_previous") + " $previousSentence", language)
             } else {
-                pepperInterface.sayMessage(getFixedMessage("nothing_to_repeat"), language)
+                pepperInterface.sayMessage(sentenceGenerator.getPredefinedSentence(language, "nothing_to_repeat"), language)
             }
             return
         }
 
+        // Proceed only if we have a meaningful user sentence
         if (sentence.isNotBlank() && sentence != "Timeout") {
-            if (!isIntervention)
+            if (!isIntervention) {
                 conversationState.lastActiveSpeakerTime = System.currentTimeMillis()
-
+            }
             conversationState.dialogueState.updateConversation("user", sentence)
 
-            var updatedConversationState: ConversationState? = null
-            // Launch the hub request asynchronously
+            // We'll store both jobs so we can await/join them
+            val hubRequestDeferred: Deferred<ConversationState?>
+            var fillerJob: Job? = null
+
+            // Run them in parallel in a coroutineScope
             coroutineScope {
-                async(Dispatchers.IO) {
-                    updatedConversationState = serverCommunicationManager.hubRequest(
+                // 1) The Hub request, returning a Deferred
+                hubRequestDeferred = async(Dispatchers.IO) {
+                    serverCommunicationManager.hubRequest(
                         "reply",
                         xmlString,
                         language,
                         conversationState,
-                        listOf(),
+                        emptyList(),
                         dueIntervention
                     )
                 }
 
-                // If using filler sentences, say one immediately in parallel with the hub request
+                // 2) The filler sentence (launch returns a Job)
                 if (!isIntervention && useFillerSentence) {
-                    launch(Dispatchers.Main) {
-                        val fillerList = fillerSentencesMap[language] ?: fillerSentencesMap["it-IT"]!!
-                        val randomFillerSentence = fillerList.random()
-                        robotSpeechTextView.text = "Pepper: $randomFillerSentence"
-                        // Speak the filler sentence now (blocking this coroutine only)
+                    fillerJob = launch(Dispatchers.IO) {
+                        val randomFillerSentence = sentenceGenerator.getFillerSentence(language)
+
+                        // Switch to Main thread for updating UI
+                        withContext(Dispatchers.Main) {
+                            robotSpeechTextView.text = "Pepper: $randomFillerSentence"
+                        }
+                        // Then speak the filler (in the Dispatchers.IO thread)
                         pepperInterface.sayMessage(randomFillerSentence, language)
                     }
                 }
             }
 
-            // Now await the hub request result; the filler sentence was spoken in parallel
+            // At this point, the coroutineScope above is done,
+            // so both the hubRequestDeferred and fillerJob have *started*,
+            // but we haven't awaited them yet.
+
+            // 3) Await the hub request result
+            val updatedConversationState = hubRequestDeferred.await()
+            // 4) Wait for the filler to finish speaking (if it was started)
+            fillerJob?.join()
+
+            // Now we can safely speak the reply *after* the filler is done
             if (updatedConversationState != null) {
-                conversationState = updatedConversationState!!
-                var replySentence = if (conversationState.plan?.isNotEmpty() == true) {
-                    conversationState.planSentence.toString()
-                } else {
-                    conversationState.dialogueState.dialogueSentence[0][1]
-                }
-                Log.i(TAG, "Reply sentence: $replySentence")
-
-                if (replySentence != ""){
-                    val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
-                    replySentence = replySentence.replace(patternPrevspk, " ")
-
+                conversationState = updatedConversationState
+                val replySentence = conversationState.getReplySentence()
+                if (!replySentence.isNullOrEmpty()) {
                     conversationState.dialogueState.updateConversation("assistant", replySentence)
                 }
 
-
                 coroutineScope {
-                    if (replySentence != "") {
-                        robotSpeechTextView.text = ("Pepper: $replySentence")
-                        pepperInterface.sayMessage(replySentence, language)
+                    Log.d("Debug", "before sayMessage $replySentence")
+
+                    // Speak the reply sentence if present
+                    var sayReplyJob: Job? = null
+                    if (replySentence.isNotEmpty()) {
+                        // Update UI on Main
+                        withContext(Dispatchers.Main) {
+                            robotSpeechTextView.text = ("Pepper: $replySentence")
+                        }
+                        // Actually speak it (on IO)
+                        sayReplyJob = launch(Dispatchers.IO) {
+                            pepperInterface.sayMessage(replySentence, language)
+                        }
                     }
 
+                    // Then perform the animation (this can also run in parallel or after speaking)
+                    Log.d("Debug", "before performAnimationFromPlan")
                     performAnimationFromPlan(conversationState.plan)
 
+                    // Decide if we do the continuation logic
                     if (!isIntervention || dueIntervention.type == "topic") {
                         val secondHubRequestJob = async(Dispatchers.IO) {
-                            //conversationState.dialogueState.ongoingConversation = ongoingConversation
+                            Log.d("Debug", "before hubRequest continuation")
                             serverCommunicationManager.hubRequest(
                                 "continuation",
                                 xmlString,
@@ -475,32 +475,33 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                 DueIntervention(type = null, exclusive = false, sentence = "")
                             )
                         }
-
-
+                        Log.d("Debug", "after performAnimationFromPlan")
                         val continuationConversationState = secondHubRequestJob.await()
+                        Log.d("Debug", "after performAnimationFromPlan await")
+
                         if (continuationConversationState != null) {
                             conversationState = continuationConversationState
                             if (conversationState.dialogueState.dialogueSentence.size > 1 &&
                                 conversationState.dialogueState.dialogueSentence[1].size > 1
                             ) {
-                                var continuationSentence =
-                                    conversationState.dialogueState.dialogueSentence[1][1]
+                                var continuationSentence = conversationState.getLastContinuationSentence()
 
-                                val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
-                                continuationSentence = continuationSentence.replace(patternDesspk, " ")
-                                val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
-                                continuationSentence =
-                                    continuationSentence.replace(patternPrevspk, " ")
-
-                                if (continuationSentence != "") {
+                                if (continuationSentence.isNotEmpty()) {
                                     conversationState.dialogueState.updateConversation("assistant", continuationSentence)
-                                    robotSpeechTextView.text = ("Pepper: $continuationSentence")
+                                    // Wait for the first reply to finish
+                                    Log.d("Debug", "Waiting sayReplyJob")
+                                    sayReplyJob?.join()
+                                    // Update UI on Main
+                                    withContext(Dispatchers.Main) {
+                                        robotSpeechTextView.text = ("Pepper: $continuationSentence")
+                                    }
+                                    Log.d("Debug", "After sayReplyJob")
+
                                     pepperInterface.sayMessage(continuationSentence, language)
                                     previousSentence = continuationSentence
                                     conversationState.dialogueState.prevDialogueSentence =
                                         conversationState.dialogueState.dialogueSentence
-                                }
-                                else {
+                                } else {
                                     Log.i(TAG, "No continuation sentence")
                                 }
                             } else {
@@ -510,31 +511,19 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             Log.e(TAG, "Failed continuation hub request.")
                         }
                     } else {
+                        // If we're in an intervention scenario
                         if (conversationState.dialogueState.ongoingConversation) {
                             Log.d(TAG, "Ongoing conversation = true && intervention == action")
                             coroutineScope {
-                                val mapLanguageSentence = mapOf(
-                                    "it-IT" to "Dicevo...",
-                                    "en-US" to "I was saying..."
-                                    // Add other languages if needed
-                                )
-                                val prefix = mapLanguageSentence[language] ?: "I was saying..."
-                                var lastContinuationSentence =
-                                    conversationState.dialogueState.prevDialogueSentence.lastOrNull()
-                                        ?.getOrNull(1) ?: ""
-
-                                // Replace any $desspk tags
-                                val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
-                                val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
-                                lastContinuationSentence =
-                                    lastContinuationSentence.replace(patternDesspk, " ")
-                                lastContinuationSentence =
-                                    lastContinuationSentence.replace(patternPrevspk, " ")
+                                val prefix = sentenceGenerator.getPredefinedSentence(language, "prefix_repeat")
+                                val lastContinuationSentence = conversationState.getPreviousContinuationSentence()
 
                                 val repeatContinuation = "$prefix $lastContinuationSentence"
-
                                 Log.i(TAG, "Repeat continuation: $repeatContinuation")
-                                robotSpeechTextView.text = ("Pepper: $repeatContinuation")
+
+                                withContext(Dispatchers.Main) {
+                                    robotSpeechTextView.text = ("Pepper: $repeatContinuation")
+                                }
                                 pepperInterface.sayMessage(repeatContinuation, language)
                             }
                         } else {
@@ -568,40 +557,5 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         } else {
             Log.e(TAG, "Plan is null or empty")
         }
-    }
-
-    /**
-     * Get a fixed message depending on the current language.
-     */
-    private fun getFixedMessage(key: String): String {
-        val messages = mapOf(
-            "welcome_back" to mapOf(
-                "it-IT" to "È bello rivederti! Di cosa vorresti parlare?",
-                "en-US" to "Welcome back! I missed you. What would you like to talk about?"
-            ),
-            "server_error" to mapOf(
-                "it-IT" to "Mi dispiace, non riesco a connettermi al server.",
-                "en-US" to "I'm sorry, I can't connect to the server."
-            ),
-            "goodbye" to mapOf(
-                "it-IT" to "È stato bello parlare con te. A presto!",
-                "en-US" to "It was nice talking to you. See you soon!"
-            ),
-            "nothing_to_repeat" to mapOf(
-                "it-IT" to "Mi dispiace, non ho niente da ripetere!",
-                "en-US" to "I'm sorry, I have nothing to repeat!"
-            ),
-            "repeat_previous" to mapOf(
-                "it-IT" to "Ho detto:",
-                "en-US" to "I said:"
-            ),
-            "listening" to mapOf(
-                "it-IT" to "Sto ascoltando...",
-                "en-US" to "I'm listening..."
-            )
-        )
-
-        val messageMap = messages[key]
-        return messageMap?.get(language) ?: (messageMap?.get("it-IT") ?: "")
     }
 }
