@@ -50,6 +50,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private val repeatKeywords = listOf("puoi ripetere", "ripeti", "non ho capito")
     private var language = "it-IT" // Default language is Italian
 
+    var lastActiveSpeakerTime: Long = 0
+
     private lateinit var serverCommunicationManager: ServerCommunicationManager
     private lateinit var serverIp: String
     private lateinit var openAIApiKey: String
@@ -231,11 +233,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
           conversationState.loadFromFile()
         }
 
-        conversationState.lastActiveSpeakerTime = System.currentTimeMillis()
+        lastActiveSpeakerTime = System.currentTimeMillis()
 
         while (isAlive) {
+            Log.i(TAG, "Time since last spoken words (ms) = ${System.currentTimeMillis() - lastActiveSpeakerTime}")
             conversationState.dialogueState.ongoingConversation =
-                (System.currentTimeMillis() - conversationState.lastActiveSpeakerTime) <= SILENCE_THRESHOLD * 1000
+                (System.currentTimeMillis() - lastActiveSpeakerTime) <= SILENCE_THRESHOLD * 1000
+            Log.i(TAG, "OngoingConversation = ${conversationState.dialogueState.ongoingConversation}")
 
             val dueIntervention = personalizationServer.getDueIntervention()
             if (dueIntervention != null) {
@@ -388,7 +392,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         // Proceed only if we have a meaningful user sentence
         if (sentence.isNotBlank() && sentence != "Timeout") {
             if (!isIntervention) {
-                conversationState.lastActiveSpeakerTime = System.currentTimeMillis()
+                lastActiveSpeakerTime = System.currentTimeMillis()
             }
             conversationState.dialogueState.updateConversation("user", sentence)
 

@@ -13,7 +13,9 @@ class ConversationState(
     var dialogueStatistics = DialogueStatistics()
     var planSentence: String? = null
     var plan: String? = null
-    var lastActiveSpeakerTime: Long = 0
+
+    // TODO: these are not reinitialized with a new hubRequest
+    // check if they are not already inside dialogueState
     var prevTurnLastSpeaker: String = ""
     var prevSpeakerTopic: Int? = null
 
