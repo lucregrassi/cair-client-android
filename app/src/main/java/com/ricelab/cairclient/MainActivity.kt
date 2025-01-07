@@ -47,7 +47,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var isAlive = true
 
     private val exitKeywords = listOf("esci dall'app")
-    private val repeatKeywords = listOf("puoi ripetere", "ripeti", "non ho capito")
+    private val repeatKeywords = listOf("puoi ripetere", "non ho capito")
     private var language = "it-IT" // Default language is Italian
 
     var lastActiveSpeakerTime: Long = 0
@@ -537,6 +537,24 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 }
             } else {
                 Log.e(TAG, "Failed to update conversation state.")
+                // Handle the null case with a fallback reply sentence
+                val fallbackSentence = when (language) {
+                    "it-IT" -> "Scusa, non ho capito, puoi ripetere?"
+                    "en-US" -> "Sorry, I didn't get it, can you repeat?"
+                    else -> "Sorry, I didn't understand, could you repeat?"
+                }
+
+                coroutineScope {
+                    // Update UI to display the fallback sentence
+                    withContext(Dispatchers.Main) {
+                        robotSpeechTextView.text = ("Pepper: $fallbackSentence")
+                    }
+
+                    // Speak the fallback sentence
+                    launch(Dispatchers.IO) {
+                        pepperInterface.sayMessage(fallbackSentence, language)
+                    }
+                }
             }
         }
     }

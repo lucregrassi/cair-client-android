@@ -9,10 +9,10 @@
     },
     "values": {
         "diversity": ["Italian", "good mental health", "no physical problems"],
-        "time": ["morning", "winter", "December"],
-        "place": ["maritime station", "port of Genoa", "Italy"],
-        "tone": ["humorous", "kind", "dramatic", "controversial", "aggressive", "teasing", "alarmist",
-            "worried", "neutral"],
+        "time": ["nothing specific", "nothing specific", "nothing specific"],
+        "place": ["nothing specific", "nothing specific", "nothing specific"],
+        "tone": ["neutral", "neutral", "neutral", "neutral", "neutral", "neutral", "neutral",
+            "neutral", "neutral"],
         "positive_speech_act": ["assertive", "commissive", "expressive"],
         "contextual_speech_act": ["assertive", "commissive", "expressive", "declarative"]
     }

@@ -15,6 +15,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.security.KeyStore
 import java.security.cert.CertificateFactory
+import java.util.concurrent.TimeUnit
 import java.util.zip.DataFormatException
 import java.util.zip.Deflater
 import java.util.zip.Inflater
@@ -35,6 +36,7 @@ class ServerCommunicationManager(
 ) {
 
     private val client: OkHttpClient
+
     private val gson = Gson()
 
     init {
@@ -85,6 +87,9 @@ class ServerCommunicationManager(
                     // Implement hostname verification logic if necessary
                     HttpsURLConnection.getDefaultHostnameVerifier().verify(hostname, session)
                 }
+                .connectTimeout(15, TimeUnit.SECONDS) // Increase connection timeout
+                .readTimeout(15, TimeUnit.SECONDS)   // Increase read timeout
+                .writeTimeout(15, TimeUnit.SECONDS)  // Increase write timeout
                 .build()
         } catch (e: Exception) {
             throw RuntimeException("Failed to create a secure OkHttpClient: ${e.message}", e)
