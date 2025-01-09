@@ -41,6 +41,10 @@ class SentenceGenerator {
             "it-IT" to "Dicevo...",
             "en-US" to "I was saying..."
         ),
+        "microphone" to mapOf(
+            "it-IT" to "Microfono disattivato. Tocca la mia testa per riattivare l’ascolto.",
+            "en-US" to "Microphone disabled. Touch my head to reactivate listening."
+        ),
     )
 
     /**

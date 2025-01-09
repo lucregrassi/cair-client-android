@@ -20,9 +20,9 @@ import com.ricelab.cairclient.libraries.*
 import kotlinx.coroutines.*
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.aldebaran.qi.sdk.`object`.touch.Touch
 import org.w3c.dom.Element
 import org.w3c.dom.Node
-import java.io.IOException
 import javax.xml.parsers.DocumentBuilderFactory
 
 private const val TAG = "MainActivity"
@@ -71,6 +71,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var teleoperationManager: TeleoperationManager? = null
 
     private var sentenceGenerator: SentenceGenerator = SentenceGenerator()
+
+    private var isListeningEnabled = true
 
     private val requestAudioPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -171,16 +173,42 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
+    private fun toggleListening() {
+        isListeningEnabled = !isListeningEnabled
+
+        if (!isListeningEnabled) {
+            // Stop listening
+            Log.i(TAG, "Stopping listening...")
+            audioRecorder.stopRecording()
+        } else {
+            // Start listening
+            Log.i(TAG, "Restarting listening...")
+        }
+    }
+
     override fun onRobotFocusGained(qiContext: QiContext) {
         this.qiContext = qiContext
         pepperInterface.setContext(this.qiContext)
+
+        // Retrieve the Touch service
+        val touch: Touch = qiContext.touch
+        touch.getSensor("Head/Touch")?.addOnStateChangedListener { touchState ->
+            if (touchState.touched) {
+                Log.i(TAG, "Head touched. Toggling listening...")
+                toggleListening()
+            } else {
+                // Optional: do something if needed on release
+                Log.i(TAG, "Head touch released.")
+            }
+        }
 
         teleoperationManager = TeleoperationManager(this, qiContext, pepperInterface)
         teleoperationManager?.startUdpListener()
 
         retrieveStoredValues()
 
-        serverCommunicationManager = ServerCommunicationManager(this, serverIp, serverPort, openAIApiKey)
+        serverCommunicationManager =
+            ServerCommunicationManager(this, serverIp, serverPort, openAIApiKey)
 
         coroutineJob = lifecycleScope.launch {
             startDialogue()
@@ -236,6 +264,14 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         lastActiveSpeakerTime = System.currentTimeMillis()
 
         while (isAlive) {
+            // Check if listening is enabled
+            if (!isListeningEnabled) {
+                userSpeechTextView.text =
+                    sentenceGenerator.getPredefinedSentence(language, "microphone")
+                delay(500) // Sleep briefly and then keep checking
+                continue
+            }
+
             Log.i(TAG, "Time since last spoken words (ms) = ${System.currentTimeMillis() - lastActiveSpeakerTime}")
             conversationState.dialogueState.ongoingConversation =
                 (System.currentTimeMillis() - lastActiveSpeakerTime) <= SILENCE_THRESHOLD * 1000
@@ -528,6 +564,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                 withContext(Dispatchers.Main) {
                                     robotSpeechTextView.text = ("Pepper: $repeatContinuation")
                                 }
+                                sayReplyJob?.join()
                                 pepperInterface.sayMessage(repeatContinuation, language)
                             }
                         } else {
