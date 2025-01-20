@@ -50,7 +50,7 @@ class ServerCommunicationManager(
             val ipFormatted = serverIp.replace(".", "_")
             val certificateFileName = "certificates/server_$ipFormatted.crt"
 
-            Log.i("MainActivity", "Certificate name: $certificateFileName")
+            Log.i(TAG, "Certificate name: $certificateFileName")
             // Load the certificate from assets
             val certificateFactory = CertificateFactory.getInstance("X.509")
             val caInput: InputStream = context.assets.open(certificateFileName)
@@ -169,7 +169,8 @@ class ServerCommunicationManager(
         val dueInterventionMap = mapOf(
             "type" to dueIntervention.type,
             "sentence" to dueIntervention.sentence,
-            "exclusive" to dueIntervention.exclusive
+            "exclusive" to dueIntervention.exclusive,
+            "contextual_data" to dueIntervention.contextual_data
         )
 
         // Compose the data payload to be sent

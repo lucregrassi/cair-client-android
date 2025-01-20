@@ -107,12 +107,12 @@ class ConversationState(
         Log.i(TAG, "Reply sentence: $replySentence")
 
         // Clean up the reply sentence if needed
-        if (replySentence.isNotEmpty()) {
+        return if (replySentence.isNotEmpty()) {
             val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
             replySentence = replySentence.replace(patternPrevspk, " ")
-            return replySentence
+            replySentence
         } else {
-            return ""
+            ""
         }
     }
 }

@@ -112,6 +112,10 @@ data class DialogueState(
         Log.d(TAG, "Current conversationHistory: $conversationHistory")
     }
 
+    fun resetConversation() {
+        conversationHistory = mutableListOf()
+    }
+
     // Update dialogue state from JSON (handles snake_case from the server)
     fun updateFromJson(json: JSONObject): DialogueState {
         Log.d(TAG, "Received JSON to update DialogueState: $json")

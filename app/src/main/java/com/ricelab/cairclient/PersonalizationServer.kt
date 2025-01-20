@@ -19,12 +19,18 @@ data class ScheduledIntervention(
     var offset: Long,
     var topics: List<Topic>?,
     var actions: List<String>?,
-    var counter: Int = 0
-)
+    var counter: Int = 0,
+    var interaction_sequence: List<String>?,
+    var contextual_data: Map<String, String>?) {
+
+    fun logVariables() {
+        Log.i("ScheduledIntervention", this.toString())
+    }
+}
 
 @Serializable
 data class Topic(
-    var name: String,
+    var sentence: String,
     var exclusive: Boolean
 )
 
@@ -33,7 +39,9 @@ data class DueIntervention(
     var type: String?,
     var exclusive: Boolean,
     var sentence: String,
-    var timestamp: Double = 0.0
+    var timestamp: Double = 0.0,
+    var contextual_data: Map<String, String>? = null,
+    var counter: Int = 0
 )
 
 @Serializable
@@ -84,6 +92,15 @@ class PersonalizationServer(private val port: Int = 8000) {
                             scheduledInterventions.addAll(request.scheduled_interventions)
                             writer.println("{\"message\":\"Data received successfully\"}")
                             Log.i("PersonalizationServer", "Scheduled interventions updated")
+
+                            if (scheduledInterventions.isEmpty()) {
+                                Log.i("PersonalizationServer", "No scheduled interventions available.")
+                            } else {
+                                scheduledInterventions.forEachIndexed { index, intervention ->
+                                    Log.i("PersonalizationServer", "Intervention #$index:")
+                                    intervention.logVariables()
+                                }
+                            }
                         } else {
                             writer.println("{\"error\":\"Invalid data format\"}")
                         }
@@ -104,7 +121,7 @@ class PersonalizationServer(private val port: Int = 8000) {
 
     fun getDueIntervention(): DueIntervention? {
         val currentTime = System.currentTimeMillis() / 1000 // Current time in seconds
-        Log.i("PersonalizationServer", "Current time: $currentTime")
+        //Log.i("PersonalizationServer", "Current time: $currentTime")
 
         val fixedInterventions = scheduledInterventions.filter {
             it.type == "fixed" && it.timestamp <= currentTime
@@ -120,36 +137,65 @@ class PersonalizationServer(private val port: Int = 8000) {
             else -> null
         } ?: return null
 
-        val counter = dueIntervention.counter
         val result = when {
             !dueIntervention.topics.isNullOrEmpty() -> {
-                val topic = dueIntervention.topics!![counter % dueIntervention.topics!!.size]
+                val topic = dueIntervention.topics!![dueIntervention.counter % dueIntervention.topics!!.size]
                 DueIntervention(
                     type = "topic",
-                    sentence = "Parliamo di ${topic.name}",
+                    sentence = topic.sentence,
                     exclusive = topic.exclusive,
-                    timestamp = dueIntervention.timestamp
+                    timestamp = dueIntervention.timestamp,
+                    counter = dueIntervention.counter
                 )
             }
             !dueIntervention.actions.isNullOrEmpty() -> {
-                val action = dueIntervention.actions!![counter % dueIntervention.actions!!.size]
+                val action = dueIntervention.actions!![dueIntervention.counter % dueIntervention.actions!!.size]
                 DueIntervention(
                     type = "action",
                     sentence = action,
                     exclusive = false,
-                    timestamp = dueIntervention.timestamp
+                    timestamp = dueIntervention.timestamp,
+                    counter = dueIntervention.counter
+                )
+            }
+            !dueIntervention.interaction_sequence.isNullOrEmpty() -> {
+                val sentence = dueIntervention.interaction_sequence!![dueIntervention.counter % dueIntervention.interaction_sequence!!.size]
+                DueIntervention(
+                    type = "interaction_sequence",
+                    sentence = sentence,
+                    exclusive = false,
+                    timestamp = dueIntervention.timestamp,
+                    contextual_data = dueIntervention.contextual_data,
+                    counter = dueIntervention.counter
                 )
             }
             else -> null
         } ?: return null
 
         // Update the counter and timestamp for periodic interventions
-        dueIntervention.counter = counter + 1
-        if (dueIntervention.type == "periodic") {
-            dueIntervention.timestamp += dueIntervention.period
+        dueIntervention.counter = dueIntervention.counter + 1
+        Log.d("PersonalizationServer", "dueIntervention counter = ${dueIntervention.counter}")
+        if (!dueIntervention.interaction_sequence.isNullOrEmpty()) {
+            if (dueIntervention.counter == dueIntervention.interaction_sequence!!.size) {
+                // reset counter to start the sequence from the beginning the next time (if periodic)
+                Log.d("PersonalizationServer", "resetting due intervention counter")
+                dueIntervention.counter = 0
+                if (dueIntervention.type == "periodic") {
+                    Log.d("PersonalizationServer", "Updating the period")
+                    dueIntervention.timestamp += dueIntervention.period
+                } else {
+                    Log.d("PersonalizationServer", "Removing the intervention")
+                    // For fixed interventions, remove them after execution
+                    scheduledInterventions.remove(dueIntervention)
+                }
+            }
         } else {
-            // For fixed interventions, remove them after execution
-            scheduledInterventions.remove(dueIntervention)
+            if (dueIntervention.type == "periodic") {
+                dueIntervention.timestamp += dueIntervention.period
+            } else {
+                // For fixed interventions, remove them after execution
+                scheduledInterventions.remove(dueIntervention)
+            }
         }
 
         Log.d("PersonalizationServer", "Result = $result")

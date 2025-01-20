@@ -74,6 +74,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private var isListeningEnabled = true
 
+    private var onGoingIntervention: DueIntervention? = null
+
     private val requestAudioPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -227,6 +229,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private fun parseXmlForSentenceAndLanguage(xmlString: String): Pair<String, String> {
+        //Log.w(TAG, "xmlString = $xmlString")
         val factory = DocumentBuilderFactory.newInstance()
         val builder = factory.newDocumentBuilder()
         val inputStream = xmlString.byteInputStream()
@@ -277,15 +280,29 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 (System.currentTimeMillis() - lastActiveSpeakerTime) <= SILENCE_THRESHOLD * 1000
             Log.i(TAG, "OngoingConversation = ${conversationState.dialogueState.ongoingConversation}")
 
-            val dueIntervention = personalizationServer.getDueIntervention()
-            if (dueIntervention != null) {
-                //handleDueIntervention(dueIntervention)
-                handle("", dueIntervention)
-                continue
+            if (onGoingIntervention == null) {
+                onGoingIntervention = personalizationServer.getDueIntervention()
+                if (onGoingIntervention != null) {
+                    Log.d(TAG, "Entering handle for DueIntervention (onGoingIntervention = null)")
+                    if (onGoingIntervention!!.type == "interaction_sequence") {
+                        Log.d(TAG, "Resetting conversation history")
+                        conversationState.dialogueState.resetConversation()
+                    }
+                    handle("")
+                }
+            } else if (onGoingIntervention!!.counter == 0) {
+                Log.d(TAG, "Entering handle for DueIntervention (counter = 0)")
+                if (onGoingIntervention!!.type == "interaction_sequence") {
+                    Log.d(TAG, "Resetting conversation history")
+                    conversationState.dialogueState.resetConversation()
+                }
+                handle("")
             }
+
             val xmlString = startListening()
             //handleUserInput(xmlString)
-            handle(xmlString, DueIntervention(null, false, ""))
+            Log.d(TAG, "Entering handle for xmlString = $xmlString")
+            handle(xmlString)
             withContext(Dispatchers.IO) {
                 conversationState.writeToFile()
             }
@@ -382,32 +399,52 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         personalizationServer.stopServer()
     }
 
-    private suspend fun handle(xmlStringInput: String, dueInterventionInput: DueIntervention) {
-        val isIntervention = !dueInterventionInput.type.isNullOrEmpty()
-        val xmlString = if (!isIntervention) {
+    private suspend fun handle(xmlStringInput: String) {
+        val isIntervention = when {
+            onGoingIntervention != null -> !onGoingIntervention!!.type.isNullOrEmpty()
+            else -> false
+        }
+        Log.d(TAG, "Handle: isIntervention = $isIntervention")
+        val xmlString = if (!xmlStringInput.isNullOrEmpty()) {
             xmlStringInput
         } else {
-            """
-        <response>
-          <profile_id value="00000000-0000-0000-0000-000000000000">
-            ${dueInterventionInput.sentence}
-            <language>$language</language>
-            <speaking_time>0.0</speaking_time>
-          </profile_id>
-        </response>
-        """.trimIndent()
+            if (isIntervention && onGoingIntervention!!.type != "interaction_sequence") {
+                """
+                <response>
+                  <profile_id value="00000000-0000-0000-0000-000000000000">
+                    ${onGoingIntervention!!.sentence}
+                    <language>$language</language>
+                    <speaking_time>0.0</speaking_time>
+                  </profile_id>
+                </response>
+                """.trimIndent()
+                    } else {
+                """
+                <response>
+                  <profile_id value="00000000-0000-0000-0000-000000000000">*<language>$language</language>
+                    <speaking_time>0.0</speaking_time>
+                  </profile_id>
+                </response>
+                """.trimIndent()
+            }
         }
+        Log.d(TAG, "Handle: xmlString = $xmlString")
 
         val dueIntervention = if (!isIntervention) {
             DueIntervention(type = null, exclusive = false, sentence = "")
         } else {
-            dueInterventionInput
+            onGoingIntervention!!
         }
 
-        val (sentence, detectedLang) = parseXmlForSentenceAndLanguage(xmlString)
+        var (sentence, detectedLang) = parseXmlForSentenceAndLanguage(xmlString)
         if (detectedLang.isNotEmpty() && detectedLang != "und") {
             language = detectedLang
         }
+
+        if (isIntervention && onGoingIntervention!!.type == "interaction_sequence" && sentence == "Timeout") {
+            Log.w(TAG, "Timeout detected, substituting sentence with *TIMEOUT*")
+            sentence = "*TIMEOUT*"
+        } else
 
         // Check for special keywords
         if (exitKeywords.any { sentence.contains(it, ignoreCase = true) }) {
@@ -427,7 +464,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         // Proceed only if we have a meaningful user sentence
         if (sentence.isNotBlank() && sentence != "Timeout") {
-            if (!isIntervention) {
+            if (!xmlStringInput.isNullOrEmpty()) {
                 lastActiveSpeakerTime = System.currentTimeMillis()
             }
             conversationState.dialogueState.updateConversation("user", sentence)
@@ -438,10 +475,15 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
             // Run them in parallel in a coroutineScope
             coroutineScope {
+                val requestType = when (dueIntervention.type) {
+                    "interaction_sequence" -> dueIntervention.type!!
+                    else -> "reply"
+                }
+                Log.d(TAG, "handle: performing $requestType request")
                 // 1) The Hub request, returning a Deferred
                 hubRequestDeferred = async(Dispatchers.IO) {
                     serverCommunicationManager.hubRequest(
-                        "reply",
+                        requestType,
                         xmlString,
                         language,
                         conversationState,
@@ -552,7 +594,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         }
                     } else {
                         // If we're in an intervention scenario
-                        if (conversationState.dialogueState.ongoingConversation) {
+                        if (conversationState.dialogueState.ongoingConversation && dueIntervention.type == "action") {
                             Log.d(TAG, "Ongoing conversation = true && intervention == action")
                             coroutineScope {
                                 val prefix = sentenceGenerator.getPredefinedSentence(language, "prefix_repeat")
@@ -592,6 +634,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         pepperInterface.sayMessage(fallbackSentence, language)
                     }
                 }
+            }
+            audioRecorder.resetTimeout()
+        }
+
+        if (isIntervention) {
+            if (onGoingIntervention!!.type == "topic" || onGoingIntervention!!.type == "action") {
+                onGoingIntervention = null
+            } else if (sentence.isNotBlank()) {
+                Log.w(TAG, "Getting the next dueIntervention")
+                onGoingIntervention = personalizationServer.getDueIntervention()
             }
         }
     }

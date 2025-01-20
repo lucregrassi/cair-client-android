@@ -43,6 +43,8 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     @Volatile
     private var isRecording = false
 
+    private var lastStartTime: Long = 0
+
     private val subscriptionKey = BuildConfig.MICROSOFT_SPEECH_API_KEY
     private val serviceRegion = "westeurope"
 
@@ -92,12 +94,17 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
         return speechDetectionThreshold
     }
 
+    fun resetTimeout() {
+        lastStartTime = System.currentTimeMillis()
+    }
+
     suspend fun listenAndSplit(): String {
         Log.d(TAG, "Starting listenAndSplit method.")
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             Log.d(TAG, "Permission to record audio was denied.")
             return generateXmlString("Permission to record audio was denied.", "und")
         }
+
 
         // Clear detectedLanguages from previous runs
         detectedLanguages.clear()
@@ -123,6 +130,12 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
             var chunkIndex = 0
             Log.d(TAG, "Starting recording loop.")
 
+            if (startTime - lastStartTime > initialTimeoutMillis) {
+                Log.d(TAG, "Resettng lastStartTime.")
+                lastStartTime = startTime
+            }
+
+
             try {
                 audioRecord.startRecording()
                 isRecording = true
@@ -146,11 +159,11 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                         // Speech detected
 
                         lastSpeechTime = currentTime
-                        //Log.d(TAG,"Speech detected above threshold time = $lastSpeechTime")
+                        Log.d(TAG,"Speech detected above threshold time = $lastSpeechTime")
                         byteArrayStream.write(shortsToBytes(audioBuffer))
                     }
 
-                    if (lastSpeechTime == null && currentTime - startTime > initialTimeoutMillis) {
+                    if (lastSpeechTime == null && currentTime - lastStartTime > initialTimeoutMillis) {
                         Log.d(TAG, "Timeout due to no speech detected.")
                         isRecording = false
                         return@withContext generateXmlString("Timeout", "und")
@@ -220,6 +233,12 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                 //val finalText = finalResult.toString().trim()
                 val finalText = results.toSortedMap().values.joinToString(" ")
                 Log.d(TAG, "Final recognized text: $finalText")
+
+                Log.w(TAG, "Time since lastStart = ${(System.currentTimeMillis() - lastStartTime)/1000.0} (s)")
+                if (finalText.isNullOrEmpty() && (System.currentTimeMillis() - lastStartTime > initialTimeoutMillis)) {
+                    Log.w(TAG, "Timeout due to no speech detected!.")
+                    return@withContext generateXmlString("Timeout", "und")
+                }
 
                 // Determine majority language
                 val finalLanguage = determineMajorityLanguage()
