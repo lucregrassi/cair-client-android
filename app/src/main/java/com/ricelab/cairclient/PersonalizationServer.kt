@@ -123,6 +123,10 @@ class PersonalizationServer(private val port: Int = 8000) {
         val currentTime = System.currentTimeMillis() / 1000 // Current time in seconds
         //Log.i("PersonalizationServer", "Current time: $currentTime")
 
+        val immediateInterventions = scheduledInterventions.filter {
+            it.type == "immediate" && it.timestamp <= currentTime
+        }.sortedBy { it.timestamp }
+
         val fixedInterventions = scheduledInterventions.filter {
             it.type == "fixed" && it.timestamp <= currentTime
         }.sortedBy { it.timestamp }
@@ -132,6 +136,7 @@ class PersonalizationServer(private val port: Int = 8000) {
         }.sortedBy { it.timestamp }
 
         val dueIntervention = when {
+            immediateInterventions.isNotEmpty() -> immediateInterventions.first()
             fixedInterventions.isNotEmpty() -> fixedInterventions.first()
             periodicInterventions.isNotEmpty() -> periodicInterventions.first()
             else -> null
@@ -180,7 +185,7 @@ class PersonalizationServer(private val port: Int = 8000) {
                 // reset counter to start the sequence from the beginning the next time (if periodic)
                 Log.d("PersonalizationServer", "resetting due intervention counter")
                 dueIntervention.counter = 0
-                if (dueIntervention.type == "periodic") {
+                if (dueIntervention.type == "periodic" || dueIntervention.type == "fixed") {
                     Log.d("PersonalizationServer", "Updating the period")
                     dueIntervention.timestamp += dueIntervention.period
                 } else {
@@ -190,9 +195,11 @@ class PersonalizationServer(private val port: Int = 8000) {
                 }
             }
         } else {
-            if (dueIntervention.type == "periodic") {
+            if (dueIntervention.type == "periodic" || dueIntervention.type == "fixed") {
+                Log.d("PersonalizationServer", "Updating the period")
                 dueIntervention.timestamp += dueIntervention.period
             } else {
+                Log.d("PersonalizationServer", "Removing the intervention")
                 // For fixed interventions, remove them after execution
                 scheduledInterventions.remove(dueIntervention)
             }

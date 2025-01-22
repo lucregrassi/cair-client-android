@@ -54,8 +54,9 @@
             android:layout_height="wrap_content"
             android:hint="Inserisci la porta"
             android:inputType="number"
-            android:text="12345"
-            android:layout_marginBottom="16dp" />
+            android:text="12349"
+            android:layout_marginBottom="16dp"
+            android:autofillHints="12349" />
 
         <!-- OpenAI API Key Input -->
         <TextView
@@ -72,21 +73,80 @@
             android:layout_height="wrap_content"
             android:hint="Inserisci la chiave"
             android:inputType="textPassword"
-            android:layout_marginBottom="24dp" />
+            android:layout_marginBottom="16dp"
+            android:autofillHints="" />
 
+        <!-- Person Name -->
+        <TextView
+            android:id="@+id/personNameLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Nome della persona"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
 
-        <Switch
+        <EditText
+            android:id="@+id/personNameEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Inserisci il nome"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Person Gender -->
+        <TextView
+            android:id="@+id/personGenderLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Genere"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <EditText
+            android:id="@+id/personGenderEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Inserisci il genere (m/f/nb)"
+            android:layout_marginBottom="16dp"/>
+
+        <!-- Person Age -->
+        <TextView
+            android:id="@+id/personAgeLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Età"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <EditText
+            android:id="@+id/personAgeEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Inserisci l'età"
+            android:layout_marginBottom="16dp"
+            android:inputType="number" />
+
+        <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/fillerSentenceSwitch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Filler sentence"
-            android:layout_marginBottom="24dp" />
+            android:layout_marginBottom="12dp"
+            android:checked="true"/>
 
-        <Switch
+        <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/autoDetectLanguageSwitch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Auto Detect Language" />
+            android:text="Auto Detect Language"
+            android:checked="false"/>
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/formalLanguageSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Usa linguaggio formale (dare del Lei)"
+            android:checked="true"
+            android:layout_marginTop="12dp"/>
 
         <!-- Proceed Button -->
         <Button
@@ -109,7 +169,7 @@
             android:backgroundTint="@android:color/holo_red_dark"
             android:textColor="@color/white"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="10dp"
             android:paddingStart="24dp"
             android:paddingEnd="24dp"
             android:paddingTop="12dp"

@@ -12,9 +12,9 @@ class SentenceGenerator {
     // Instead of a single list for fillerSentences, we now have a map keyed by language
     private val fillerSentencesMap = mutableMapOf<String, List<String>>()
 
-    val mapPredefinedSentences= mapOf(
+    private val mapPredefinedSentences= mapOf(
         "welcome_back" to mapOf(
-            "it-IT" to "È bello rivederti! Di cosa vorresti parlare?",
+            "it-IT" to "È bello rivederci! Di cosa potremmo parlare?",
             "en-US" to "Welcome back! I missed you. What would you like to talk about?"
         ),
         "server_error" to mapOf(
@@ -22,7 +22,7 @@ class SentenceGenerator {
             "en-US" to "I'm sorry, I can't connect to the server."
         ),
         "goodbye" to mapOf(
-            "it-IT" to "È stato bello parlare con te. A presto!",
+            "it-IT" to "È stato bello conversare insieme. A presto!",
             "en-US" to "It was nice talking to you. See you soon!"
         ),
         "nothing_to_repeat" to mapOf(
@@ -42,7 +42,7 @@ class SentenceGenerator {
             "en-US" to "I was saying..."
         ),
         "microphone" to mapOf(
-            "it-IT" to "Microfono disattivato. Tocca la mia testa per riattivare l’ascolto.",
+            "it-IT" to "Microfono disattivato. Toccare la testa per riattivare l’ascolto.",
             "en-US" to "Microphone disabled. Touch my head to reactivate listening."
         ),
     )

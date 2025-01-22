@@ -55,26 +55,23 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private lateinit var serverCommunicationManager: ServerCommunicationManager
     private lateinit var serverIp: String
     private lateinit var openAIApiKey: String
+    private lateinit var personName: String
+    private lateinit var personGender: String
+    private lateinit var personAge: String
+    private var useFillerSentence: Boolean = false
+    private var autoDetectLanguage = false // default
+    private var formalLanguage = false
 
     private lateinit var fileStorageManager: FileStorageManager
     private lateinit var conversationState: ConversationState
-
     private lateinit var personalizationServer: PersonalizationServer
-    private val scheduledInterventionsPort = 8000
-
     private lateinit var pepperInterface: PepperInterface
-
-    private var useFillerSentence: Boolean = false
-
-    private var autoDetectLanguage = false // default
-
+    private val scheduledInterventionsPort = 8000
     private var teleoperationManager: TeleoperationManager? = null
-
     private var sentenceGenerator: SentenceGenerator = SentenceGenerator()
-
     private var isListeningEnabled = true
-
     private var onGoingIntervention: DueIntervention? = null
+    private var profileId: String = "00000000-0000-0000-0000-000000000000"
 
     private val requestAudioPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -145,9 +142,17 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         serverIp = sharedPreferences.getString("server_ip", null) ?: ""
         openAIApiKey = sharedPreferences.getString("openai_api_key", null) ?: ""
         serverPort = sharedPreferences.getInt("server_port", -1)
-        useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", false)
-        autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false) // Load the setting
-        Log.i(TAG, "autodetect=$autoDetectLanguage")
+        personName = sharedPreferences.getString("person_name", "") ?: ""
+        personGender = sharedPreferences.getString("person_gender", "") ?: ""
+        personAge = sharedPreferences.getString("person_age", "") ?: ""
+        useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
+        autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
+        formalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
+
+        Log.i(TAG, "personName=$personName, personGender=$personGender, personAge=$personAge")
+        Log.i(TAG, "useFillerSentence=$useFillerSentence")
+        Log.i(TAG, "autoDetectLanguage=$autoDetectLanguage")
+        Log.i(TAG, "formalLanguage=$formalLanguage")
 
         if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
             val intent = Intent(this, SettingsActivity::class.java)
@@ -263,6 +268,15 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         withContext(Dispatchers.IO) {
           conversationState.loadFromFile()
         }
+        // Update the value of formalLanguage in the DialogueState
+        conversationState.dialogueState.formalLanguage = formalLanguage
+        // Update the person gender and age but not the name as we want to keep it generic
+        if (personGender.isNotEmpty()) {
+            conversationState.speakersInfo.speakers[profileId]?.set("gender", personGender)
+        }
+        if (personAge.isNotEmpty()) {
+            conversationState.speakersInfo.speakers[profileId]?.set("age", personAge)
+        }
 
         lastActiveSpeakerTime = System.currentTimeMillis()
 
@@ -325,15 +339,20 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             firstSentence = firstRequestResponse.firstSentence
 
             val dialogueState = DialogueState(firstRequestResponse.dialogueState)
+            // Update the value based on that taken from the settings activity so that it is
+            // correctly saved in the file
+            dialogueState.formalLanguage = formalLanguage
 
-            val profileId = "00000000-0000-0000-0000-000000000000"
             val userName = if (language == "it-IT") "Utente" else "User"
+            val userGender = personGender.ifEmpty { "nb" }
+            val userAge = personAge.ifEmpty { "nd" }
 
-            val speakerAttributes = mapOf(
+            val speakerAttributes: MutableMap<String, Any?> = mutableMapOf(
                 "name" to userName,
-                "gender" to "nb",
-                "age" to "nd"
+                "gender" to userGender,
+                "age" to userAge
             )
+
             val speakersInfo = SpeakersInfo(
                 speakers = mutableMapOf(profileId to speakerAttributes)
             )
@@ -399,6 +418,29 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         personalizationServer.stopServer()
     }
 
+
+    // A helper function to persist the new formalLanguage to EncryptedSharedPreferences
+    private fun updateFormalLanguageInPrefs(newValue: Boolean) {
+        val masterKeyAlias = MasterKey.Builder(this)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        val sharedPreferences = EncryptedSharedPreferences.create(
+            this,
+            "secure_prefs",
+            masterKeyAlias,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+
+        with(sharedPreferences.edit()) {
+            putBoolean("use_formal_language", newValue)
+            apply()
+        }
+
+        Log.d(TAG, "Updated formal language in SharedPreferences -> $newValue")
+    }
+
     private suspend fun handle(xmlStringInput: String) {
         val isIntervention = when {
             onGoingIntervention != null -> !onGoingIntervention!!.type.isNullOrEmpty()
@@ -421,7 +463,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     } else {
                 """
                 <response>
-                  <profile_id value="00000000-0000-0000-0000-000000000000">*<language>$language</language>
+                  <profile_id value="00000000-0000-0000-0000-000000000000">*START*<language>$language</language>
                     <speaking_time>0.0</speaking_time>
                   </profile_id>
                 </response>
@@ -492,8 +534,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     )
                 }
 
-                // 2) The filler sentence (launch returns a Job)
-                if (!isIntervention && useFillerSentence) {
+                // 2) Say the filler sentence when it's not an intervention or when it's an
+                // intervention of type interaction_sequence and the conversation is ongoing.
+                // If the conversation is not ongoing, say it only if it's not the first sentence
+                if ((!isIntervention ||
+                    (dueIntervention.type == "interaction_sequence" && dueIntervention.counter != 0))
+                     && useFillerSentence) {
                     fillerJob = launch(Dispatchers.IO) {
                         val randomFillerSentence = sentenceGenerator.getFillerSentence(language)
 
@@ -519,7 +565,15 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             // Now we can safely speak the reply *after* the filler is done
             if (updatedConversationState != null) {
                 conversationState = updatedConversationState
-                val replySentence = conversationState.getReplySentence()
+                // Whenever the server sets the formal language during an interaction_sequence
+                // (or at any other moment), store the new value in SharedPreferences if it changed.
+                if (conversationState.dialogueState.formalLanguage != formalLanguage) {
+                    formalLanguage = conversationState.dialogueState.formalLanguage
+                    // Persist it to EncryptedSharedPreferences
+                    updateFormalLanguageInPrefs(formalLanguage)
+                }
+
+                val replySentence = conversationState.getReplySentence(personName)
                 if (!replySentence.isNullOrEmpty()) {
                     conversationState.dialogueState.updateConversation("assistant", replySentence)
                 }
@@ -566,7 +620,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             if (conversationState.dialogueState.dialogueSentence.size > 1 &&
                                 conversationState.dialogueState.dialogueSentence[1].size > 1
                             ) {
-                                var continuationSentence = conversationState.getLastContinuationSentence()
+                                var continuationSentence = conversationState.getLastContinuationSentence(personName)
 
                                 if (continuationSentence.isNotEmpty()) {
                                     conversationState.dialogueState.updateConversation("assistant", continuationSentence)
@@ -598,7 +652,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             Log.d(TAG, "Ongoing conversation = true && intervention == action")
                             coroutineScope {
                                 val prefix = sentenceGenerator.getPredefinedSentence(language, "prefix_repeat")
-                                val lastContinuationSentence = conversationState.getPreviousContinuationSentence()
+                                val lastContinuationSentence = conversationState.getPreviousContinuationSentence(personName)
 
                                 val repeatContinuation = "$prefix $lastContinuationSentence"
                                 Log.i(TAG, "Repeat continuation: $repeatContinuation")

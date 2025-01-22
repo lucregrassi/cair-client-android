@@ -29,6 +29,7 @@ data class DialogueState(
     var dialogueNuances: DialogueNuances = DialogueNuances(),
     var conversationHistory: MutableList<Map<String, String>> = mutableListOf(),
     var ongoingConversation: Boolean = true,
+    var formalLanguage: Boolean = true,
 
 ) {
     // Constructor using snake_case from server-side
@@ -52,7 +53,8 @@ data class DialogueState(
             DialogueNuances(flags, values)
         } ?: DialogueNuances(),
         conversationHistory = (dialogueState["conversation_history"] as? List<*>)?.filterIsInstance<Map<String, String>>()?.toMutableList() ?: mutableListOf(),
-        ongoingConversation = dialogueState["ongoing_conversation"] as Boolean
+        ongoingConversation = dialogueState["ongoing_conversation"] as Boolean,
+        formalLanguage = dialogueState["formal_language"] as Boolean
     )
     companion object {
         fun parseDialogueSentence(data: Any?): List<List<String>> {
@@ -97,6 +99,7 @@ data class DialogueState(
             ),
             "conversation_history" to conversationHistory,
             "ongoing_conversation" to ongoingConversation,
+            "formal_language" to formalLanguage,
         )
     }
 
@@ -198,6 +201,9 @@ data class DialogueState(
 
         // Update ongoingConversation
         this.ongoingConversation = if (json.has("ongoing_conversation")) json.optBoolean("ongoing_conversation") else this.ongoingConversation
+
+        // Update formalLanguage
+        this.formalLanguage = if (json.has("formal_language")) json.optBoolean("formal_language") else this.formalLanguage
 
         return this
     }

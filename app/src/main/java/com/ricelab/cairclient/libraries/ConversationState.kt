@@ -1,8 +1,10 @@
 package com.ricelab.cairclient.libraries
 
 import android.util.Log
+import kotlin.random.Random
 
 private const val TAG = "ConversationState"
+private var profileId: String = "00000000-0000-0000-0000-000000000000"
 
 class ConversationState(
     private var fileStorageManager: FileStorageManager,
@@ -79,26 +81,62 @@ class ConversationState(
         return newConversationState
     }
 
-    fun getLastContinuationSentence(): String {
+    private fun replaceSpeakerTags(
+        sentence: String,
+        prevSpeakerName: String?,
+        destSpeakerName: String?
+    ): String {
+        var result = sentence
+
+        // Regex patterns to find placeholders in text
+        val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
+        val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
+
+        // Randomly decide whether to replace with the actual name or an empty string
+        val usePrevSpeakerName = prevSpeakerName != null && Random.nextInt(100) < 10
+        val useDestSpeakerName = destSpeakerName != null && Random.nextInt(100) < 10
+
+        // Replace the placeholders
+        result = if (usePrevSpeakerName) {
+            result.replace(patternPrevspk, " $prevSpeakerName ")
+        } else {
+            // If no name found, just remove the placeholder
+            result.replace(patternPrevspk, " ")
+        }
+        result = if (useDestSpeakerName) {
+            result.replace(patternDesspk, " $destSpeakerName ")
+        } else {
+            result.replace(patternDesspk, " ")
+
+        }
+        return result
+    }
+
+    fun getLastContinuationSentence(personName: String): String {
         var lastContinuationSentence = dialogueState.dialogueSentence.lastOrNull()?.getOrNull(1) ?: ""
-        val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
-        val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
-        lastContinuationSentence = lastContinuationSentence.replace(patternDesspk, " ")
-        lastContinuationSentence = lastContinuationSentence.replace(patternPrevspk, " ")
+        val destSpeakerName = if (personName.isEmpty() || personName == "Utente" || personName == "User") {
+            null
+        } else {
+            personName
+        }
+        lastContinuationSentence = replaceSpeakerTags(lastContinuationSentence, null, destSpeakerName)
         return lastContinuationSentence
     }
 
-    fun getPreviousContinuationSentence(): String {
+    fun getPreviousContinuationSentence(personName: String): String {
         var lastContinuationSentence = dialogueState.prevDialogueSentence.lastOrNull()?.getOrNull(1) ?: ""
-        val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
-        val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
-        lastContinuationSentence = lastContinuationSentence.replace(patternDesspk, " ")
-        lastContinuationSentence = lastContinuationSentence.replace(patternPrevspk, " ")
+        val destSpeakerName = if (personName.isEmpty() || personName == "Utente" || personName == "User") {
+            null
+        } else {
+            personName
+        }
+        lastContinuationSentence = replaceSpeakerTags(lastContinuationSentence,null, destSpeakerName)
         return lastContinuationSentence
     }
 
-    fun getReplySentence(): String {
-        var replySentence = if (plan?.isNotEmpty() == true) {
+    fun getReplySentence(personName: String): String {
+        // Determine the initial reply sentence
+        val replySentence = if (!plan.isNullOrEmpty()) {
             planSentence.toString()
         } else {
             dialogueState.dialogueSentence[0][1]
@@ -106,11 +144,15 @@ class ConversationState(
 
         Log.i(TAG, "Reply sentence: $replySentence")
 
-        // Clean up the reply sentence if needed
+        // Determine whether to use the person's name or fallback to null
+        val prevSpeakerName = personName.ifEmpty {
+            null
+        }
+
+        // Clean up and process the reply sentence
         return if (replySentence.isNotEmpty()) {
-            val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
-            replySentence = replySentence.replace(patternPrevspk, " ")
-            replySentence
+            // Replace speaker tags with the determined name or null
+            replaceSpeakerTags(replySentence, prevSpeakerName, null)
         } else {
             ""
         }

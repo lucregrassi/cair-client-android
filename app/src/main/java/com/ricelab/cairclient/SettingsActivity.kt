@@ -8,6 +8,7 @@ import android.view.MenuItem
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.ricelab.cairclient.libraries.FileStorageManager
@@ -20,9 +21,13 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var serverIpSpinner: Spinner
     private lateinit var serverPortEditText: EditText
     private lateinit var openAIApiKeyEditText: EditText
+    private lateinit var personNameEditText: EditText
+    private lateinit var personGenderEditText: EditText
+    private lateinit var personAgeEditText: EditText
+    private lateinit var fillerSentenceSwitch: SwitchCompat
+    private lateinit var autoDetectLanguageSwitch: SwitchCompat
+    private lateinit var formalLanguageSwitch: SwitchCompat
     private lateinit var proceedButton: Button
-    private lateinit var fillerSentenceSwitch: Switch
-    private lateinit var autoDetectLanguageSwitch: Switch // Added line for auto language detection
 
     private val serverIpList = mutableListOf<String>()
 
@@ -37,9 +42,13 @@ class SettingsActivity : AppCompatActivity() {
         serverIpSpinner = findViewById(R.id.serverIpSpinner)
         serverPortEditText = findViewById(R.id.serverPortEditText)
         openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
-        proceedButton = findViewById(R.id.proceedButton)
+        personNameEditText = findViewById(R.id.personNameEditText)
+        personGenderEditText = findViewById(R.id.personGenderEditText)
+        personAgeEditText = findViewById(R.id.personAgeEditText)
         fillerSentenceSwitch = findViewById(R.id.fillerSentenceSwitch)
-        autoDetectLanguageSwitch = findViewById(R.id.autoDetectLanguageSwitch) // Initialize the switch
+        autoDetectLanguageSwitch = findViewById(R.id.autoDetectLanguageSwitch)
+        formalLanguageSwitch = findViewById(R.id.formalLanguageSwitch)
+        proceedButton = findViewById(R.id.proceedButton)
 
         val fromMenu = intent.getBooleanExtra("fromMenu", false)
         val deleteAllButton: Button = findViewById(R.id.deleteAllButton)
@@ -57,8 +66,12 @@ class SettingsActivity : AppCompatActivity() {
             val serverIp = serverIpSpinner.selectedItem as String
             val openAIApiKey = openAIApiKeyEditText.text.toString().trim()
             val serverPortText = serverPortEditText.text.toString().trim()
+            val personName = personNameEditText.text.toString().trim()
+            val personGender = personGenderEditText.text.toString().trim()
+            val personAge = personAgeEditText.text.toString().trim()
             val useFillerSentence = fillerSentenceSwitch.isChecked
-            val autoDetectLanguage = autoDetectLanguageSwitch.isChecked // Get the switch state
+            val autoDetectLanguage = autoDetectLanguageSwitch.isChecked
+            val useFormalLanguage = formalLanguageSwitch.isChecked
 
             Log.d(TAG, "Server IP: $serverIp")
             Log.d(TAG, "OpenAI API Key: $openAIApiKey")
@@ -76,7 +89,16 @@ class SettingsActivity : AppCompatActivity() {
                     Log.d(TAG, "Validated Server Port: $serverPort")
 
                     // Save the values securely including the autoDetectLanguage parameter
-                    saveValues(serverIp, openAIApiKey, serverPort, useFillerSentence, autoDetectLanguage)
+                    saveValues(
+                        serverIp,
+                        openAIApiKey,
+                        serverPort,
+                        personName,
+                        personGender,
+                        personAge,
+                        useFillerSentence,
+                        autoDetectLanguage,
+                        useFormalLanguage)
 
                     if (!fromMenu) {
                         Log.i(TAG, "FromMenu False, spawning new MainActivity")
@@ -133,8 +155,12 @@ class SettingsActivity : AppCompatActivity() {
         val savedServerIp = sharedPreferences.getString("server_ip", null)
         val savedOpenAIApiKey = sharedPreferences.getString("openai_api_key", null)
         val savedServerPort = sharedPreferences.getInt("server_port", -1)
-        val useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", false)
-        val autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", true) // Default true if not set
+        val savedPersonName = sharedPreferences.getString("person_name", "")
+        val savedPersonGender = sharedPreferences.getString("person_gender", "")
+        val savedPersonAge = sharedPreferences.getString("person_age", "")
+        val useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
+        val autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
+        val useFormalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
 
         if (!fromMenu && !savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
             val intent = Intent(this, MainActivity::class.java)
@@ -146,8 +172,12 @@ class SettingsActivity : AppCompatActivity() {
             if (savedServerPort != -1) {
                 serverPortEditText.setText(savedServerPort.toString())
             }
+            savedPersonName?.let { personNameEditText.setText(it) }
+            savedPersonGender?.let { personGenderEditText.setText(it) }
+            savedPersonAge?.let { personAgeEditText.setText(it) }
             fillerSentenceSwitch.isChecked = useFillerSentence
             autoDetectLanguageSwitch.isChecked = autoDetectLanguage
+            formalLanguageSwitch.isChecked = useFormalLanguage
         }
     }
 
@@ -182,7 +212,17 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun saveValues(serverIp: String, openAIApiKey: String, serverPort: Int, useFillerSentence: Boolean, autoDetectLanguage: Boolean) {
+    private fun saveValues(
+        serverIp: String,
+        openAIApiKey: String,
+        serverPort: Int,
+        personName: String,
+        personGender: String,
+        personAge: String,
+        useFillerSentence: Boolean,
+        autoDetectLanguage: Boolean,
+        useFormalLanguage: Boolean
+    ) {
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
@@ -199,8 +239,12 @@ class SettingsActivity : AppCompatActivity() {
             putString("server_ip", serverIp)
             putString("openai_api_key", openAIApiKey)
             putInt("server_port", serverPort)
+            putString("person_name", personName)
+            putString("person_gender", personGender)
+            putString("person_age", personAge)
             putBoolean("use_filler_sentence", useFillerSentence)
             putBoolean("auto_detect_language", autoDetectLanguage)
+            putBoolean("use_formal_language", useFormalLanguage)
             apply()
         }
     }
