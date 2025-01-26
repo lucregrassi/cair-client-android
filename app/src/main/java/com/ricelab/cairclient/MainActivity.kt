@@ -61,6 +61,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var useFillerSentence: Boolean = false
     private var autoDetectLanguage = false // default
     private var formalLanguage = false
+    private var isTouchListenerAdded = false
+
 
     private lateinit var fileStorageManager: FileStorageManager
     private lateinit var conversationState: ConversationState
@@ -197,16 +199,21 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         this.qiContext = qiContext
         pepperInterface.setContext(this.qiContext)
 
-        // Retrieve the Touch service
-        val touch: Touch = qiContext.touch
-        touch.getSensor("Head/Touch")?.addOnStateChangedListener { touchState ->
-            if (touchState.touched) {
-                Log.i(TAG, "Head touched. Toggling listening...")
-                toggleListening()
-            } else {
-                // Optional: do something if needed on release
-                Log.i(TAG, "Head touch released.")
+        if (!isTouchListenerAdded) {
+            // Retrieve the Touch service
+            val touch: Touch = qiContext.touch
+
+            Log.w(TAG, "ADDING TOUCH LISTENER!!!!!!!!")
+            touch.getSensor("Head/Touch")?.addOnStateChangedListener { touchState ->
+                if (touchState.touched) {
+                    Log.i(TAG, "Head touched. Toggling listening...")
+                    toggleListening()
+                } else {
+                    // Optional: do something if needed on release
+                    Log.i(TAG, "Head touch released.")
+                }
             }
+            isTouchListenerAdded = true
         }
 
         teleoperationManager = TeleoperationManager(this, qiContext, pepperInterface)
@@ -482,11 +489,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         if (detectedLang.isNotEmpty() && detectedLang != "und") {
             language = detectedLang
         }
-
-        if (isIntervention && onGoingIntervention!!.type == "interaction_sequence" && sentence == "Timeout") {
-            Log.w(TAG, "Timeout detected, substituting sentence with *TIMEOUT*")
-            sentence = "*TIMEOUT*"
-        } else
+        Log.i(TAG, "*****$sentence*****")
 
         // Check for special keywords
         if (exitKeywords.any { sentence.contains(it, ignoreCase = true) }) {
@@ -505,7 +508,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
 
         // Proceed only if we have a meaningful user sentence
-        if (sentence.isNotBlank() && sentence != "Timeout") {
+        if (sentence.isNotBlank() && (sentence != "*TIMEOUT*" || (isIntervention && onGoingIntervention!!.type == "interaction_sequence"))) {
             if (!xmlStringInput.isNullOrEmpty()) {
                 lastActiveSpeakerTime = System.currentTimeMillis()
             }

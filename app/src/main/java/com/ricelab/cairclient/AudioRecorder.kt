@@ -166,7 +166,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                     if (lastSpeechTime == null && currentTime - lastStartTime > initialTimeoutMillis) {
                         Log.d(TAG, "Timeout due to no speech detected.")
                         isRecording = false
-                        return@withContext generateXmlString("Timeout", "und")
+                        return@withContext generateXmlString("*TIMEOUT*", "und")
                     }
 
                     //if (lastSpeechTime != null)
@@ -237,7 +237,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                 Log.w(TAG, "Time since lastStart = ${(System.currentTimeMillis() - lastStartTime)/1000.0} (s)")
                 if (finalText.isNullOrEmpty() && (System.currentTimeMillis() - lastStartTime > initialTimeoutMillis)) {
                     Log.w(TAG, "Timeout due to no speech detected!.")
-                    return@withContext generateXmlString("Timeout", "und")
+                    return@withContext generateXmlString("*TIMEOUT*", "und")
                 }
 
                 // Determine majority language
