@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "cair_client_android"
+rootProject.name = "cair-client-android"
 include ':app'
