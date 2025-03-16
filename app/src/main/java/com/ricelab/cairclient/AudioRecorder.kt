@@ -45,7 +45,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
 
     private var lastStartTime: Long = 0
 
-    private val subscriptionKey = BuildConfig.MICROSOFT_SPEECH_API_KEY
+    private val subscriptionKey = BuildConfig.AZURE_SPEECH_KEY
     private val serviceRegion = "westeurope"
 
     // Store detected languages for all chunks
@@ -120,7 +120,6 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
             }
 
             val audioBuffer = ShortArray(bufferSize)
-            val finalResult = StringBuilder()
             val currentPartialResult = StringBuilder()
             val byteArrayStream = ByteArrayOutputStream()
             var lastSpeechTime: Long? = null
@@ -202,9 +201,6 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                                     )
                                     results[index] = ""
                                     isRecording = false
-                                    //finalResult.append(currentPartialResult.toString().trim())
-                                    //    .append(" ")
-                                    //break
                                 } else {
                                     Log.w(TAG, "Partial result is empty. Stopping recording.")
                                     results[index] = ""
@@ -218,8 +214,6 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                         // Long silence
                         if (currentTime - lastSpeechTime > longSilenceDurationMillis) {
                             Log.d(TAG, "Long silence detected. Finalizing result.")
-
-                            //finalResult.append(currentPartialResult.toString().trim()).append(" ")
                             break
                         }
                     }

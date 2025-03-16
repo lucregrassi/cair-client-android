@@ -47,7 +47,7 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Define a custom field for the build configuration, storing the Microsoft Speech API key.
-        buildConfigField "String", "MICROSOFT_SPEECH_API_KEY", "\"${apiKeys.MICROSOFT_SPEECH_API_KEY ?: 'default_key'}\""
+        buildConfigField "String", "AZURE_SPEECH_KEY", "\"${apiKeys.AZURE_SPEECH_KEY ?: 'default_key'}\""
     }
 
     buildTypes {

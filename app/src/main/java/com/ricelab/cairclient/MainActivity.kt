@@ -268,6 +268,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private suspend fun startDialogue() {
+        Log.i(TAG, "Starting dialogue")
         conversationState = ConversationState(fileStorageManager, previousSentence)
 
         initializeUserSession()
@@ -331,6 +332,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private suspend fun initializeUserSession() {
+        Log.i(TAG, "Initializing user session")
         val firstSentence: String
         if (!fileStorageManager.filesExist()) {
             val firstRequestResponse = try {
@@ -381,12 +383,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 fileStorageManager.writeToFile(dialogueStatistics)
             }
         } else {
+            Log.i(TAG, "generating predefined sentence")
             firstSentence = sentenceGenerator.getPredefinedSentence(language, "welcome_back")
         }
         if(firstSentence != "") {
+            Log.i(TAG, "uttering first sentence")
             robotSpeechTextView.text = "Pepper: $firstSentence"
             pepperInterface.sayMessage(firstSentence, language)
             previousSentence = firstSentence
+        } else {
+            Log.e(TAG, "no first sentence!!!")
         }
     }
 
