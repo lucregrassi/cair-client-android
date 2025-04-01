@@ -24,6 +24,10 @@ android {
     // Defines the namespace for your app, used for package scoping in the generated R class and other Android components.
     namespace 'com.ricelab.cairclient'
 
+    buildFeatures {
+        buildConfig true
+    }
+
     // Specifies the API level to compile your app against. This should be the latest SDK version available.
     compileSdk 34
 

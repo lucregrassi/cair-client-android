@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/setupScrollView"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -37,7 +38,8 @@
             android:id="@+id/serverIpSpinner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="16dp"
+            android:minHeight="48dp" />
 
         <!-- Server Port Number Input -->
         <TextView
@@ -52,11 +54,13 @@
             android:id="@+id/serverPortEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:autofillHints="12349"
             android:hint="Inserisci la porta"
             android:inputType="number"
+            android:minHeight="48dp"
             android:text="12349"
-            android:layout_marginBottom="16dp"
-            android:autofillHints="12349" />
+            tools:ignore="VisualLintTextFieldSize" />
 
         <!-- Experiment ID -->
         <TextView
@@ -72,7 +76,9 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:hint="Inserisci l'ID dell'esperimento"
-            android:inputType="text" />
+            android:inputType="text"
+            android:minHeight="48dp"
+            tools:ignore="VisualLintTextFieldSize" />
 
         <!-- Person Name -->
         <TextView
@@ -87,8 +93,10 @@
             android:id="@+id/personNameEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
             android:hint="Inserisci il nome"
-            android:layout_marginBottom="16dp"/>
+            android:minHeight="48dp"
+            tools:ignore="VisualLintTextFieldSize" />
 
         <!-- Person Gender -->
         <TextView
@@ -103,8 +111,10 @@
             android:id="@+id/personGenderEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
             android:hint="Inserisci il genere (m/f/nb)"
-            android:layout_marginBottom="16dp"/>
+            android:minHeight="48dp"
+            tools:ignore="VisualLintTextFieldSize" />
 
         <!-- Person Age -->
         <TextView
@@ -119,16 +129,18 @@
             android:id="@+id/personAgeEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Inserisci l'età"
             android:layout_marginBottom="16dp"
-            android:inputType="number" />
+            android:hint="Inserisci l'età"
+            android:inputType="number"
+            android:minHeight="48dp"
+            tools:ignore="VisualLintTextFieldSize" />
 
         <!-- OpenAI API Key Input -->
         <TextView
             android:id="@+id/openAIApiKeyLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Chiave per le API di OpenAI"
+            android:text="Chiave OpenAI"
             android:textSize="16sp"
             android:textColor="@color/black" />
 
@@ -136,10 +148,12 @@
             android:id="@+id/openAIApiKeyEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:autofillHints=""
             android:hint="Inserisci la chiave"
             android:inputType="textPassword"
-            android:layout_marginBottom="16dp"
-            android:autofillHints="" />
+            android:minHeight="48dp"
+            tools:ignore="VisualLintTextFieldSize" />
 
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/fillerSentenceSwitch"
