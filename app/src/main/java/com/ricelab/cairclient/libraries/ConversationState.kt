@@ -4,7 +4,6 @@ import android.util.Log
 import kotlin.random.Random
 
 private const val TAG = "ConversationState"
-private var profileId: String = "00000000-0000-0000-0000-000000000000"
 
 class ConversationState(
     private var fileStorageManager: FileStorageManager,

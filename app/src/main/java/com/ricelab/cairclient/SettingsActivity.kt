@@ -20,10 +20,11 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var serverIpSpinner: Spinner
     private lateinit var serverPortEditText: EditText
-    private lateinit var openAIApiKeyEditText: EditText
+    private lateinit var experimentIdEditText: EditText
     private lateinit var personNameEditText: EditText
     private lateinit var personGenderEditText: EditText
     private lateinit var personAgeEditText: EditText
+    private lateinit var openAIApiKeyEditText: EditText
     private lateinit var fillerSentenceSwitch: SwitchCompat
     private lateinit var autoDetectLanguageSwitch: SwitchCompat
     private lateinit var formalLanguageSwitch: SwitchCompat
@@ -41,10 +42,11 @@ class SettingsActivity : AppCompatActivity() {
         // Initialize UI elements
         serverIpSpinner = findViewById(R.id.serverIpSpinner)
         serverPortEditText = findViewById(R.id.serverPortEditText)
-        openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
+        experimentIdEditText = findViewById(R.id.experimentIdEditText)
         personNameEditText = findViewById(R.id.personNameEditText)
         personGenderEditText = findViewById(R.id.personGenderEditText)
         personAgeEditText = findViewById(R.id.personAgeEditText)
+        openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
         fillerSentenceSwitch = findViewById(R.id.fillerSentenceSwitch)
         autoDetectLanguageSwitch = findViewById(R.id.autoDetectLanguageSwitch)
         formalLanguageSwitch = findViewById(R.id.formalLanguageSwitch)
@@ -64,18 +66,20 @@ class SettingsActivity : AppCompatActivity() {
 
         proceedButton.setOnClickListener {
             val serverIp = serverIpSpinner.selectedItem as String
-            val openAIApiKey = openAIApiKeyEditText.text.toString().trim()
             val serverPortText = serverPortEditText.text.toString().trim()
+            val experimentId = experimentIdEditText.text.toString().trim()
             val personName = personNameEditText.text.toString().trim()
             val personGender = personGenderEditText.text.toString().trim()
             val personAge = personAgeEditText.text.toString().trim()
+            val openAIApiKey = openAIApiKeyEditText.text.toString().trim()
             val useFillerSentence = fillerSentenceSwitch.isChecked
             val autoDetectLanguage = autoDetectLanguageSwitch.isChecked
             val useFormalLanguage = formalLanguageSwitch.isChecked
 
             Log.d(TAG, "Server IP: $serverIp")
-            Log.d(TAG, "OpenAI API Key: $openAIApiKey")
             Log.d(TAG, "Server Port Text: $serverPortText")
+            Log.d(TAG, "Experiment ID: $experimentId")
+            Log.d(TAG, "OpenAI API Key: $openAIApiKey")
             Log.d(TAG, "Use Filler Sentence: $useFillerSentence")
             Log.d(TAG, "Auto Detect Language: $autoDetectLanguage")
 
@@ -91,11 +95,12 @@ class SettingsActivity : AppCompatActivity() {
                     // Save the values securely including the autoDetectLanguage parameter
                     saveValues(
                         serverIp,
-                        openAIApiKey,
                         serverPort,
+                        experimentId,
                         personName,
                         personGender,
                         personAge,
+                        openAIApiKey,
                         useFillerSentence,
                         autoDetectLanguage,
                         useFormalLanguage)
@@ -153,11 +158,12 @@ class SettingsActivity : AppCompatActivity() {
         )
 
         val savedServerIp = sharedPreferences.getString("server_ip", null)
-        val savedOpenAIApiKey = sharedPreferences.getString("openai_api_key", null)
         val savedServerPort = sharedPreferences.getInt("server_port", -1)
+        val savedExperimentId = sharedPreferences.getString("experiment_id", "")
         val savedPersonName = sharedPreferences.getString("person_name", "")
         val savedPersonGender = sharedPreferences.getString("person_gender", "")
         val savedPersonAge = sharedPreferences.getString("person_age", "")
+        val savedOpenAIApiKey = sharedPreferences.getString("openai_api_key", null)
         val useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
         val autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
         val useFormalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
@@ -168,13 +174,14 @@ class SettingsActivity : AppCompatActivity() {
             finish()
         } else {
             savedServerIp?.let { setSelectedServerIp(it) }
-            savedOpenAIApiKey?.let { openAIApiKeyEditText.setText(it) }
             if (savedServerPort != -1) {
                 serverPortEditText.setText(savedServerPort.toString())
             }
+            savedExperimentId?.let { experimentIdEditText.setText(it) }
             savedPersonName?.let { personNameEditText.setText(it) }
             savedPersonGender?.let { personGenderEditText.setText(it) }
             savedPersonAge?.let { personAgeEditText.setText(it) }
+            savedOpenAIApiKey?.let { openAIApiKeyEditText.setText(it) }
             fillerSentenceSwitch.isChecked = useFillerSentence
             autoDetectLanguageSwitch.isChecked = autoDetectLanguage
             formalLanguageSwitch.isChecked = useFormalLanguage
@@ -214,11 +221,12 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun saveValues(
         serverIp: String,
-        openAIApiKey: String,
         serverPort: Int,
+        experimentId: String,
         personName: String,
         personGender: String,
         personAge: String,
+        openAIApiKey: String,
         useFillerSentence: Boolean,
         autoDetectLanguage: Boolean,
         useFormalLanguage: Boolean
@@ -237,11 +245,12 @@ class SettingsActivity : AppCompatActivity() {
 
         with(sharedPreferences.edit()) {
             putString("server_ip", serverIp)
-            putString("openai_api_key", openAIApiKey)
             putInt("server_port", serverPort)
+            putString("experiment_id", experimentId)
             putString("person_name", personName)
             putString("person_gender", personGender)
             putString("person_age", personAge)
+            putString("openai_api_key", openAIApiKey)
             putBoolean("use_filler_sentence", useFillerSentence)
             putBoolean("auto_detect_language", autoDetectLanguage)
             putBoolean("use_formal_language", useFormalLanguage)

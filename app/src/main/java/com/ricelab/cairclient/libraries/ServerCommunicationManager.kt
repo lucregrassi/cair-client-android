@@ -155,10 +155,11 @@ class ServerCommunicationManager(
 
     suspend fun hubRequest(
         requestType: String,
+        experimentId: String,
         xmlString: String,
         language: String,
         conversationState: ConversationState,
-        denseCapResult: List<String>,
+        visualInformation: String,
         dueIntervention: DueIntervention
     ): ConversationState? {
 
@@ -170,12 +171,13 @@ class ServerCommunicationManager(
             "type" to dueIntervention.type,
             "sentence" to dueIntervention.sentence,
             "exclusive" to dueIntervention.exclusive,
-            "contextual_data" to dueIntervention.contextual_data
+            "contextual_data" to dueIntervention.contextualData
         )
 
         // Compose the data payload to be sent
         val data = mapOf(
             "req_type" to requestType,
+            "experiment_id" to experimentId,
             "openai_api_key" to openAIApiKey,
             "client_sentence" to xmlString,
             "language" to language,
@@ -187,7 +189,7 @@ class ServerCommunicationManager(
                 "id" to conversationState.prevTurnLastSpeaker,
                 "topic" to conversationState.prevSpeakerTopic
             ),
-            "dense_cap_result" to denseCapResult
+            "visual_information" to visualInformation
         )
 
         Log.d(TAG, "xmlString = $xmlString")

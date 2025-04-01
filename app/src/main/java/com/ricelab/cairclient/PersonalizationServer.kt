@@ -11,7 +11,6 @@ import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.serialization.*
 
 
-@Serializable
 data class ScheduledIntervention(
     var type: String,
     var timestamp: Double,
@@ -20,33 +19,30 @@ data class ScheduledIntervention(
     var topics: List<Topic>?,
     var actions: List<String>?,
     var counter: Int = 0,
-    var interaction_sequence: List<String>?,
-    var contextual_data: Map<String, String>?) {
+    var interactionSequence: List<String>?,
+    var contextualData: Map<String, String>?) {
 
     fun logVariables() {
         Log.i("ScheduledIntervention", this.toString())
     }
 }
 
-@Serializable
 data class Topic(
     var sentence: String,
     var exclusive: Boolean
 )
 
-@Serializable
 data class DueIntervention(
     var type: String?,
     var exclusive: Boolean,
     var sentence: String,
     var timestamp: Double = 0.0,
-    var contextual_data: Map<String, String>? = null,
+    var contextualData: Map<String, String>? = null,
     var counter: Int = 0
 )
 
-@Serializable
 data class ScheduledInterventionsRequest(
-    val scheduled_interventions: List<ScheduledIntervention>?
+    val scheduledInterventions: List<ScheduledIntervention>?
 )
 
 class PersonalizationServer(private val port: Int = 8000) {
@@ -84,12 +80,10 @@ class PersonalizationServer(private val port: Int = 8000) {
                 val data = reader.readLine()
                 if (data != null) {
                     try {
-                        val request = kotlinx.serialization.json.Json.decodeFromString(
-                            ScheduledInterventionsRequest.serializer(), data
-                        )
-                        if (request.scheduled_interventions != null) {
+                        val request = kotlinx.serialization.json.Json.decodeFromString<ScheduledInterventionsRequest>(data)
+                        if (request.scheduledInterventions != null) {
                             scheduledInterventions.clear()
-                            scheduledInterventions.addAll(request.scheduled_interventions)
+                            scheduledInterventions.addAll(request.scheduledInterventions)
                             writer.println("{\"message\":\"Data received successfully\"}")
                             Log.i("PersonalizationServer", "Scheduled interventions updated")
 
@@ -163,14 +157,14 @@ class PersonalizationServer(private val port: Int = 8000) {
                     counter = dueIntervention.counter
                 )
             }
-            !dueIntervention.interaction_sequence.isNullOrEmpty() -> {
-                val sentence = dueIntervention.interaction_sequence!![dueIntervention.counter % dueIntervention.interaction_sequence!!.size]
+            !dueIntervention.interactionSequence.isNullOrEmpty() -> {
+                val sentence = dueIntervention.interactionSequence!![dueIntervention.counter % dueIntervention.interactionSequence!!.size]
                 DueIntervention(
                     type = "interaction_sequence",
                     sentence = sentence,
                     exclusive = false,
                     timestamp = dueIntervention.timestamp,
-                    contextual_data = dueIntervention.contextual_data,
+                    contextualData = dueIntervention.contextualData,
                     counter = dueIntervention.counter
                 )
             }
@@ -180,8 +174,8 @@ class PersonalizationServer(private val port: Int = 8000) {
         // Update the counter and timestamp for periodic interventions
         dueIntervention.counter = dueIntervention.counter + 1
         Log.d("PersonalizationServer", "dueIntervention counter = ${dueIntervention.counter}")
-        if (!dueIntervention.interaction_sequence.isNullOrEmpty()) {
-            if (dueIntervention.counter == dueIntervention.interaction_sequence!!.size) {
+        if (!dueIntervention.interactionSequence.isNullOrEmpty()) {
+            if (dueIntervention.counter == dueIntervention.interactionSequence!!.size) {
                 // reset counter to start the sequence from the beginning the next time (if periodic)
                 Log.d("PersonalizationServer", "resetting due intervention counter")
                 dueIntervention.counter = 0

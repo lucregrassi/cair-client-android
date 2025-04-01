@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var autoDetectLanguage = false // default
     private var formalLanguage = false
     private var isTouchListenerAdded = false
-
+    private var experimentId: String = ""
 
     private lateinit var fileStorageManager: FileStorageManager
     private lateinit var conversationState: ConversationState
@@ -142,11 +142,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         )
 
         serverIp = sharedPreferences.getString("server_ip", null) ?: ""
-        openAIApiKey = sharedPreferences.getString("openai_api_key", null) ?: ""
         serverPort = sharedPreferences.getInt("server_port", -1)
+        experimentId = sharedPreferences.getString("experiment_id", "") ?: ""
         personName = sharedPreferences.getString("person_name", "") ?: ""
         personGender = sharedPreferences.getString("person_gender", "") ?: ""
         personAge = sharedPreferences.getString("person_age", "") ?: ""
+        openAIApiKey = sharedPreferences.getString("openai_api_key", null) ?: ""
         useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
         autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
         formalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
@@ -387,12 +388,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             firstSentence = sentenceGenerator.getPredefinedSentence(language, "welcome_back")
         }
         if(firstSentence != "") {
-            Log.i(TAG, "uttering first sentence")
+            Log.i(TAG, "Uttering first sentence")
             robotSpeechTextView.text = "Pepper: $firstSentence"
             pepperInterface.sayMessage(firstSentence, language)
             previousSentence = firstSentence
         } else {
-            Log.e(TAG, "no first sentence!!!")
+            Log.e(TAG, "No first sentence!")
         }
     }
 
@@ -535,10 +536,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 hubRequestDeferred = async(Dispatchers.IO) {
                     serverCommunicationManager.hubRequest(
                         requestType,
+                        experimentId,
                         xmlString,
                         language,
                         conversationState,
-                        emptyList(),
+                        "",
                         dueIntervention
                     )
                 }
@@ -613,10 +615,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             Log.d("Debug", "before hubRequest continuation")
                             serverCommunicationManager.hubRequest(
                                 "continuation",
+                                experimentId,
                                 xmlString,
                                 language,
                                 conversationState,
-                                listOf(),
+                                "",
                                 DueIntervention(type = null, exclusive = false, sentence = "")
                             )
                         }

@@ -9,7 +9,7 @@ private const val TAG = "DialogueState"
 fun jsonArrayToList(jsonArray: JSONArray): List<Int> {
     val list = mutableListOf<Int>()
     for (i in 0 until jsonArray.length()) {
-        list.add(jsonArray.optInt(i)) // Usa optInt per evitare eccezioni
+        list.add(jsonArray.optInt(i)) // optInt to avoid exceptions
     }
     return list
 }
