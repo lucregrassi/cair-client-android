@@ -92,10 +92,10 @@ android {
 dependencies {
     // Core Android libraries
     implementation 'androidx.core:core-ktx:1.13.1'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'com.google.android.material:material:1.12.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'androidx.security:security-crypto-ktx:1.1.0-alpha03'
+    implementation 'androidx.constraintlayout:constraintlayout:2.2.1'
+    implementation 'androidx.security:security-crypto-ktx:1.1.0-alpha06'
 
     // Unit testing library
     testImplementation 'junit:junit:4.13.2'
@@ -111,12 +111,8 @@ dependencies {
     // OkHttp library for making HTTP requests, such as sending audio to Microsoft's Speech API.
     implementation 'com.squareup.okhttp3:okhttp:4.9.3'
 
-    // Google Play Services libraries for authentication and other base services.
-    implementation 'com.google.android.gms:play-services-base:18.5.0'
-    implementation 'com.google.android.gms:play-services-auth:21.2.0'
-
     // To serialize and deserialize json
     implementation 'com.google.code.gson:gson:2.10.1'
-    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.4.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2"
     implementation 'com.microsoft.cognitiveservices.speech:client-sdk:1.26.0'
 }
