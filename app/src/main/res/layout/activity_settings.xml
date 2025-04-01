@@ -150,7 +150,27 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             android:autofillHints=""
-            android:hint="Inserisci la chiave"
+            android:hint="Inserisci la chiave di OpenAI"
+            android:inputType="textPassword"
+            android:minHeight="48dp"
+            tools:ignore="VisualLintTextFieldSize" />
+
+        <!-- OpenAI API Key Input -->
+        <TextView
+            android:id="@+id/azureSpeechKeyLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Chiave Microsoft Azure"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <EditText
+            android:id="@+id/azureSpeechKeyEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:autofillHints=""
+            android:hint="Inserisci la chiave di Microsoft Azure"
             android:inputType="textPassword"
             android:minHeight="48dp"
             tools:ignore="VisualLintTextFieldSize" />

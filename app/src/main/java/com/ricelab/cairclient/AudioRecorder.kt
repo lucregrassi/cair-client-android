@@ -10,6 +10,8 @@ import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.microsoft.cognitiveservices.speech.*
 import com.microsoft.cognitiveservices.speech.audio.*
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +47,22 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
 
     private var lastStartTime: Long = 0
 
-    private val subscriptionKey = BuildConfig.AZURE_SPEECH_KEY
+    private val subscriptionKey: String by lazy {
+        val masterKeyAlias = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        val sharedPreferences = EncryptedSharedPreferences.create(
+            context,
+            "secure_prefs",
+            masterKeyAlias,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+
+        sharedPreferences.getString("azure_speech_key", "") ?: ""
+    }
+
     private val serviceRegion = "westeurope"
 
     // Store detected languages for all chunks
@@ -144,9 +161,6 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                 while (isRecording) {
                     val currentTime = System.currentTimeMillis()
                     val ret = audioRecord.read(audioBuffer, 0, audioBuffer.size)
-                    val testTime = System.currentTimeMillis()
-                    val audioReadTime = testTime-currentTime
-                    //Log.w(TAG, "AudioRecord.Read time = $currentTime time taken =  $audioReadTime")
 
                     if (ret < 0) {
                         Log.e(TAG, "audioRecord read error $ret")

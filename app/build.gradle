@@ -49,9 +49,6 @@ android {
 
         // Specifies the instrumentation test runner to use for running tests on your app.
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-
-        // Define a custom field for the build configuration, storing the Microsoft Speech API key.
-        buildConfigField "String", "AZURE_SPEECH_KEY", "\"${apiKeys.AZURE_SPEECH_KEY ?: 'default_key'}\""
     }
 
     buildTypes {

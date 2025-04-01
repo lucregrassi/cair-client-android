@@ -25,6 +25,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var personGenderEditText: EditText
     private lateinit var personAgeEditText: EditText
     private lateinit var openAIApiKeyEditText: EditText
+    private lateinit var azureSpeechKeyEditText: EditText
     private lateinit var fillerSentenceSwitch: SwitchCompat
     private lateinit var autoDetectLanguageSwitch: SwitchCompat
     private lateinit var formalLanguageSwitch: SwitchCompat
@@ -47,6 +48,7 @@ class SettingsActivity : AppCompatActivity() {
         personGenderEditText = findViewById(R.id.personGenderEditText)
         personAgeEditText = findViewById(R.id.personAgeEditText)
         openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
+        azureSpeechKeyEditText = findViewById(R.id.azureSpeechKeyEditText)
         fillerSentenceSwitch = findViewById(R.id.fillerSentenceSwitch)
         autoDetectLanguageSwitch = findViewById(R.id.autoDetectLanguageSwitch)
         formalLanguageSwitch = findViewById(R.id.formalLanguageSwitch)
@@ -72,6 +74,7 @@ class SettingsActivity : AppCompatActivity() {
             val personGender = personGenderEditText.text.toString().trim()
             val personAge = personAgeEditText.text.toString().trim()
             val openAIApiKey = openAIApiKeyEditText.text.toString().trim()
+            val azureSpeechKey = azureSpeechKeyEditText.text.toString().trim()
             val useFillerSentence = fillerSentenceSwitch.isChecked
             val autoDetectLanguage = autoDetectLanguageSwitch.isChecked
             val useFormalLanguage = formalLanguageSwitch.isChecked
@@ -80,6 +83,7 @@ class SettingsActivity : AppCompatActivity() {
             Log.d(TAG, "Server Port Text: $serverPortText")
             Log.d(TAG, "Experiment ID: $experimentId")
             Log.d(TAG, "OpenAI API Key: $openAIApiKey")
+            Log.d(TAG, "Azure Speech Key: $azureSpeechKey")
             Log.d(TAG, "Use Filler Sentence: $useFillerSentence")
             Log.d(TAG, "Auto Detect Language: $autoDetectLanguage")
 
@@ -101,6 +105,7 @@ class SettingsActivity : AppCompatActivity() {
                         personGender,
                         personAge,
                         openAIApiKey,
+                        azureSpeechKey,
                         useFillerSentence,
                         autoDetectLanguage,
                         useFormalLanguage)
@@ -164,6 +169,7 @@ class SettingsActivity : AppCompatActivity() {
         val savedPersonGender = sharedPreferences.getString("person_gender", "")
         val savedPersonAge = sharedPreferences.getString("person_age", "")
         val savedOpenAIApiKey = sharedPreferences.getString("openai_api_key", null)
+        val savedAzureSpeechKey = sharedPreferences.getString("azure_speech_key", null)
         val useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
         val autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
         val useFormalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
@@ -182,6 +188,7 @@ class SettingsActivity : AppCompatActivity() {
             savedPersonGender?.let { personGenderEditText.setText(it) }
             savedPersonAge?.let { personAgeEditText.setText(it) }
             savedOpenAIApiKey?.let { openAIApiKeyEditText.setText(it) }
+            savedAzureSpeechKey?.let { azureSpeechKeyEditText.setText(it) }
             fillerSentenceSwitch.isChecked = useFillerSentence
             autoDetectLanguageSwitch.isChecked = autoDetectLanguage
             formalLanguageSwitch.isChecked = useFormalLanguage
@@ -227,6 +234,7 @@ class SettingsActivity : AppCompatActivity() {
         personGender: String,
         personAge: String,
         openAIApiKey: String,
+        azureSpeechKey: String,
         useFillerSentence: Boolean,
         autoDetectLanguage: Boolean,
         useFormalLanguage: Boolean
@@ -251,6 +259,7 @@ class SettingsActivity : AppCompatActivity() {
             putString("person_gender", personGender)
             putString("person_age", personAge)
             putString("openai_api_key", openAIApiKey)
+            putString("azure_speech_key", azureSpeechKey)
             putBoolean("use_filler_sentence", useFillerSentence)
             putBoolean("auto_detect_language", autoDetectLanguage)
             putBoolean("use_formal_language", useFormalLanguage)
