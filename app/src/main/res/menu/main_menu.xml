@@ -6,4 +6,9 @@
         android:title="Impostazioni"
         android:orderInCategory="100"
         app:showAsAction="never" />
+    <item
+        android:id="@+id/action_personalization"
+        android:title="Personalizzazione"
+        android:orderInCategory="100"
+        app:showAsAction="never"/>
 </menu>

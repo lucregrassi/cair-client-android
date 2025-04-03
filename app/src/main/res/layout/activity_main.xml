@@ -2,16 +2,9 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- Background Image -->
-    <!--<ImageView
-        android:id="@+id/backgroundImage"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:src="@drawable/maritime_station"
-        android:scaleType="centerCrop" />-->
-
-    <!-- Overlay Layout -->
+    <!-- Main UI Layer: Speech display + Recalibration -->
     <RelativeLayout
+        android:id="@+id/main_ui_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
@@ -64,4 +57,11 @@
             android:padding="16dp"
             android:layout_marginBottom="16dp" />
     </RelativeLayout>
+
+    <!-- Fragment container: starts invisible -->
+    <FrameLayout
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
 </FrameLayout>

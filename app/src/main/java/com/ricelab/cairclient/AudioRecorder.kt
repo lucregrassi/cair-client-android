@@ -170,7 +170,6 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                     val maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
                     if (maxAmplitude > speechDetectionThreshold) {
                         // Speech detected
-
                         lastSpeechTime = currentTime
                         Log.d(TAG,"Speech detected above threshold time = $lastSpeechTime")
                         byteArrayStream.write(shortsToBytes(audioBuffer))
@@ -243,7 +242,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                 Log.d(TAG, "Final recognized text: $finalText")
 
                 Log.w(TAG, "Time since lastStart = ${(System.currentTimeMillis() - lastStartTime)/1000.0} (s)")
-                if (finalText.isNullOrEmpty() && (System.currentTimeMillis() - lastStartTime > initialTimeoutMillis)) {
+                if (finalText.isEmpty() && (System.currentTimeMillis() - lastStartTime > initialTimeoutMillis)) {
                     Log.w(TAG, "Timeout due to no speech detected!.")
                     return@withContext generateXmlString("*TIMEOUT*", "und")
                 }

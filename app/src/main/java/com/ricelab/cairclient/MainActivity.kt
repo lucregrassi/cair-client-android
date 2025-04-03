@@ -24,9 +24,12 @@ import com.aldebaran.qi.sdk.`object`.touch.Touch
 import org.w3c.dom.Element
 import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 private const val TAG = "MainActivity"
 private const val SILENCE_THRESHOLD: Long = 300 // in seconds
+private const val INTERVENTION_POLLING_DELAY_MIC_OFF = 2000L
 
 class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
@@ -66,9 +69,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private lateinit var fileStorageManager: FileStorageManager
     private lateinit var conversationState: ConversationState
-    private lateinit var personalizationServer: PersonalizationServer
+    private lateinit var personalizationManager: PersonalizationManager
     private lateinit var pepperInterface: PepperInterface
-    private val scheduledInterventionsPort = 8000
     private var teleoperationManager: TeleoperationManager? = null
     private var sentenceGenerator: SentenceGenerator = SentenceGenerator()
     private var isListeningEnabled = true
@@ -85,8 +87,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        personalizationServer = PersonalizationServer(scheduledInterventionsPort)
-        personalizationServer.startServer()
+        personalizationManager = PersonalizationManager(this)
 
         pepperInterface = PepperInterface(null)
 
@@ -94,6 +95,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         QiSDK.register(this, this)
         sentenceGenerator.loadFillerSentences(this)
         retrieveStoredValues() // autoDetectLanguage is now loaded here
+        loadScheduledInterventions()
         fileStorageManager = FileStorageManager(this, filesDir)
 
         userSpeechTextView = findViewById(R.id.userSpeechTextView)
@@ -124,8 +126,25 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 startActivity(intent)
                 true
             }
+            R.id.action_personalization -> {
+                showPersonalizationFragment()
+                true
+            }
             else -> super.onOptionsItemSelected(item)
         }
+    }
+
+    private fun showPersonalizationFragment() {
+        val mainUI = findViewById<android.view.View>(R.id.main_ui_container)
+        val fragmentContainer = findViewById<android.view.View>(R.id.fragment_container)
+
+        mainUI.visibility = android.view.View.GONE
+        fragmentContainer.visibility = android.view.View.VISIBLE
+
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragment_container, PersonalizationFragment())
+            .addToBackStack(null)
+            .commit()
     }
 
     private fun retrieveStoredValues() {
@@ -162,6 +181,25 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             startActivity(intent)
             finish()
         }
+    }
+
+    private fun loadScheduledInterventions() {
+        val prefs = getSharedPreferences("interventions", MODE_PRIVATE)
+        val json = prefs.getString("scheduled_interventions", null) ?: return
+
+        val listType = object : TypeToken<List<ScheduledIntervention>>() {}.type
+        val loadedInterventions: List<ScheduledIntervention> = Gson().fromJson(json, listType)
+
+        val now = System.currentTimeMillis() / 1000.0
+        val validInterventions = loadedInterventions.filter {
+            when (it.type) {
+                "fixed", "immediate" -> it.timestamp > now
+                "periodic" -> true // will be checked later by getDueIntervention
+                else -> false
+            }
+        }
+
+        personalizationManager.setScheduledInterventions(validInterventions)
     }
 
     private fun recalibrateThreshold() {
@@ -292,9 +330,20 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         while (isAlive) {
             // Check if listening is enabled
             if (!isListeningEnabled) {
-                userSpeechTextView.text =
-                    sentenceGenerator.getPredefinedSentence(language, "microphone")
-                delay(500) // Sleep briefly and then keep checking
+                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone")
+
+                // Check for due interventions even if mic is off
+                if (onGoingIntervention == null) {
+                    onGoingIntervention = personalizationManager.getDueIntervention()
+                    if (onGoingIntervention != null) {
+                        Log.d(TAG, "New intervention arrived while microphone is disabled")
+                        if (onGoingIntervention!!.type == "interaction_sequence") {
+                            conversationState.dialogueState.resetConversation()
+                        }
+                        handle("")
+                    }
+                }
+                delay(INTERVENTION_POLLING_DELAY_MIC_OFF)
                 continue
             }
 
@@ -304,7 +353,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             Log.i(TAG, "OngoingConversation = ${conversationState.dialogueState.ongoingConversation}")
 
             if (onGoingIntervention == null) {
-                onGoingIntervention = personalizationServer.getDueIntervention()
+                onGoingIntervention = personalizationManager.getDueIntervention()
                 if (onGoingIntervention != null) {
                     Log.d(TAG, "Entering handle for DueIntervention (onGoingIntervention = null)")
                     if (onGoingIntervention!!.type == "interaction_sequence") {
@@ -429,7 +478,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         QiSDK.unregister(this, this)
         audioRecorder.stopRecording()
         teleoperationManager?.stopUdpListener()
-        personalizationServer.stopServer()
     }
 
 
@@ -461,7 +509,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             else -> false
         }
         Log.d(TAG, "Handle: isIntervention = $isIntervention")
-        val xmlString = if (!xmlStringInput.isNullOrEmpty()) {
+        val xmlString = if (xmlStringInput.isNotEmpty()) {
             xmlStringInput
         } else {
             if (isIntervention && onGoingIntervention!!.type != "interaction_sequence") {
@@ -585,7 +633,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 }
 
                 val replySentence = conversationState.getReplySentence(personName)
-                if (!replySentence.isNullOrEmpty()) {
+                if (replySentence.isNotEmpty()) {
                     conversationState.dialogueState.updateConversation("assistant", replySentence)
                 }
 
@@ -709,7 +757,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 onGoingIntervention = null
             } else if (sentence.isNotBlank()) {
                 Log.w(TAG, "Getting the next dueIntervention")
-                onGoingIntervention = personalizationServer.getDueIntervention()
+                onGoingIntervention = personalizationManager.getDueIntervention()
             }
         }
     }

@@ -26,6 +26,8 @@ android {
 
     buildFeatures {
         buildConfig true
+        viewBinding true
+        dataBinding true
     }
 
     // Specifies the API level to compile your app against. This should be the latest SDK version available.
