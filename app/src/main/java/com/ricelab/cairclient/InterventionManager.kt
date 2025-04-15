@@ -1,7 +1,6 @@
 package com.ricelab.cairclient
 
 import android.content.Context
-import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.edit
 import com.google.gson.Gson
@@ -9,12 +8,12 @@ import com.google.gson.annotations.SerializedName
 import com.google.gson.reflect.TypeToken
 import java.util.concurrent.CopyOnWriteArrayList
 
-private const val TAG = "PersonalizationManager"
+private const val TAG = "InterventionManager"
 
 /**
  * Manages scheduled interventions with persistent storage and due-time retrieval.
  */
-class PersonalizationManager(context: Context) {
+class InterventionManager private constructor(context: Context) {
 
     private val gson = Gson()
     private val prefs = context.getSharedPreferences("interventions", Context.MODE_PRIVATE)
@@ -44,15 +43,14 @@ class PersonalizationManager(context: Context) {
     fun setScheduledInterventions(list: List<ScheduledIntervention>) {
         interventions.clear()
         interventions.addAll(list)
+        Log.i(TAG, "Scheduled interventions: $interventions")
     }
 
     fun getAllScheduledInterventions(): List<ScheduledIntervention> = interventions.toList()
 
     fun getDueIntervention(): DueIntervention? {
-        val currentTime = SystemClock.elapsedRealtime() / 1000.0
-
+        val currentTime = System.currentTimeMillis() / 1000.0
         val sorted = interventions.filter { it.timestamp <= currentTime }.sortedBy { it.timestamp }
-
         val next = sorted.firstOrNull() ?: return null
 
         val result = when {
@@ -90,6 +88,17 @@ class PersonalizationManager(context: Context) {
         }
 
         return result
+    }
+
+    companion object {
+        @Volatile
+        private var INSTANCE: InterventionManager? = null
+
+        fun getInstance(context: Context): InterventionManager {
+            return INSTANCE ?: synchronized(this) {
+                INSTANCE ?: InterventionManager(context.applicationContext).also { INSTANCE = it }
+            }
+        }
     }
 }
 

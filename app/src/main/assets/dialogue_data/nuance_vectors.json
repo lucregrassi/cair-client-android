@@ -10,7 +10,7 @@
     "values": {
         "diversity": ["Italian", "good mental health", "no physical problems"],
         "time": ["nothing specific", "nothing specific", "nothing specific"],
-        "place": ["San Martino Hospital", "Genoa", "Italy"],
+        "place": ["Villa Bombrini during Robot Valley", "Genoa", "Italy"],
         "tone": ["neutral", "neutral", "neutral", "neutral", "neutral", "neutral", "neutral",
             "neutral", "neutral"],
         "positive_speech_act": ["assertive", "commissive", "expressive"],

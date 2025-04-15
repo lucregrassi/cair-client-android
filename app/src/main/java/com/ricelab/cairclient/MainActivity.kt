@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +27,8 @@ import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.aldebaran.qi.sdk.`object`.holder.Holder
+
 
 private const val TAG = "MainActivity"
 private const val SILENCE_THRESHOLD: Long = 300 // in seconds
@@ -69,7 +72,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private lateinit var fileStorageManager: FileStorageManager
     private lateinit var conversationState: ConversationState
-    private lateinit var personalizationManager: PersonalizationManager
+    private lateinit var personalizationManager: InterventionManager
     private lateinit var pepperInterface: PepperInterface
     private var teleoperationManager: TeleoperationManager? = null
     private var sentenceGenerator: SentenceGenerator = SentenceGenerator()
@@ -87,8 +90,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        personalizationManager = PersonalizationManager(this)
-
+        personalizationManager = InterventionManager.getInstance(this)
         pepperInterface = PepperInterface(null)
 
         setContentView(R.layout.activity_main)
@@ -108,9 +110,31 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         // Assuming we modify AudioRecorder constructor to accept autoDetectLanguage boolean
 
         recalibrateButton.setOnClickListener {
-            recalibrateThreshold()
+            lifecycleScope.launch {
+                recalibrateThresholdBlocking()
+            }
         }
         checkAndRequestAudioPermission()
+
+        supportFragmentManager.addOnBackStackChangedListener {
+            val mainUI = findViewById<View>(R.id.main_ui_container)
+            val fragmentContainer = findViewById<View>(R.id.fragment_container)
+
+            if (supportFragmentManager.backStackEntryCount == 0) {
+                mainUI.visibility = View.VISIBLE
+                fragmentContainer.visibility = View.GONE
+            }
+        }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    )
+        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -142,7 +166,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         fragmentContainer.visibility = android.view.View.VISIBLE
 
         supportFragmentManager.beginTransaction()
-            .replace(R.id.fragment_container, PersonalizationFragment())
+            .replace(R.id.fragment_container, InterventionFragment())
             .addToBackStack(null)
             .commit()
     }
@@ -190,24 +214,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         val listType = object : TypeToken<List<ScheduledIntervention>>() {}.type
         val loadedInterventions: List<ScheduledIntervention> = Gson().fromJson(json, listType)
 
-        val now = System.currentTimeMillis() / 1000.0
-        val validInterventions = loadedInterventions.filter {
-            when (it.type) {
-                "fixed", "immediate" -> it.timestamp > now
-                "periodic" -> true // will be checked later by getDueIntervention
-                else -> false
-            }
-        }
-
-        personalizationManager.setScheduledInterventions(validInterventions)
+        personalizationManager.loadFromPrefs()
+        Log.i(TAG, "Loaded $loadedInterventions")
     }
 
-    private fun recalibrateThreshold() {
-        lifecycleScope.launch(Dispatchers.IO) {
-            val newThreshold = audioRecorder.recalibrateThreshold()
-            withContext(Dispatchers.Main) {
-                thresholdTextView.text = "Soglia del rumore: $newThreshold"
-            }
+    private suspend fun recalibrateThresholdBlocking() {
+        val newThreshold = withContext(Dispatchers.IO) {
+            audioRecorder.recalibrateThreshold()
+        }
+        withContext(Dispatchers.Main) {
+            thresholdTextView.text = "Soglia del rumore: $newThreshold"
         }
     }
 
@@ -237,12 +253,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onRobotFocusGained(qiContext: QiContext) {
         this.qiContext = qiContext
         pepperInterface.setContext(this.qiContext)
+        pepperInterface.holdBaseMovement()
 
         if (!isTouchListenerAdded) {
             // Retrieve the Touch service
             val touch: Touch = qiContext.touch
 
-            Log.w(TAG, "ADDING TOUCH LISTENER!!!!!!!!")
+            Log.w(TAG, "ADDING TOUCH LISTENER")
             touch.getSensor("Head/Touch")?.addOnStateChangedListener { touchState ->
                 if (touchState.touched) {
                     Log.i(TAG, "Head touched. Toggling listening...")
@@ -272,6 +289,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         teleoperationManager?.stopUdpListener()
         teleoperationManager = null
         this.qiContext = null
+        pepperInterface.releaseBaseMovement()
         pepperInterface.setContext(null)
     }
 
@@ -687,12 +705,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                     // Wait for the first reply to finish
                                     Log.d("Debug", "Waiting sayReplyJob")
                                     sayReplyJob?.join()
+                                    recalibrateThresholdBlocking()
                                     // Update UI on Main
                                     withContext(Dispatchers.Main) {
                                         robotSpeechTextView.text = ("Pepper: $continuationSentence")
                                     }
                                     Log.d("Debug", "After sayReplyJob")
-
                                     pepperInterface.sayMessage(continuationSentence, language)
                                     previousSentence = continuationSentence
                                     conversationState.dialogueState.prevDialogueSentence =

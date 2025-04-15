@@ -190,10 +190,10 @@
 
             <!-- Confirm and send -->
             <Button
-                android:id="@+id/btnConfirm"
+                android:id="@+id/btnAdd"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Conferma intervento"
+                android:text="Aggiungi intervento"
                 android:layout_marginBottom="16dp" />
 
             <TextView
@@ -213,12 +213,12 @@
                 android:layout_marginBottom="16dp" />
 
             <Button
-                android:id="@+id/btnSend"
+                android:id="@+id/btnConfirm"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:backgroundTint="@color/christmas_green"
                 android:textColor="@color/white"
-                android:text="Invia gli interventi programmati"
+                android:text="Conferma gli interventi programmati"
                 android:layout_marginBottom="8dp" />
 
             <Button
@@ -227,7 +227,7 @@
                 android:textColor="@color/white"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Elimina tutti gli interventi" />
+                android:text="Elimina tutti gli interventi programmati" />
         </LinearLayout>
     </ScrollView>
 </layout>

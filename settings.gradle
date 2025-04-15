@@ -12,13 +12,17 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven {
-            url 'http://android.aldebaran.com/sdk/maven'
-            allowInsecureProtocol = true
+            url = uri("http://android.aldebaran.com/sdk/maven")
+            setAllowInsecureProtocol(true)
         }
-        maven { url "https://maven.google.com" }  // Repository Maven di Google
-        maven { url "https://jitpack.io" }
+        maven {
+            url = uri("https://maven.google.com")
+        }
+        maven {
+            url = uri("https://jitpack.io")
+        }
     }
 }
 
 rootProject.name = "cair-client-android"
-include ':app'
+include(":app")

@@ -14,8 +14,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.aldebaran.qi.sdk.builder.HolderBuilder
+import com.aldebaran.qi.sdk.`object`.autonomousabilities.DegreeOfFreedom
+import com.aldebaran.qi.sdk.`object`.holder.Holder
 
 private const val TAG = "PepperInterface"
+private var holder: Holder? = null
 
 class PepperInterface(
     private var qiContext: QiContext? = null
@@ -116,7 +120,7 @@ class PepperInterface(
                 val goTo = GoToBuilder.with(qiContext)
                     .withFrame(targetFrame.frame())
                     .withFinalOrientationPolicy(OrientationPolicy.ALIGN_X)
-                    .withMaxSpeed(0.3F)
+                    .withMaxSpeed(0.2F) //0.72km/h
                     .withPathPlanningPolicy(PathPlanningPolicy.STRAIGHT_LINES_ONLY)
                     .build()
 
@@ -146,5 +150,16 @@ class PepperInterface(
                 Log.e(TAG, "Error during stopping robot: ${e.message}", e)
             }
         }
+    }
+
+    fun holdBaseMovement() {
+        holder = HolderBuilder.with(qiContext)
+            .withDegreesOfFreedom(DegreeOfFreedom.ROBOT_FRAME_ROTATION)
+            .build()
+        holder?.async()?.hold()
+    }
+
+    fun releaseBaseMovement() {
+        holder?.async()?.release()
     }
 }
