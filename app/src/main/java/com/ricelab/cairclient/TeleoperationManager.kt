@@ -40,7 +40,11 @@ class TeleoperationManager(
                     handleCommand(command)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "UDP listener error: ${e.message}", e)
+                if (e is java.net.SocketException && e.message == "Socket closed") {
+                    Log.i(TAG, "UDP listener closed cleanly.")
+                } else {
+                    Log.e(TAG, "UDP listener error: ${e.message}", e)
+                }
             } finally {
                 socket?.close()
             }

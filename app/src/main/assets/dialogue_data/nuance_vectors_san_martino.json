@@ -10,7 +10,7 @@
     "values": {
         "diversity": ["Italian", "good mental health", "no physical problems"],
         "time": ["nothing specific", "nothing specific", "nothing specific"],
-        "place": ["Stazione Marittima", "port of Genoa", "Italy"],
+        "place": ["San Martino Hospital", "Genoa", "Italy"],
         "tone": ["neutral", "neutral", "neutral", "neutral", "neutral", "neutral", "neutral",
             "neutral", "neutral"],
         "positive_speech_act": ["assertive", "commissive", "expressive"],

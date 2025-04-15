@@ -123,6 +123,17 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             if (supportFragmentManager.backStackEntryCount == 0) {
                 mainUI.visibility = View.VISIBLE
                 fragmentContainer.visibility = View.GONE
+
+                // Re-enable teleoperation when back to MainActivity
+                teleoperationManager?.startUdpListener()
+                Log.d(TAG, "Teleoperation listener restarted after fragment closed")
+            } else {
+                mainUI.visibility = View.GONE
+                fragmentContainer.visibility = View.VISIBLE
+
+                // Stop teleoperation when entering fragment
+                teleoperationManager?.stopUdpListener()
+                Log.d(TAG, "Teleoperation listener stopped for fragment")
             }
         }
     }
