@@ -32,6 +32,7 @@ class ServerCommunicationManager(
     private val context: Context,
     private val serverIp: String,
     private val serverPort: Int,
+    private val logPort: Int,
     private val openAIApiKey: String
 ) {
 
@@ -156,6 +157,7 @@ class ServerCommunicationManager(
     suspend fun hubRequest(
         requestType: String,
         experimentId: String,
+        deviceId: String,
         xmlString: String,
         language: String,
         conversationState: ConversationState,
@@ -178,6 +180,7 @@ class ServerCommunicationManager(
         val data = mapOf(
             "req_type" to requestType,
             "experiment_id" to experimentId,
+            "device_id" to deviceId,
             "openai_api_key" to openAIApiKey,
             "client_sentence" to xmlString,
             "language" to language,
@@ -320,5 +323,54 @@ class ServerCommunicationManager(
         }
         inflater.end()
         return outputStream.toByteArray()
+    }
+
+    suspend fun sendLogToServer(
+        logString: String,
+        logType: String = "client", // or "audio_recorder"
+        experimentId: String,
+        deviceId: String = "pepper", // change if needed
+        serverPort: Int
+    ) {
+        val logUrl = "https://$serverIp:$logPort/CAIR_log"
+        val logPayload = JSONObject().apply {
+            put("log_type", logType)
+            put("log", logString)
+            put("ontology_name", getOntologyNameFromPort(serverPort))
+            put("device_id", deviceId)
+            put("experiment_id", experimentId)
+        }
+
+        val requestBody = logPayload.toString().toRequestBody("application/json".toMediaTypeOrNull())
+
+        val request = Request.Builder()
+            .url(logUrl)
+            .post(requestBody)
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        withContext(Dispatchers.IO) {
+            try {
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "Failed to send log. Code: ${response.code}")
+                } else {
+                    Log.i(TAG, "Log sent successfully.")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error sending log: ${e.message}")
+            }
+        }
+    }
+
+    fun getOntologyNameFromPort(port: Int): String {
+        return when (port.toString()) {
+            "12345" -> "generic"
+            "12346" -> "home paraplegia"
+            "12347" -> "maritime_station_pepper"
+            "12348" -> "maritime_station_alterego"
+            "12349" -> "delirium"
+            else -> "unknown"
+        }
     }
 }

@@ -62,6 +62,24 @@
             android:text="12345"
             tools:ignore="VisualLintTextFieldSize" />
 
+        <!-- Device name -->
+        <TextView
+            android:id="@+id/deviceIdLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Nome del robot"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <EditText
+            android:id="@+id/deviceIdEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Inserisci il nome del robot"
+            android:inputType="text"
+            android:minHeight="48dp"
+            tools:ignore="VisualLintTextFieldSize" />
+
         <!-- Experiment ID -->
         <TextView
             android:id="@+id/experimentIdLabel"

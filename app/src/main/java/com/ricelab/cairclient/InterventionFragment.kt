@@ -25,6 +25,7 @@ class InterventionFragment : Fragment() {
     private val prefsName = "patient_fields"
 
     private val topicTriggerMap = mapOf(
+        "Questionario" to "Parliamo del questionario di valultazione della mia esperienza presso la Stazione Marittima",
         "Famiglia" to "Parliamo della mia famiglia",
         "Cibo" to "Parliamo di cibo"
     )

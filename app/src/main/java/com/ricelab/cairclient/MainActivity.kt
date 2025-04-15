@@ -27,7 +27,6 @@ import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.aldebaran.qi.sdk.`object`.holder.Holder
 
 
 private const val TAG = "MainActivity"
@@ -48,6 +47,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     // Network
     private var serverPort: Int = 12345 // Default value
+    private var logPort: Int = 12350 // Default value
 
     private var previousSentence: String = ""
     private var isAlive = true
@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var formalLanguage = false
     private var isTouchListenerAdded = false
     private var experimentId: String = ""
+    private var deviceId: String = ""
 
     private lateinit var fileStorageManager: FileStorageManager
     private lateinit var conversationState: ConversationState
@@ -97,6 +98,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         QiSDK.register(this, this)
         sentenceGenerator.loadFillerSentences(this)
         retrieveStoredValues() // autoDetectLanguage is now loaded here
+        Log.i(TAG, "******autoDetectLanguage = $autoDetectLanguage")
         loadScheduledInterventions()
         fileStorageManager = FileStorageManager(this, filesDir)
 
@@ -107,7 +109,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         // Pass autoDetectLanguage to AudioRecorder
         audioRecorder = AudioRecorder(this, autoDetectLanguage)
-        // Assuming we modify AudioRecorder constructor to accept autoDetectLanguage boolean
 
         recalibrateButton.setOnClickListener {
             lifecycleScope.launch {
@@ -170,11 +171,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private fun showPersonalizationFragment() {
-        val mainUI = findViewById<android.view.View>(R.id.main_ui_container)
-        val fragmentContainer = findViewById<android.view.View>(R.id.fragment_container)
+        val mainUI = findViewById<View>(R.id.main_ui_container)
+        val fragmentContainer = findViewById<View>(R.id.fragment_container)
 
-        mainUI.visibility = android.view.View.GONE
-        fragmentContainer.visibility = android.view.View.VISIBLE
+        mainUI.visibility = View.GONE
+        fragmentContainer.visibility = View.VISIBLE
 
         supportFragmentManager.beginTransaction()
             .replace(R.id.fragment_container, InterventionFragment())
@@ -197,7 +198,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         serverIp = sharedPreferences.getString("server_ip", null) ?: ""
         serverPort = sharedPreferences.getInt("server_port", -1)
-        experimentId = sharedPreferences.getString("experiment_id", "") ?: ""
+        experimentId = sharedPreferences.getString("experiment_id", "test") ?: ""
+        deviceId = sharedPreferences.getString("device_id", "pepper") ?: ""
         personName = sharedPreferences.getString("person_name", "") ?: ""
         personGender = sharedPreferences.getString("person_gender", "") ?: ""
         personAge = sharedPreferences.getString("person_age", "") ?: ""
@@ -289,7 +291,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         retrieveStoredValues()
 
         serverCommunicationManager =
-            ServerCommunicationManager(this, serverIp, serverPort, openAIApiKey)
+            ServerCommunicationManager(this, serverIp, serverPort, logPort, openAIApiKey)
 
         coroutineJob = lifecycleScope.launch {
             startDialogue()
@@ -400,14 +402,27 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 handle("")
             }
 
-            val xmlString = startListening()
-            //handleUserInput(xmlString)
+            val audioResult = startListening()
+            val xmlString = audioResult.xmlResult
+            val audioLog = audioResult.log
+            serverCommunicationManager.sendLogToServer(
+                audioLog,
+                "audio",
+                experimentId,
+                deviceId,
+                serverPort
+            )
             Log.d(TAG, "Entering handle for xmlString = $xmlString")
             handle(xmlString)
             withContext(Dispatchers.IO) {
                 conversationState.writeToFile()
             }
         }
+    }
+
+    fun getCurrentTimestamp(): String {
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+        return sdf.format(java.util.Date())
     }
 
     private suspend fun initializeUserSession() {
@@ -422,7 +437,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 pepperInterface.sayMessage(sentenceGenerator.getPredefinedSentence(language,"server_error"), language)
                 return
             }
-
             conversationState.dialogueState.printDebug()
             firstSentence = firstRequestResponse.firstSentence
 
@@ -475,14 +489,15 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private suspend fun startListening(): String {
+    private suspend fun startListening(): AudioResult {
         while (true) {
             userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening")
 
-            val xmlResult = withContext(Dispatchers.IO) {
+            val audioResult = withContext(Dispatchers.IO) {
                 audioRecorder.listenAndSplit()
             }
 
+            val xmlResult = audioResult.xmlResult
             val (userSentence, detectedLang) = parseXmlForSentenceAndLanguage(xmlResult)
 
             userSpeechTextView.text = "Utente: $userSentence"
@@ -492,7 +507,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             }
 
             if (xmlResult.isNotBlank()) {
-                return xmlResult
+                return audioResult
             }
         }
     }
@@ -533,6 +548,15 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private suspend fun handle(xmlStringInput: String) {
+        val logBuilder = StringBuilder()
+        logBuilder.appendLine("d#timestamp:${getCurrentTimestamp()}")
+
+        var ackSpeakingTime = -1.0
+        var firstRequestTime = -1.0
+        var replySpeakingTime = -1.0
+        var secondRequestTime = -1.0
+        var continuationSpeakingTime = -1.0
+
         val isIntervention = when {
             onGoingIntervention != null -> !onGoingIntervention!!.type.isNullOrEmpty()
             else -> false
@@ -603,6 +627,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             var fillerJob: Job? = null
 
             // Run them in parallel in a coroutineScope
+            val requestStart = System.currentTimeMillis()
             coroutineScope {
                 val requestType = when (dueIntervention.type) {
                     "interaction_sequence" -> dueIntervention.type!!
@@ -614,6 +639,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     serverCommunicationManager.hubRequest(
                         requestType,
                         experimentId,
+                        deviceId,
                         xmlString,
                         language,
                         conversationState,
@@ -636,7 +662,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             robotSpeechTextView.text = "Pepper: $randomFillerSentence"
                         }
                         // Then speak the filler (in the Dispatchers.IO thread)
+                        val fillerStart = System.currentTimeMillis()
                         pepperInterface.sayMessage(randomFillerSentence, language)
+                        val fillerEnd = System.currentTimeMillis()
+                        ackSpeakingTime = (fillerEnd - fillerStart) / 1000.0
+                        logBuilder.appendLine("d#ack_sentence_speaking_time:$ackSpeakingTime")
                     }
                 }
             }
@@ -647,6 +677,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
             // 3) Await the hub request result
             val updatedConversationState = hubRequestDeferred.await()
+            val requestEnd = System.currentTimeMillis()
+            firstRequestTime = (requestEnd - requestStart) / 1000.0
+            logBuilder.appendLine("d#first_request_response_time:$firstRequestTime")
+
             // 4) Wait for the filler to finish speaking (if it was started)
             fillerJob?.join()
 
@@ -667,7 +701,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 }
 
                 coroutineScope {
-                    Log.d("Debug", "before sayMessage $replySentence")
+                    Log.d(TAG, "before sayMessage $replySentence")
 
                     // Speak the reply sentence if present
                     var sayReplyJob: Job? = null
@@ -678,7 +712,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         }
                         // Actually speak it (on IO)
                         sayReplyJob = launch(Dispatchers.IO) {
+                            val replyStart = System.currentTimeMillis()
                             pepperInterface.sayMessage(replySentence, language)
+                            val replyEnd = System.currentTimeMillis()
+                            replySpeakingTime = (replyEnd - replyStart) / 1000.0
+                            logBuilder.appendLine("d#first_response_speaking_time:$replySpeakingTime")
                         }
                     }
 
@@ -688,11 +726,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
                     // Decide if we do the continuation logic
                     if (!isIntervention || dueIntervention.type == "topic") {
+                        val contRequestStart = System.currentTimeMillis()
                         val secondHubRequestJob = async(Dispatchers.IO) {
                             Log.d("Debug", "before hubRequest continuation")
                             serverCommunicationManager.hubRequest(
                                 "continuation",
                                 experimentId,
+                                deviceId,
                                 xmlString,
                                 language,
                                 conversationState,
@@ -702,6 +742,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         }
                         Log.d("Debug", "after performAnimationFromPlan")
                         val continuationConversationState = secondHubRequestJob.await()
+                        val contRequestEnd = System.currentTimeMillis()
+                        secondRequestTime = (contRequestEnd - contRequestStart) / 1000.0
+                        logBuilder.appendLine("d#second_request_response_time:$secondRequestTime")
+
                         Log.d("Debug", "after performAnimationFromPlan await")
 
                         if (continuationConversationState != null) {
@@ -722,7 +766,19 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                         robotSpeechTextView.text = ("Pepper: $continuationSentence")
                                     }
                                     Log.d("Debug", "After sayReplyJob")
+                                    val contSpeakStart = System.currentTimeMillis()
                                     pepperInterface.sayMessage(continuationSentence, language)
+                                    val contSpeakEnd = System.currentTimeMillis()
+                                    continuationSpeakingTime = (contSpeakEnd - contSpeakStart) / 1000.0
+                                    logBuilder.appendLine("d#second_sentence_speaking_time:$continuationSpeakingTime")
+                                    logBuilder.appendLine("d#********************")
+                                    serverCommunicationManager.sendLogToServer(
+                                        logBuilder.toString(),
+                                        "client",
+                                        experimentId,
+                                        deviceId,
+                                        serverPort
+                                    )
                                     previousSentence = continuationSentence
                                     conversationState.dialogueState.prevDialogueSentence =
                                         conversationState.dialogueState.dialogueSentence

@@ -21,6 +21,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var serverIpSpinner: Spinner
     private lateinit var serverPortEditText: EditText
     private lateinit var experimentIdEditText: EditText
+    private lateinit var deviceIdEditText: EditText
     private lateinit var personNameEditText: EditText
     private lateinit var personGenderEditText: EditText
     private lateinit var personAgeEditText: EditText
@@ -44,6 +45,7 @@ class SettingsActivity : AppCompatActivity() {
         serverIpSpinner = findViewById(R.id.serverIpSpinner)
         serverPortEditText = findViewById(R.id.serverPortEditText)
         experimentIdEditText = findViewById(R.id.experimentIdEditText)
+        deviceIdEditText = findViewById(R.id.deviceIdEditText)
         personNameEditText = findViewById(R.id.personNameEditText)
         personGenderEditText = findViewById(R.id.personGenderEditText)
         personAgeEditText = findViewById(R.id.personAgeEditText)
@@ -70,6 +72,7 @@ class SettingsActivity : AppCompatActivity() {
             val serverIp = serverIpSpinner.selectedItem as String
             val serverPortText = serverPortEditText.text.toString().trim()
             val experimentId = experimentIdEditText.text.toString().trim()
+            val deviceId = deviceIdEditText.text.toString().trim()
             val personName = personNameEditText.text.toString().trim()
             val personGender = personGenderEditText.text.toString().trim()
             val personAge = personAgeEditText.text.toString().trim()
@@ -82,6 +85,7 @@ class SettingsActivity : AppCompatActivity() {
             Log.d(TAG, "Server IP: $serverIp")
             Log.d(TAG, "Server Port Text: $serverPortText")
             Log.d(TAG, "Experiment ID: $experimentId")
+            Log.d(TAG, "Device ID: $deviceId")
             Log.d(TAG, "OpenAI API Key: $openAIApiKey")
             Log.d(TAG, "Azure Speech Key: $azureSpeechKey")
             Log.d(TAG, "Use Filler Sentence: $useFillerSentence")
@@ -101,6 +105,7 @@ class SettingsActivity : AppCompatActivity() {
                         serverIp,
                         serverPort,
                         experimentId,
+                        deviceId,
                         personName,
                         personGender,
                         personAge,
@@ -165,6 +170,7 @@ class SettingsActivity : AppCompatActivity() {
         val savedServerIp = sharedPreferences.getString("server_ip", null)
         val savedServerPort = sharedPreferences.getInt("server_port", -1)
         val savedExperimentId = sharedPreferences.getString("experiment_id", "")
+        val savedDeviceId = sharedPreferences.getString("device_id", "")
         val savedPersonName = sharedPreferences.getString("person_name", "")
         val savedPersonGender = sharedPreferences.getString("person_gender", "")
         val savedPersonAge = sharedPreferences.getString("person_age", "")
@@ -184,6 +190,7 @@ class SettingsActivity : AppCompatActivity() {
                 serverPortEditText.setText(savedServerPort.toString())
             }
             savedExperimentId?.let { experimentIdEditText.setText(it) }
+            savedDeviceId?.let { deviceIdEditText.setText(it) }
             savedPersonName?.let { personNameEditText.setText(it) }
             savedPersonGender?.let { personGenderEditText.setText(it) }
             savedPersonAge?.let { personAgeEditText.setText(it) }
@@ -230,6 +237,7 @@ class SettingsActivity : AppCompatActivity() {
         serverIp: String,
         serverPort: Int,
         experimentId: String,
+        deviceId: String,
         personName: String,
         personGender: String,
         personAge: String,
@@ -255,6 +263,7 @@ class SettingsActivity : AppCompatActivity() {
             putString("server_ip", serverIp)
             putInt("server_port", serverPort)
             putString("experiment_id", experimentId)
+            putString("device_id", deviceId)
             putString("person_name", personName)
             putString("person_gender", personGender)
             putString("person_age", personAge)
@@ -288,6 +297,13 @@ class SettingsActivity : AppCompatActivity() {
         )
 
         with(sharedPreferences.edit()) {
+            clear()
+            apply()
+        }
+
+        // Delete all scheduled interventions
+        val interventionPrefs = getSharedPreferences("interventions", MODE_PRIVATE)
+        with(interventionPrefs.edit()) {
             clear()
             apply()
         }

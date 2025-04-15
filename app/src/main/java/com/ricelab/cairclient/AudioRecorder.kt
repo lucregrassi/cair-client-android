@@ -26,6 +26,11 @@ import java.util.concurrent.ConcurrentHashMap
 private const val TAG = "AudioRecorder"
 private const val DEFAULT_LANGUAGE = "it-IT"
 
+data class AudioResult(
+    val xmlResult: String,
+    val log: String
+)
+
 class AudioRecorder(private val context: Context, private val autoDetectLanguage: Boolean) {
 
     // Audio recording configuration
@@ -37,7 +42,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
 
     // Detection thresholds
     private var speechDetectionThreshold = 2000
-    private val thresholdAdjustmentValue = 1500
+    private val thresholdAdjustmentValue = 2000
     private val shortSilenceDurationMillis = 500L
     private val longSilenceDurationMillis = 2000L
     private val initialTimeoutMillis = 30000L
@@ -115,13 +120,18 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
         lastStartTime = System.currentTimeMillis()
     }
 
-    suspend fun listenAndSplit(): String {
+    private fun getCurrentTimestamp(): String {
+        return java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+            .format(java.util.Date())
+    }
+
+    suspend fun listenAndSplit(): AudioResult {
+        val audioLogBuilder = StringBuilder()
         Log.d(TAG, "Starting listenAndSplit method.")
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             Log.d(TAG, "Permission to record audio was denied.")
-            return generateXmlString("Permission to record audio was denied.", "und")
+            return AudioResult(generateXmlString("Permission to record audio was denied.", "und"), audioLogBuilder.toString())
         }
-
 
         // Clear detectedLanguages from previous runs
         detectedLanguages.clear()
@@ -151,7 +161,6 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                 lastStartTime = startTime
             }
 
-
             try {
                 audioRecord.startRecording()
                 isRecording = true
@@ -164,7 +173,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
 
                     if (ret < 0) {
                         Log.e(TAG, "audioRecord read error $ret")
-                        return@withContext generateXmlString("Error reading audio", "und")
+                        return@withContext AudioResult(generateXmlString("Error reading audio", "und"), audioLogBuilder.toString())
                     }
 
                     val maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
@@ -178,12 +187,12 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                     if (lastSpeechTime == null && currentTime - lastStartTime > initialTimeoutMillis) {
                         Log.d(TAG, "Timeout due to no speech detected.")
                         isRecording = false
-                        return@withContext generateXmlString("*TIMEOUT*", "und")
+                        audioLogBuilder.appendLine("timestamp:${getCurrentTimestamp()}")
+                        audioLogBuilder.appendLine("final_delay_time:TIMEOUT")
+                        audioLogBuilder.appendLine("********************")
+                        return@withContext AudioResult(generateXmlString("*TIMEOUT*", "und"), audioLogBuilder.toString())
                     }
 
-                    //if (lastSpeechTime != null)
-                        //Log.e(TAG, "Current-LastSpeech = ${currentTime-lastSpeechTime}")
-                    // Short silence - process chunk if we have data
                     if (lastSpeechTime != null) {
                         if (currentTime - lastSpeechTime > shortSilenceDurationMillis && byteArrayStream.size() > 0) {
                             val audioBytes = byteArrayStream.toByteArray()
@@ -191,14 +200,17 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                             val index = chunkIndex
                             chunkIndex++
                             val job = scope.launch {
-                                Log.d(TAG, "Short silence detected. Processing chunk in a coroutine.")
-                                val beforeChunkTime = System.currentTimeMillis()
+                                val timestamp = getCurrentTimestamp()
+                                val chunkAudioDuration = audioBytes.size.toDouble() / (sampleRate * 2)
+                                val recognitionStart = System.currentTimeMillis()
                                 val (partialText, partialLang) = recognizeChunk(audioBytes)
-                                val afterChunkTime = System.currentTimeMillis()
-                                Log.d(
-                                    TAG,
-                                    "Time taken to process chunk = ${afterChunkTime - beforeChunkTime} Partial result: $partialText, language: $partialLang"
-                                )
+                                val recognitionEnd = System.currentTimeMillis()
+                                val sttTime = (recognitionEnd - recognitionStart) / 1000.0
+
+                                audioLogBuilder.appendLine("timestamp:$timestamp")
+                                audioLogBuilder.appendLine("chunk_duration:$chunkAudioDuration")
+                                audioLogBuilder.appendLine("chunk_speech_to_text_time:$sttTime")
+                                Log.d(TAG,"Time taken to process chunk = ${recognitionEnd - recognitionStart} Partial result: $partialText, language: $partialLang")
 
                                 if (partialText.isNotEmpty()) {
                                     synchronized(currentPartialResult) {
@@ -235,26 +247,31 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                 val beforeJoinTime = System.currentTimeMillis()
                 jobs.forEach { it.join() }
                 val afterJoinTime = System.currentTimeMillis()
+                val finalDelayTime = (afterJoinTime - beforeJoinTime) / 1000.0
+                audioLogBuilder.appendLine("final_delay_time:$finalDelayTime")
+
                 Log.d(TAG, "Waited for all coroutines (time taken =${afterJoinTime-beforeJoinTime})")
 
-                //val finalText = finalResult.toString().trim()
                 val finalText = results.toSortedMap().values.joinToString(" ")
                 Log.d(TAG, "Final recognized text: $finalText")
 
                 Log.w(TAG, "Time since lastStart = ${(System.currentTimeMillis() - lastStartTime)/1000.0} (s)")
                 if (finalText.isEmpty() && (System.currentTimeMillis() - lastStartTime > initialTimeoutMillis)) {
                     Log.w(TAG, "Timeout due to no speech detected!.")
-                    return@withContext generateXmlString("*TIMEOUT*", "und")
+                    audioLogBuilder.appendLine("timestamp:${getCurrentTimestamp()}")
+                    audioLogBuilder.appendLine("final_delay_time:TIMEOUT")
+                    audioLogBuilder.appendLine("********************")
+                    return@withContext AudioResult(generateXmlString("*TIMEOUT*", "und"), audioLogBuilder.toString())
                 }
 
                 // Determine majority language
                 val finalLanguage = determineMajorityLanguage()
-
-                return@withContext generateXmlString(finalText, finalLanguage)
+                audioLogBuilder.appendLine("********************")
+                return@withContext AudioResult(generateXmlString(finalText, finalLanguage), audioLogBuilder.toString())
 
             } catch (e: IOException) {
                 Log.e(TAG, "Error recording audio: ${e.message}", e)
-                return@withContext generateXmlString("Error recording audio: ${e.message}", "und")
+                return@withContext AudioResult(generateXmlString("Error recording audio: ${e.message}", "und"), audioLogBuilder.toString())
             } finally {
                 Log.d(TAG, "Stopping and releasing AudioRecord.")
                 isRecording = false
