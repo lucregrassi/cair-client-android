@@ -94,7 +94,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         personalizationManager = InterventionManager.getInstance(this)
         pepperInterface = PepperInterface(null)
 
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_main_maritime_station)
         QiSDK.register(this, this)
         sentenceGenerator.loadFillerSentences(this)
         retrieveStoredValues() // autoDetectLanguage is now loaded here
