@@ -27,6 +27,7 @@ import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import org.json.JSONObject
 
 
 private const val TAG = "MainActivity"
@@ -44,6 +45,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private lateinit var robotSpeechTextView: TextView
     private lateinit var thresholdTextView: TextView
     private lateinit var recalibrateButton: Button
+
+    private val gson = Gson()
 
     // Network
     private var serverPort: Int = 12345 // Default value
@@ -407,7 +410,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             val audioLog = audioResult.log
             serverCommunicationManager.sendLogToServer(
                 audioLog,
-                "audio",
+                "audio_recorder",
                 experimentId,
                 deviceId,
                 serverPort
@@ -507,6 +510,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             }
 
             if (xmlResult.isNotBlank()) {
+                Log.i(TAG, "xmlResult = $xmlResult")
                 return audioResult
             }
         }
@@ -548,8 +552,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private suspend fun handle(xmlStringInput: String) {
-        val logBuilder = StringBuilder()
-        logBuilder.appendLine("d#timestamp:${getCurrentTimestamp()}")
+        val logMap = mutableMapOf<String, Any>()
+        logMap["timestamp"] = getCurrentTimestamp()
 
         var ackSpeakingTime = -1.0
         var firstRequestTime = -1.0
@@ -590,6 +594,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         val dueIntervention = if (!isIntervention) {
             DueIntervention(type = null, exclusive = false, sentence = "")
         } else {
+            logMap["intervention_type"] = onGoingIntervention!!.type!!
+            if (xmlStringInput.isEmpty() && onGoingIntervention!!.type == "interaction_sequence")
+                logMap["intervention_sentence"] = "*START*"
+            else
+                logMap["intervention_sentence"] = onGoingIntervention!!.sentence
+            Log.d(TAG, "logging intervention sentence ${logMap["intervention_sentence"]} and type ${logMap["intervention_type"]}")
+
             onGoingIntervention!!
         }
 
@@ -617,7 +628,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         // Proceed only if we have a meaningful user sentence
         if (sentence.isNotBlank() && (sentence != "*TIMEOUT*" || (isIntervention && onGoingIntervention!!.type == "interaction_sequence"))) {
-            if (!xmlStringInput.isNullOrEmpty()) {
+            if (xmlStringInput.isNotEmpty()) {
                 lastActiveSpeakerTime = System.currentTimeMillis()
             }
             conversationState.dialogueState.updateConversation("user", sentence)
@@ -666,7 +677,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         pepperInterface.sayMessage(randomFillerSentence, language)
                         val fillerEnd = System.currentTimeMillis()
                         ackSpeakingTime = (fillerEnd - fillerStart) / 1000.0
-                        logBuilder.appendLine("d#ack_sentence_speaking_time:$ackSpeakingTime")
+                        logMap["ack_sentence_speaking_time"] = ackSpeakingTime
                     }
                 }
             }
@@ -679,7 +690,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             val updatedConversationState = hubRequestDeferred.await()
             val requestEnd = System.currentTimeMillis()
             firstRequestTime = (requestEnd - requestStart) / 1000.0
-            logBuilder.appendLine("d#first_request_response_time:$firstRequestTime")
+            logMap["first_request_response_time"] = firstRequestTime
 
             // 4) Wait for the filler to finish speaking (if it was started)
             fillerJob?.join()
@@ -716,7 +727,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             pepperInterface.sayMessage(replySentence, language)
                             val replyEnd = System.currentTimeMillis()
                             replySpeakingTime = (replyEnd - replyStart) / 1000.0
-                            logBuilder.appendLine("d#first_response_speaking_time:$replySpeakingTime")
+                            logMap["first_response_speaking_time"] = replySpeakingTime
                         }
                     }
 
@@ -744,7 +755,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         val continuationConversationState = secondHubRequestJob.await()
                         val contRequestEnd = System.currentTimeMillis()
                         secondRequestTime = (contRequestEnd - contRequestStart) / 1000.0
-                        logBuilder.appendLine("d#second_request_response_time:$secondRequestTime")
+                        logMap["second_request_response_time"] = secondRequestTime
 
                         Log.d("Debug", "after performAnimationFromPlan await")
 
@@ -770,15 +781,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                     pepperInterface.sayMessage(continuationSentence, language)
                                     val contSpeakEnd = System.currentTimeMillis()
                                     continuationSpeakingTime = (contSpeakEnd - contSpeakStart) / 1000.0
-                                    logBuilder.appendLine("d#second_sentence_speaking_time:$continuationSpeakingTime")
-                                    logBuilder.appendLine("d#********************")
+                                    logMap["second_sentence_speaking_time"] = continuationSpeakingTime
+                                    val logJson = JSONObject(logMap)
                                     serverCommunicationManager.sendLogToServer(
-                                        logBuilder.toString(),
-                                        "client",
+                                        logJson,
+                                        "client_dialogue",
                                         experimentId,
                                         deviceId,
                                         serverPort
                                     )
+                                    logMap.clear()
                                     previousSentence = continuationSentence
                                     conversationState.dialogueState.prevDialogueSentence =
                                         conversationState.dialogueState.dialogueSentence
@@ -792,6 +804,15 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             Log.e(TAG, "Failed continuation hub request.")
                         }
                     } else {
+                        val logJson = JSONObject(logMap)
+                        serverCommunicationManager.sendLogToServer(
+                            logJson,
+                            "client_dialogue",
+                            experimentId,
+                            deviceId,
+                            serverPort
+                        )
+                        logMap.clear()
                         // If we're in an intervention scenario
                         if (conversationState.dialogueState.ongoingConversation && dueIntervention.type == "action") {
                             Log.d(TAG, "Ongoing conversation = true && intervention == action")
@@ -809,7 +830,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                 pepperInterface.sayMessage(repeatContinuation, language)
                             }
                         } else {
-                            Log.d(TAG, "Ongoing conversation = false && intervention == action")
+                            Log.d(TAG, "Ongoing conversation = false && (intervention == action || interaction_sequence)")
                         }
                     }
                 }
@@ -839,10 +860,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         if (isIntervention) {
             if (onGoingIntervention!!.type == "topic" || onGoingIntervention!!.type == "action") {
+                Log.w(TAG, "Resetting onGoingIntervention to null")
                 onGoingIntervention = null
             } else if (sentence.isNotBlank()) {
                 Log.w(TAG, "Getting the next dueIntervention")
                 onGoingIntervention = personalizationManager.getDueIntervention()
+                if (onGoingIntervention == null) {
+                    Log.w(TAG, "No dueIntervention found")
+                } else {
+                    Log.w(TAG, "DueIntervention found: ${onGoingIntervention!!.type}")
+                }
             }
         }
     }

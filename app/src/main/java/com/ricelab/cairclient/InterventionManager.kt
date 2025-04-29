@@ -37,6 +37,7 @@ class InterventionManager private constructor(context: Context) {
     }
 
     fun clearAll() {
+        Log.w(TAG, "Clearing ALL interventions")
         interventions.clear()
     }
 
@@ -49,41 +50,59 @@ class InterventionManager private constructor(context: Context) {
     fun getAllScheduledInterventions(): List<ScheduledIntervention> = interventions.toList()
 
     fun getDueIntervention(): DueIntervention? {
+        Log.w(TAG, "Object identity: ${Integer.toHexString(System.identityHashCode(this))}")
+        Log.d(TAG, "ENTERING getDueIntervention interventions.size = ${interventions.size}")
         val currentTime = System.currentTimeMillis() / 1000.0
         val sorted = interventions.filter { it.timestamp <= currentTime }.sortedBy { it.timestamp }
+        Log.w(TAG, "sorted size = ${sorted.size}")
         val next = sorted.firstOrNull() ?: return null
 
         val result = when {
             !next.topics.isNullOrEmpty() -> {
                 val topic = next.topics!![next.counter % next.topics!!.size]
+                Log.d(TAG, "Returning topic sentence = ${topic.sentence} counter = ${next.counter}")
                 DueIntervention("topic", topic.exclusive, topic.sentence, next.timestamp, next.contextualData, next.counter)
             }
             !next.actions.isNullOrEmpty() -> {
                 val action = next.actions!![next.counter % next.actions!!.size]
+                Log.d(TAG, "Returning action action = $action counter = ${next.counter}")
                 DueIntervention("action", false, action, next.timestamp, next.contextualData, next.counter)
             }
             !next.interactionSequence.isNullOrEmpty() -> {
                 val sentence = next.interactionSequence!![next.counter % next.interactionSequence!!.size]
+                Log.d(TAG, "Returning interaction_sequence sentence = $sentence counter = ${next.counter} size = ${next.interactionSequence!!.size}")
                 DueIntervention("interaction_sequence", false, sentence, next.timestamp, next.contextualData, next.counter)
             }
-            else -> null
+            else -> {
+                Log.w(TAG, "No valid interventions found")
+                null
+            }
         } ?: return null
 
         next.counter++
         Log.d(TAG, "dueIntervention counter = ${next.counter}")
 
         val isEndOfSequence = !next.interactionSequence.isNullOrEmpty() && next.counter == next.interactionSequence!!.size
+        Log.d(TAG, "isEndOfSequence = $isEndOfSequence")
 
-        if (isEndOfSequence || next.topics.isNullOrEmpty() && next.actions.isNullOrEmpty()) {
-            next.counter = 0
-            if (next.typeEnum == InterventionType.PERIODIC || next.typeEnum == InterventionType.FIXED) {
-                next.timestamp += next.period
-            } else {
-                interventions.remove(next)
+        if (next.topics.isNullOrEmpty() && next.actions.isNullOrEmpty()) {
+            // interaction_sequence
+            if (isEndOfSequence) {
+                next.counter = 0
+                if (next.typeEnum == InterventionType.PERIODIC || next.typeEnum == InterventionType.FIXED) {
+                    Log.d(TAG, "incrementing sequence period: next.typeEnum = ${next.typeEnum} ")
+                    next.timestamp += next.period
+                } else {
+                    Log.d(TAG, "removing sequence intervention (immediate)")
+                    interventions.remove(next)
+                }
             }
         } else if (next.typeEnum == InterventionType.PERIODIC || next.typeEnum == InterventionType.FIXED) {
+            // action or topic
+            Log.d(TAG, "incrementing action/topic period: next.typeEnum = ${next.typeEnum} ")
             next.timestamp += next.period
         } else {
+            Log.d(TAG, "removing action/topic intervention (immediate)")
             interventions.remove(next)
         }
 

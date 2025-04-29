@@ -326,8 +326,8 @@ class ServerCommunicationManager(
     }
 
     suspend fun sendLogToServer(
-        logString: String,
-        logType: String = "client", // or "audio_recorder"
+        logJson: JSONObject,
+        logType: String = "client_dialogue", // or "audio_recorder"
         experimentId: String,
         deviceId: String = "pepper", // change if needed
         serverPort: Int
@@ -335,7 +335,7 @@ class ServerCommunicationManager(
         val logUrl = "https://$serverIp:$logPort/CAIR_log"
         val logPayload = JSONObject().apply {
             put("log_type", logType)
-            put("log", logString)
+            put("log", logJson)
             put("ontology_name", getOntologyNameFromPort(serverPort))
             put("device_id", deviceId)
             put("experiment_id", experimentId)

@@ -17,6 +17,7 @@ import com.microsoft.cognitiveservices.speech.audio.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.*
+import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -28,7 +29,7 @@ private const val DEFAULT_LANGUAGE = "it-IT"
 
 data class AudioResult(
     val xmlResult: String,
-    val log: String
+    val log: JSONObject
 )
 
 class AudioRecorder(private val context: Context, private val autoDetectLanguage: Boolean) {
@@ -45,7 +46,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     private val thresholdAdjustmentValue = 2000
     private val shortSilenceDurationMillis = 500L
     private val longSilenceDurationMillis = 2000L
-    private val initialTimeoutMillis = 30000L
+    private val initialTimeoutMillis = 60_000L
 
     @Volatile
     private var isRecording = false
@@ -126,159 +127,145 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     }
 
     suspend fun listenAndSplit(): AudioResult {
-        val audioLogBuilder = StringBuilder()
+        val audioLogMap = mutableMapOf<String, Any>()
         Log.d(TAG, "Starting listenAndSplit method.")
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            Log.d(TAG, "Permission to record audio was denied.")
-            return AudioResult(generateXmlString("Permission to record audio was denied.", "und"), audioLogBuilder.toString())
-        }
 
-        // Clear detectedLanguages from previous runs
         detectedLanguages.clear()
 
         return withContext(Dispatchers.IO) {
-            val audioRecord = AudioRecord(audioSource, sampleRate, channelConfig, audioFormat, bufferSize)
-            val noiseSuppressor: NoiseSuppressor? = if (NoiseSuppressor.isAvailable()) {
-                Log.d(TAG, "NoiseSuppressor enabled.")
-                NoiseSuppressor.create(audioRecord.audioSessionId)
-            } else {
-                Log.w(TAG, "NoiseSuppressor not supported on this device.")
-                null
+            var finalAudioResult: AudioResult? = null
+
+            while (finalAudioResult == null) {
+                finalAudioResult = recordAndRecognizeOneAttempt(audioLogMap)
             }
 
-            val audioBuffer = ShortArray(bufferSize)
-            val currentPartialResult = StringBuilder()
-            val byteArrayStream = ByteArrayOutputStream()
-            var lastSpeechTime: Long? = null
-            val startTime = System.currentTimeMillis()
-            val jobs = mutableListOf<Job>()
-            val results = ConcurrentHashMap<Int, String>()
-            var chunkIndex = 0
-            Log.d(TAG, "Starting recording loop.")
+            finalAudioResult
+        }
+    }
 
-            if (startTime - lastStartTime > initialTimeoutMillis) {
-                Log.d(TAG, "Resettng lastStartTime.")
-                lastStartTime = startTime
-            }
+    private suspend fun recordAndRecognizeOneAttempt(audioLogMap: MutableMap<String, Any>): AudioResult? {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            Log.e(TAG, "Permission to record audio was denied.")
+            audioLogMap["timestamp"] = getCurrentTimestamp()
+            audioLogMap["error_message"] = "Permission denied"
+            return AudioResult(generateXmlString("Permission denied", "und"), JSONObject(audioLogMap))
+        }
 
-            try {
-                audioRecord.startRecording()
-                isRecording = true
-                Log.d(TAG, "Audio recording started.")
+        val audioRecord = AudioRecord(audioSource, sampleRate, channelConfig, audioFormat, bufferSize)
+        val noiseSuppressor: NoiseSuppressor? = if (NoiseSuppressor.isAvailable()) {
+            NoiseSuppressor.create(audioRecord.audioSessionId)
+        } else {
+            null
+        }
 
-                val scope = CoroutineScope(Dispatchers.Default)
-                while (isRecording) {
-                    val currentTime = System.currentTimeMillis()
-                    val ret = audioRecord.read(audioBuffer, 0, audioBuffer.size)
+        val audioBuffer = ShortArray(bufferSize)
+        val byteArrayStream = ByteArrayOutputStream()
+        var lastSpeechTime: Long? = null
+        var lastDetectionTime: Long? = null
+        val startTime = System.currentTimeMillis()
+        val jobs = mutableListOf<Job>()
+        val results = ConcurrentHashMap<Int, String>()
+        var chunkIndex = 0
 
-                    if (ret < 0) {
-                        Log.e(TAG, "audioRecord read error $ret")
-                        return@withContext AudioResult(generateXmlString("Error reading audio", "und"), audioLogBuilder.toString())
-                    }
+        try {
+            audioRecord.startRecording()
+            isRecording = true
 
-                    val maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
-                    if (maxAmplitude > speechDetectionThreshold) {
-                        // Speech detected
-                        lastSpeechTime = currentTime
-                        Log.d(TAG,"Speech detected above threshold time = $lastSpeechTime")
-                        byteArrayStream.write(shortsToBytes(audioBuffer))
-                    }
+            val scope = CoroutineScope(Dispatchers.Default)
+            while (isRecording) {
+                val currentTime = System.currentTimeMillis()
+                val ret = audioRecord.read(audioBuffer, 0, audioBuffer.size)
 
-                    if (lastSpeechTime == null && currentTime - lastStartTime > initialTimeoutMillis) {
-                        Log.d(TAG, "Timeout due to no speech detected.")
-                        isRecording = false
-                        audioLogBuilder.appendLine("timestamp:${getCurrentTimestamp()}")
-                        audioLogBuilder.appendLine("final_delay_time:TIMEOUT")
-                        audioLogBuilder.appendLine("********************")
-                        return@withContext AudioResult(generateXmlString("*TIMEOUT*", "und"), audioLogBuilder.toString())
-                    }
+                if (ret < 0) {
+                    Log.e(TAG, "audioRecord read error $ret")
+                    audioLogMap["timestamp"] = getCurrentTimestamp()
+                    audioLogMap["error_message"] = "Error reading audio"
+                    return AudioResult(generateXmlString("Error reading audio", "und"), JSONObject(audioLogMap))
+                }
 
-                    if (lastSpeechTime != null) {
-                        if (currentTime - lastSpeechTime > shortSilenceDurationMillis && byteArrayStream.size() > 0) {
-                            val audioBytes = byteArrayStream.toByteArray()
-                            byteArrayStream.reset()
-                            val index = chunkIndex
-                            chunkIndex++
-                            val job = scope.launch {
-                                val timestamp = getCurrentTimestamp()
-                                val chunkAudioDuration = audioBytes.size.toDouble() / (sampleRate * 2)
-                                val recognitionStart = System.currentTimeMillis()
-                                val (partialText, partialLang) = recognizeChunk(audioBytes)
-                                val recognitionEnd = System.currentTimeMillis()
-                                val sttTime = (recognitionEnd - recognitionStart) / 1000.0
+                val maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
+                if (maxAmplitude > speechDetectionThreshold) {
+                    lastDetectionTime = currentTime
+                    byteArrayStream.write(shortsToBytes(audioBuffer))
+                    Log.d(TAG, "Detected speech at $currentTime")
+                }
 
-                                audioLogBuilder.appendLine("timestamp:$timestamp")
-                                audioLogBuilder.appendLine("chunk_duration:$chunkAudioDuration")
-                                audioLogBuilder.appendLine("chunk_speech_to_text_time:$sttTime")
-                                Log.d(TAG,"Time taken to process chunk = ${recognitionEnd - recognitionStart} Partial result: $partialText, language: $partialLang")
+                if (lastSpeechTime == null && currentTime - startTime > initialTimeoutMillis) {
+                    Log.d(TAG, "Timeout due to no speech detected.")
+                    isRecording = false
+                    audioLogMap["timestamp"] = getCurrentTimestamp()
+                    audioLogMap["error_message"] = "TIMEOUT"
+                    return AudioResult(generateXmlString("*TIMEOUT*", "und"), JSONObject(audioLogMap))
+                }
 
-                                if (partialText.isNotEmpty()) {
-                                    synchronized(currentPartialResult) {
-                                        //currentPartialResult.append(partialText).append(" ")
-                                        results[index] = partialText
-                                        Log.w(TAG, "current partial result: $currentPartialResult")
-                                    }
-                                    //byteArrayStream.reset()
-                                } else if (currentPartialResult.isNotEmpty()) {
-                                    Log.w(
-                                        TAG,
-                                        "Partial result is empty, returning current partial result"
-                                    )
-                                    results[index] = ""
-                                    isRecording = false
-                                } else {
-                                    Log.w(TAG, "Partial result is empty. Stopping recording.")
-                                    results[index] = ""
-                                    isRecording = false
-                                    //return@withContext generateXmlString("", "und")
+                if (lastDetectionTime != null) {
+                    if (currentTime - lastDetectionTime > shortSilenceDurationMillis && byteArrayStream.size() > 0) {
+                        val audioBytes = byteArrayStream.toByteArray()
+                        byteArrayStream.reset()
+                        val index = chunkIndex
+                        chunkIndex++
+
+                        val job = scope.launch {
+                            val timestamp = getCurrentTimestamp()
+                            val chunkAudioDuration = audioBytes.size.toDouble() / (sampleRate * 2)
+                            val recognitionStart = System.currentTimeMillis()
+                            val (partialText, partialLang) = recognizeChunk(audioBytes)
+                            val recognitionEnd = System.currentTimeMillis()
+                            val sttTime = (recognitionEnd - recognitionStart) / 1000.0
+
+                            if (partialText.isNotEmpty()) {
+                                if (lastSpeechTime == null || recognitionStart > lastSpeechTime!!) {
+                                    Log.d(TAG, "New speech detected, setting lastSpeechTime to $recognitionStart.")
+                                    lastSpeechTime = recognitionEnd
                                 }
+                                results[index] = partialText
+                                // Only log chunk info if something was recognized
+                                audioLogMap["timestamp"] = timestamp
+                                audioLogMap["chunk_${chunkIndex}_duration"] = chunkAudioDuration
+                                audioLogMap["chunk_${chunkIndex}_speech_to_text_time"] = sttTime
+                                Log.d(TAG, "Chunk $chunkIndex recognized, duration=$chunkAudioDuration, sttTime=$sttTime")
                             }
-                            jobs.add(job)
                         }
+                        jobs.add(job)
+                    }
 
-                        // Long silence
-                        if (currentTime - lastSpeechTime > longSilenceDurationMillis) {
-                            Log.d(TAG, "Long silence detected. Finalizing result.")
-                            break
-                        }
+                    if (lastSpeechTime != null && currentTime - lastSpeechTime > longSilenceDurationMillis) {
+                        Log.d(TAG, "Long silence detected, breaking recording.")
+                        break
                     }
                 }
-
-                val beforeJoinTime = System.currentTimeMillis()
-                jobs.forEach { it.join() }
-                val afterJoinTime = System.currentTimeMillis()
-                val finalDelayTime = (afterJoinTime - beforeJoinTime) / 1000.0
-                audioLogBuilder.appendLine("final_delay_time:$finalDelayTime")
-
-                Log.d(TAG, "Waited for all coroutines (time taken =${afterJoinTime-beforeJoinTime})")
-
-                val finalText = results.toSortedMap().values.joinToString(" ")
-                Log.d(TAG, "Final recognized text: $finalText")
-
-                Log.w(TAG, "Time since lastStart = ${(System.currentTimeMillis() - lastStartTime)/1000.0} (s)")
-                if (finalText.isEmpty() && (System.currentTimeMillis() - lastStartTime > initialTimeoutMillis)) {
-                    Log.w(TAG, "Timeout due to no speech detected!.")
-                    audioLogBuilder.appendLine("timestamp:${getCurrentTimestamp()}")
-                    audioLogBuilder.appendLine("final_delay_time:TIMEOUT")
-                    audioLogBuilder.appendLine("********************")
-                    return@withContext AudioResult(generateXmlString("*TIMEOUT*", "und"), audioLogBuilder.toString())
-                }
-
-                // Determine majority language
-                val finalLanguage = determineMajorityLanguage()
-                audioLogBuilder.appendLine("********************")
-                return@withContext AudioResult(generateXmlString(finalText, finalLanguage), audioLogBuilder.toString())
-
-            } catch (e: IOException) {
-                Log.e(TAG, "Error recording audio: ${e.message}", e)
-                return@withContext AudioResult(generateXmlString("Error recording audio: ${e.message}", "und"), audioLogBuilder.toString())
-            } finally {
-                Log.d(TAG, "Stopping and releasing AudioRecord.")
-                isRecording = false
-                audioRecord.stop()
-                audioRecord.release()
-                noiseSuppressor?.release()
             }
+
+            val beforeJoinTime = System.currentTimeMillis()
+            jobs.forEach { it.join() }
+            val afterJoinTime = System.currentTimeMillis()
+
+            val finalText = results.toSortedMap().values.joinToString(" ").trim()
+
+            if (finalText.isNotEmpty()) {
+                val finalDelayTime = (afterJoinTime - beforeJoinTime) / 1000.0
+                audioLogMap["final_delay_time"] = finalDelayTime
+                Log.d(TAG, "Final delay time logged: $finalDelayTime")
+            }
+
+            if (finalText.isEmpty()) {
+                Log.i(TAG, "Nothing recognized in this attempt. Retrying...")
+                return null // <---- KEY CHANGE
+            }
+
+            val finalLanguage = determineMajorityLanguage()
+            return AudioResult(generateXmlString(finalText, finalLanguage), JSONObject(audioLogMap))
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Exception during recording: ${e.message}", e)
+            audioLogMap["timestamp"] = getCurrentTimestamp()
+            audioLogMap["error_message"] = "Error during recording"
+            return AudioResult(generateXmlString("Error during recording", "und"), JSONObject(audioLogMap))
+        } finally {
+            isRecording = false
+            audioRecord.stop()
+            audioRecord.release()
+            noiseSuppressor?.release()
         }
     }
 
