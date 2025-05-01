@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.SystemClock.sleep
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
@@ -81,6 +82,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var teleoperationManager: TeleoperationManager? = null
     private var sentenceGenerator: SentenceGenerator = SentenceGenerator()
     private var isListeningEnabled = true
+    private var isFragmentActive = false
     private var onGoingIntervention: DueIntervention? = null
     private var profileId: String = "00000000-0000-0000-0000-000000000000"
 
@@ -131,6 +133,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 // Re-enable teleoperation when back to MainActivity
                 teleoperationManager?.startUdpListener()
                 Log.d(TAG, "Teleoperation listener restarted after fragment closed")
+
+                // Start listening
+                Log.i(TAG, "Restarting listening...")
+                isListeningEnabled = true
+                isFragmentActive = false
             } else {
                 mainUI.visibility = View.GONE
                 fragmentContainer.visibility = View.VISIBLE
@@ -138,6 +145,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 // Stop teleoperation when entering fragment
                 teleoperationManager?.stopUdpListener()
                 Log.d(TAG, "Teleoperation listener stopped for fragment")
+
+                // Stop listening
+                Log.i(TAG, "Stopping listening...")
+                audioRecorder.stopRecording()
+                isListeningEnabled = false
+                isFragmentActive = true
             }
         }
     }
@@ -362,6 +375,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         lastActiveSpeakerTime = System.currentTimeMillis()
 
         while (isAlive) {
+            if (isFragmentActive) {
+                Log.w(TAG, "Fragment is active, skipping loop")
+                delay(1000)
+                continue
+            }
             // Check if listening is enabled
             if (!isListeningEnabled) {
                 userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone")
@@ -406,6 +424,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             }
 
             val audioResult = startListening()
+            if (isFragmentActive) {
+                Log.w(TAG, "Fragment is active, skipping loop after startListening")
+                continue
+            }
+
             val xmlString = audioResult.xmlResult
             val audioLog = audioResult.log
             serverCommunicationManager.sendLogToServer(
@@ -829,8 +852,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                 sayReplyJob?.join()
                                 pepperInterface.sayMessage(repeatContinuation, language)
                             }
-                        } else {
-                            Log.d(TAG, "Ongoing conversation = false && (intervention == action || interaction_sequence)")
                         }
                     }
                 }

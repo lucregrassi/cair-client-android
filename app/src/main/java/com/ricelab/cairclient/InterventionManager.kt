@@ -24,10 +24,26 @@ class InterventionManager private constructor(context: Context) {
         val type = object : TypeToken<List<ScheduledIntervention>>() {}.type
         val now = System.currentTimeMillis() / 1000.0
         val loaded = gson.fromJson<List<ScheduledIntervention>>(json, type)
-        val valid = loaded.filter {
-            it.typeEnum == InterventionType.PERIODIC || it.timestamp > now
+        val adjusted = loaded.mapNotNull { intervention ->
+            when (intervention.typeEnum) {
+                InterventionType.PERIODIC, InterventionType.FIXED -> {
+                    val period = intervention.period
+                    if (period > 0) {
+                        val newTimestamp = if (intervention.timestamp <= now) {
+                            Log.d(TAG, "adjusting intervention timestamp by  ${(((now - intervention.timestamp) / period).toInt() + 1)} periods")
+                            intervention.timestamp + (((now - intervention.timestamp) / period).toInt() + 1) * period
+                        } else {
+                            intervention.timestamp
+                        }
+                        intervention.copy(timestamp = newTimestamp, counter = 0)
+                    } else {
+                        null // discard if period is missing or invalid
+                    }
+                }
+                else -> if (intervention.timestamp > now) intervention else null
+            }
         }
-        setScheduledInterventions(valid)
+        setScheduledInterventions(adjusted)
     }
 
     fun saveToPrefs() {

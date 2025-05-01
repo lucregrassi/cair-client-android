@@ -8,5 +8,4 @@
 .externalNativeBuild
 .cxx
 local.properties
-apikeys.properties
 app/src/main/assets/certificates/*.crt

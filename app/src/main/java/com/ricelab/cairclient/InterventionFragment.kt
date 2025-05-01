@@ -62,7 +62,7 @@ class InterventionFragment : Fragment() {
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, callback)
 
         interventionManager = InterventionManager.getInstance(requireContext())
-        interventionManager.loadFromPrefs()
+        // interventionManager.loadFromPrefs()
         scheduledInterventions.clear()
         scheduledInterventions.addAll(interventionManager.getAllScheduledInterventions())
         setupUI()
@@ -137,6 +137,7 @@ class InterventionFragment : Fragment() {
             }
 
             interventionManager.setScheduledInterventions(scheduledInterventions)
+            Log.w(TAG, "setting interventions")
             interventionManager.saveToPrefs()
             Toast.makeText(
                 requireContext(),
@@ -397,6 +398,7 @@ class InterventionFragment : Fragment() {
                 text = "Elimina"
                 setOnClickListener {
                     scheduledInterventions.removeAt(index)
+                    Log.w(TAG, "setting interventions")
                     interventionManager.setScheduledInterventions(scheduledInterventions)
                     interventionManager.saveToPrefs()
                     updateScheduledInterventionsUI()
