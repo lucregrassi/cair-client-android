@@ -52,25 +52,56 @@ class TeleoperationManager(
     }
 
     private fun handleCommand(command: String) {
-        // In handleCommand method
+        Log.d(TAG, "Received command: $command")
+
         when (command) {
-            "MOVE_FORWARD" -> pepperInterface.moveRobot(10.0, 0.0, 0.0)
-            "MOVE_BACKWARD" -> pepperInterface.moveRobot(-10.0, 0.0, 3.14)
-            "ROTATE_LEFT" -> pepperInterface.moveRobot(0.0, 0.0, 1.57)
-            "ROTATE_RIGHT" -> pepperInterface.moveRobot(0.0, 0.0, -1.57)
-            "STOP" -> pepperInterface.stopRobot()
-            "VOLUME_UP" -> changeVolume(AudioManager.ADJUST_RAISE)
-            "VOLUME_DOWN" -> changeVolume(AudioManager.ADJUST_LOWER)
-            "HUG" -> CoroutineScope(Dispatchers.Main).launch { pepperInterface.performAnimation("hug") }
-            "GREET" -> CoroutineScope(Dispatchers.Main).launch { pepperInterface.performAnimation("hello") }
-            "HANDSHAKE" -> CoroutineScope(Dispatchers.Main).launch {
-                pepperInterface.performAnimation(
-                    "handshake"
-                )
+            "MOVE_FORWARD" -> {
+                Log.i(TAG, "Executing MOVE_FORWARD")
+                pepperInterface.moveRobot(10.0, 0.0, 0.0)
+            }
+            "MOVE_BACKWARD" -> {
+                Log.i(TAG, "Executing MOVE_BACKWARD")
+                pepperInterface.moveRobot(-10.0, 0.0, 3.14)
+            }
+            "ROTATE_LEFT" -> {
+                Log.i(TAG, "Executing ROTATE_LEFT")
+                pepperInterface.moveRobot(0.0, 0.0, 1.57)
+            }
+            "ROTATE_RIGHT" -> {
+                Log.i(TAG, "Executing ROTATE_RIGHT")
+                pepperInterface.moveRobot(0.0, 0.0, -1.57)
+            }
+            "STOP" -> {
+                Log.i(TAG, "Executing STOP")
+                pepperInterface.stopRobot()
+            }
+            "VOLUME_UP" -> {
+                Log.i(TAG, "Executing VOLUME_UP")
+                changeVolume(AudioManager.ADJUST_RAISE)
+            }
+            "VOLUME_DOWN" -> {
+                Log.i(TAG, "Executing VOLUME_DOWN")
+                changeVolume(AudioManager.ADJUST_LOWER)
+            }
+            "HUG" -> {
+                Log.i(TAG, "Executing HUG animation")
+                CoroutineScope(Dispatchers.Main).launch { pepperInterface.performAnimation("hug") }
+            }
+            "GREET" -> {
+                Log.i(TAG, "Executing GREET animation")
+                CoroutineScope(Dispatchers.Main).launch { pepperInterface.performAnimation("hello") }
+            }
+            "HANDSHAKE" -> {
+                Log.i(TAG, "Executing HANDSHAKE animation")
+                CoroutineScope(Dispatchers.Main).launch {
+                    pepperInterface.performAnimation("handshake")
+                }
             }
             else -> {
-                // For sayMessage, since it's a suspend function
-                CoroutineScope(Dispatchers.Main).launch { pepperInterface.sayMessage(command, "it-IT") }
+                Log.i(TAG, "Received unknown command, treating as sentence: $command")
+                CoroutineScope(Dispatchers.Main).launch {
+                    pepperInterface.sayMessage(command, "it-IT")
+                }
             }
         }
     }

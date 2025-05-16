@@ -115,12 +115,12 @@ class PepperInterface(
                 val mapping: Mapping = qiContext!!.mapping
 
                 val targetFrame: FreeFrame = mapping.makeFreeFrame()
-                targetFrame.update(robotFrame, transform, System.currentTimeMillis())
+                targetFrame.update(robotFrame, transform, 0L)
 
                 val goTo = GoToBuilder.with(qiContext)
                     .withFrame(targetFrame.frame())
                     .withFinalOrientationPolicy(OrientationPolicy.ALIGN_X)
-                    .withMaxSpeed(0.2F) //0.72km/h
+                    .withMaxSpeed(0.2F)
                     .withPathPlanningPolicy(PathPlanningPolicy.STRAIGHT_LINES_ONLY)
                     .build()
 

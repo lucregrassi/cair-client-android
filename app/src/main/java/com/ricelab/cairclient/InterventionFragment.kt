@@ -25,13 +25,19 @@ class InterventionFragment : Fragment() {
     private val prefsName = "patient_fields"
 
     private val topicTriggerMap = mapOf(
-        "Questionario" to "Parliamo del questionario di valultazione della mia esperienza presso la Stazione Marittima",
+        "Questionario SM" to "Parliamo del questionario di valultazione della mia esperienza presso la Stazione Marittima",
         "Famiglia" to "Parliamo della mia famiglia",
-        "Cibo" to "Parliamo di cibo"
+        "Cibo" to "Parliamo di cibo",
+        "Barriere coralline" to "Parliamo delle scogliere coralline",
+        "Protezione delle barriere coralline" to "Parliamo della protezione delle barriere coralline",
+        "Polipi corallini" to "Parliamo dei polipi corallini",
+        "Coralli molli" to "Parliamo dei coralli molli",
+        "Forme dei pesci" to "Parliamo delle forme dei pesci"
     )
 
     private val actionTriggerMap = mapOf(
-        "Richiama l'attenzione" to "Richiama l'attenzione"
+        "Richiama l'attenzione" to "Richiama l'attenzione",
+        "Invita a scansionare i codici QR" to "Scansiona i codici QR"
     )
 
     private val predefinedQuestionsMapping = mapOf(

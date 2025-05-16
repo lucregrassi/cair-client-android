@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.SystemClock.sleep
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
@@ -99,7 +98,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         personalizationManager = InterventionManager.getInstance(this)
         pepperInterface = PepperInterface(null)
 
-        setContentView(R.layout.activity_main_maritime_station)
+        setContentView(R.layout.activity_main)
         QiSDK.register(this, this)
         sentenceGenerator.loadFillerSentences(this)
         retrieveStoredValues() // autoDetectLanguage is now loaded here
@@ -327,7 +326,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private fun parseXmlForSentenceAndLanguage(xmlString: String): Pair<String, String> {
-        //Log.w(TAG, "xmlString = $xmlString")
         val factory = DocumentBuilderFactory.newInstance()
         val builder = factory.newDocumentBuilder()
         val inputStream = xmlString.byteInputStream()
@@ -794,7 +792,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                     // Wait for the first reply to finish
                                     Log.d("Debug", "Waiting sayReplyJob")
                                     sayReplyJob?.join()
-                                    recalibrateThresholdBlocking()
+                                    // recalibrateThresholdBlocking()
                                     // Update UI on Main
                                     withContext(Dispatchers.Main) {
                                         robotSpeechTextView.text = ("Pepper: $continuationSentence")

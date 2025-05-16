@@ -187,7 +187,6 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                 if (maxAmplitude > speechDetectionThreshold) {
                     lastDetectionTime = currentTime
                     byteArrayStream.write(shortsToBytes(audioBuffer))
-                    Log.d(TAG, "Detected speech at $currentTime")
                 }
 
                 if (lastSpeechTime == null && currentTime - startTime > initialTimeoutMillis) {
