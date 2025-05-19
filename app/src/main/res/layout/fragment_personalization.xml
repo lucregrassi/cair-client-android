@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <ScrollView
+        android:id="@+id/scrollViewNuances"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:id="@+id/dialogueNuancesLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:gravity="center_horizontal">
+
+            <!-- Titolo -->
+            <TextView
+                android:text="Personalizzazione delle Nuances"
+                android:textColor="@color/black"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="24dp"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+
+            <!-- DIVERSITÀ -->
+            <TextView
+                android:text="Diversità"
+                android:textStyle="bold"
+                android:textSize="20sp"
+                android:textColor="@color/black"
+                android:layout_marginBottom="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <EditText
+                android:id="@+id/inputNationality"
+                android:hint="Nazionalità"
+                android:text="non rilevante"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/inputMentalCondition"
+                android:hint="Condizione mentale"
+                android:text="buona salute mentale"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/inputPhysicalCondition"
+                android:hint="Condizione fisica"
+                android:text="nessun problema fisico"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp" />
+
+            <!-- TEMPO -->
+            <TextView
+                android:text="Tempo"
+                android:textStyle="bold"
+                android:textSize="20sp"
+                android:textColor="@color/black"
+                android:layout_marginBottom="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <EditText
+                android:id="@+id/inputTimeOfDay"
+                android:hint="Momento della giornata"
+                android:text="niente di specifico"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/inputSeason"
+                android:hint="Stagione"
+                android:text="niente di specifico"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/inputEvents"
+                android:hint="Eventi"
+                android:text="niente di specifico"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp" />
+
+            <!-- LUOGO -->
+            <TextView
+                android:text="Luogo"
+                android:textStyle="bold"
+                android:textSize="20sp"
+                android:textColor="@color/black"
+                android:layout_marginBottom="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <EditText
+                android:id="@+id/inputEnvironment"
+                android:hint="Ambiente"
+                android:text="nessun luogo specifico"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/inputCity"
+                android:hint="Città"
+                android:text="nessun luogo specifico"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp" />
+
+            <EditText
+                android:id="@+id/inputNation"
+                android:hint="Nazione"
+                android:text="nessun luogo specifico"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp" />
+
+            <!-- TONO -->
+            <TextView
+                android:text="Tono (valori separati da virgola)"
+                android:textStyle="bold"
+                android:textSize="20sp"
+                android:textColor="@color/black"
+                android:layout_marginBottom="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <EditText
+                android:id="@+id/inputTone"
+                android:hint="es. neutro, formale"
+                android:text="neutrale,neutrale,neutrale,neutrale,neutrale,neutrale,neutrale,neutrale,neutrale"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp" />
+
+            <!-- ATTI LOCUTIVI POSITIVI -->
+            <TextView
+                android:text="Atto linguistico positivo (separati da virgola)"
+                android:textStyle="bold"
+                android:textSize="20sp"
+                android:textColor="@color/black"
+                android:layout_marginBottom="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <EditText
+                android:id="@+id/inputPositiveSpeechAct"
+                android:hint="es. assertivo, commissivo"
+                android:text="assertivo,commissivo,espressivo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp" />
+
+            <!-- ATTI LOCUTIVI CONTESTUALI -->
+            <TextView
+                android:text="Atto linguistico contestuale (separati da virgola)"
+                android:textStyle="bold"
+                android:textSize="20sp"
+                android:textColor="@color/black"
+                android:layout_marginBottom="8dp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <EditText
+                android:id="@+id/inputContextualSpeechAct"
+                android:hint="es. assertivo, dichiarativo"
+                android:text="assertivo,commissivo,espressivo,dichiarativo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp" />
+
+            <!-- Pulsante Salva -->
+            <Button
+                android:id="@+id/btnSaveNuances"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Salva le modifiche"
+                android:backgroundTint="@color/christmas_green"
+                android:textColor="@color/white"
+                android:layout_marginBottom="16dp" />
+            <!-- Pulsante Reset -->
+            <Button
+                android:id="@+id/btnResetDefaults"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Ripristina valori predefiniti"
+                android:backgroundTint="@android:color/holo_red_dark"
+                android:textColor="@color/white"
+                android:layout_marginBottom="16dp" />
+        </LinearLayout>
+    </ScrollView>
+</layout>

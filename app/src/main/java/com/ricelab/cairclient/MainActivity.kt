@@ -10,6 +10,7 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -70,12 +71,14 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var useFillerSentence: Boolean = false
     private var autoDetectLanguage = false // default
     private var formalLanguage = false
+    private var voiceSpeed = 100
     private var isTouchListenerAdded = false
     private var experimentId: String = ""
     private var deviceId: String = ""
+    private var fontSize: Int = 24
 
     private lateinit var fileStorageManager: FileStorageManager
-    private lateinit var conversationState: ConversationState
+    internal lateinit var conversationState: ConversationState
     private lateinit var personalizationManager: InterventionManager
     private lateinit var pepperInterface: PepperInterface
     private var teleoperationManager: TeleoperationManager? = null
@@ -96,18 +99,21 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         personalizationManager = InterventionManager.getInstance(this)
-        pepperInterface = PepperInterface(null)
 
         setContentView(R.layout.activity_main)
         QiSDK.register(this, this)
         sentenceGenerator.loadFillerSentences(this)
-        retrieveStoredValues() // autoDetectLanguage is now loaded here
+        // retrieve values stored in settings
+        retrieveStoredValues()
+        pepperInterface = PepperInterface(null, voiceSpeed)
         Log.i(TAG, "******autoDetectLanguage = $autoDetectLanguage")
         loadScheduledInterventions()
         fileStorageManager = FileStorageManager(this, filesDir)
 
         userSpeechTextView = findViewById(R.id.userSpeechTextView)
+        userSpeechTextView.textSize = fontSize.toFloat()
         robotSpeechTextView = findViewById(R.id.robotSpeechTextView)
+        robotSpeechTextView.textSize = fontSize.toFloat()
         thresholdTextView = findViewById(R.id.thresholdTextView)
         recalibrateButton = findViewById(R.id.recalibrateButton)
 
@@ -133,9 +139,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 teleoperationManager?.startUdpListener()
                 Log.d(TAG, "Teleoperation listener restarted after fragment closed")
 
-                // Start listening
-                Log.i(TAG, "Restarting listening...")
-                isListeningEnabled = true
+                if (isListeningEnabled) {
+                    // Start listening
+                    Log.i(TAG, "Restarting listening after exiting fragment...")
+                }
+
                 isFragmentActive = false
             } else {
                 mainUI.visibility = View.GONE
@@ -146,9 +154,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 Log.d(TAG, "Teleoperation listener stopped for fragment")
 
                 // Stop listening
-                Log.i(TAG, "Stopping listening...")
+                Log.i(TAG, "Stopping listening to enter fragment...")
                 audioRecorder.stopRecording()
-                isListeningEnabled = false
+                //isListeningEnabled = false
                 isFragmentActive = true
             }
         }
@@ -177,6 +185,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 startActivity(intent)
                 true
             }
+            R.id.action_intervention -> {
+                showInterventionFragment()
+                true
+            }
             R.id.action_personalization -> {
                 showPersonalizationFragment()
                 true
@@ -185,7 +197,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private fun showPersonalizationFragment() {
+    private fun showInterventionFragment() {
         val mainUI = findViewById<View>(R.id.main_ui_container)
         val fragmentContainer = findViewById<View>(R.id.fragment_container)
 
@@ -198,6 +210,18 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             .commit()
     }
 
+    private fun showPersonalizationFragment() {
+        val mainUI = findViewById<View>(R.id.main_ui_container)
+        val fragmentContainer = findViewById<View>(R.id.fragment_container)
+
+        mainUI.visibility = View.GONE
+        fragmentContainer.visibility = View.VISIBLE
+
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragment_container, PersonalizationFragment())
+            .addToBackStack(null)
+            .commit()
+    }
     private fun retrieveStoredValues() {
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -222,6 +246,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
         autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
         formalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
+        voiceSpeed = sharedPreferences.getInt("voice_speed", 100)
+        fontSize = sharedPreferences.getInt("font_size", 24)
 
         Log.i(TAG, "personName=$personName, personGender=$personGender, personAge=$personAge")
         Log.i(TAG, "useFillerSentence=$useFillerSentence")
@@ -252,6 +278,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
         withContext(Dispatchers.Main) {
             thresholdTextView.text = "Soglia del rumore: $newThreshold"
+            Toast.makeText(
+                thresholdTextView.context,
+                "Soglia ricalibrata: $newThreshold",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
@@ -269,12 +300,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         isListeningEnabled = !isListeningEnabled
 
         if (!isListeningEnabled) {
-            // Stop listening
             Log.i(TAG, "Stopping listening...")
             audioRecorder.stopRecording()
+            runOnUiThread {
+                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone")
+            }
         } else {
-            // Start listening
             Log.i(TAG, "Restarting listening...")
+            runOnUiThread {
+                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening")
+            }
         }
     }
 
@@ -303,7 +338,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         teleoperationManager = TeleoperationManager(this, qiContext, pepperInterface)
         teleoperationManager?.startUdpListener()
 
+        // retrieve values stored in shared preferences and update UI
         retrieveStoredValues()
+        pepperInterface.setVoiceSpeed(voiceSpeed)
+        runOnUiThread {
+            userSpeechTextView.textSize = fontSize.toFloat()
+            robotSpeechTextView.textSize = fontSize.toFloat()
+        }
 
         serverCommunicationManager =
             ServerCommunicationManager(this, serverIp, serverPort, logPort, openAIApiKey)
@@ -379,11 +420,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 continue
             }
             // Check if listening is enabled
-            if (!isListeningEnabled) {
-                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone")
+            if (!isListeningEnabled && !isFragmentActive) {
+                // userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone")
 
                 // Check for due interventions even if mic is off
                 if (onGoingIntervention == null) {
+                    Log.d("InterventionManager", "Entering DueIntervention 1 (onGoingIntervention = null)")
                     onGoingIntervention = personalizationManager.getDueIntervention()
                     if (onGoingIntervention != null) {
                         Log.d(TAG, "New intervention arrived while microphone is disabled")
@@ -403,6 +445,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             Log.i(TAG, "OngoingConversation = ${conversationState.dialogueState.ongoingConversation}")
 
             if (onGoingIntervention == null) {
+                Log.d("InterventionManager", "Entering DueIntervention 1 (onGoingIntervention = null)")
                 onGoingIntervention = personalizationManager.getDueIntervention()
                 if (onGoingIntervention != null) {
                     Log.d(TAG, "Entering handle for DueIntervention (onGoingIntervention = null)")
@@ -424,6 +467,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             val audioResult = startListening()
             if (isFragmentActive) {
                 Log.w(TAG, "Fragment is active, skipping loop after startListening")
+                continue
+            }
+            if (!isListeningEnabled) {
+                Log.w(TAG, "Listening is disabled, skipping loop after startListening")
                 continue
             }
 
@@ -881,8 +928,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             if (onGoingIntervention!!.type == "topic" || onGoingIntervention!!.type == "action") {
                 Log.w(TAG, "Resetting onGoingIntervention to null")
                 onGoingIntervention = null
-            } else if (sentence.isNotBlank()) {
+            } else if (sentence.isNotBlank() && sentence != "*START*") {
                 Log.w(TAG, "Getting the next dueIntervention")
+                Log.d("InterventionManager", "Entering DueIntervention 3 (sentenceNotBlank)")
                 onGoingIntervention = personalizationManager.getDueIntervention()
                 if (onGoingIntervention == null) {
                     Log.w(TAG, "No dueIntervention found")

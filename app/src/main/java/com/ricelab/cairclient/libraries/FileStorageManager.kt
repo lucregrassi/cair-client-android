@@ -34,11 +34,6 @@ class FileStorageManager(
             isDialogueState(data) -> dialogueStateFile?.writeText(jsonData)
             isSpeakersInfo(data) -> speakersInfoFile?.writeText(jsonData)
             isDialogueStatistics(data) -> dialogueStatisticsFile?.writeText(jsonData)
-            isDialogueNuances(data) -> {
-                // Nuances are stored in internal storage since assets are read-only
-                val nuanceVectorsFile = File(filesDir, "dialogue_data/nuance_vectors.json")
-                nuanceVectorsFile.writeText(jsonData)
-            }
         }
     }
 
@@ -61,12 +56,6 @@ class FileStorageManager(
             isDialogueStatistics(classOfT) -> {
                 dialogueStatisticsFile?.let {
                     val jsonData = it.readText()
-                    gson.fromJson(jsonData, classOfT)
-                }
-            }
-            isDialogueNuances(classOfT) -> {
-                mycontext!!.assets.open("dialogue_data/nuance_vectors.json").bufferedReader().use { reader ->
-                    val jsonData = reader.readText()
                     gson.fromJson(jsonData, classOfT)
                 }
             }
@@ -96,10 +85,6 @@ inline fun <reified T> isDialogueState(data: T): Boolean {
     return data is DialogueState
 }
 
-inline fun <reified T> isDialogueNuances(data: T): Boolean {
-    return data is DialogueNuances
-}
-
 // Type checking helper function for DialogueState
 fun <T> isDialogueState(classOfT: Class<T>): Boolean {
     return classOfT == DialogueState::class.java
@@ -112,8 +97,4 @@ fun <T> isSpeakersInfo(classOfT: Class<T>): Boolean {
 
 fun <T> isDialogueStatistics(classOfT: Class<T>): Boolean {
     return classOfT == DialogueStatistics::class.java
-}
-
-fun <T> isDialogueNuances(classOfT: Class<T>): Boolean {
-    return classOfT == DialogueNuances::class.java
 }

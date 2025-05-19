@@ -194,11 +194,6 @@ data class DialogueState(
         this.addressedCommunity =
             this.addressedCommunity?.let { json.optString("addressed_community", it) }
 
-        // Update dialogueNuances (assuming it has its own updateFromJson method)
-        json.optJSONObject("dialogue_nuances")?.let {
-            this.dialogueNuances.updateFromJson(it)
-        }
-
         // Update ongoingConversation
         this.ongoingConversation = if (json.has("ongoing_conversation")) json.optBoolean("ongoing_conversation") else this.ongoingConversation
 

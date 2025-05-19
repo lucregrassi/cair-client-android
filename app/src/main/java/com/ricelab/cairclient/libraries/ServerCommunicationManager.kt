@@ -3,7 +3,6 @@ package com.ricelab.cairclient.libraries
 import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
-import com.ricelab.cairclient.DueIntervention
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient

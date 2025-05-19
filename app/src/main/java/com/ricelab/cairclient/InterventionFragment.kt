@@ -10,7 +10,12 @@ import android.widget.*
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
 import com.ricelab.cairclient.databinding.FragmentInterventionBinding
+import com.ricelab.cairclient.libraries.InterventionManager
+import com.ricelab.cairclient.libraries.InterventionType
+import com.ricelab.cairclient.libraries.ScheduledIntervention
+import com.ricelab.cairclient.libraries.Topic
 import java.util.*
+import kotlin.math.roundToInt
 
 private const val TAG = "InterventionFragment"
 
@@ -41,10 +46,10 @@ class InterventionFragment : Fragment() {
     )
 
     private val predefinedQuestionsMapping = mapOf(
-        "salutare alla persona e chiedere come sta" to "greeting the person and ask how they are",
+        "salutare alla persona e chiedere come sta" to "greeting the person and ask them how they are feeling",
         "chiedere alla persona se le si può dare del tu" to "asking the person if you can address them informally",
         "chiedere alla persona dove si trova" to "asking the person where they are",
-        "chiedere alla persona la data e l'ora di oggi" to "asking the person today's date and time",
+        "chiedere alla persona la data e l'ora di oggi" to "asking the person which are today's date and time",
         "chiedere alla persona dove abita" to "asking the person where they live",
         "chiedere alla persona con chi abita" to "asking the person who they live with"
     )
@@ -143,7 +148,6 @@ class InterventionFragment : Fragment() {
             }
 
             interventionManager.setScheduledInterventions(scheduledInterventions)
-            Log.w(TAG, "setting interventions")
             interventionManager.saveToPrefs()
             Toast.makeText(
                 requireContext(),
@@ -158,6 +162,7 @@ class InterventionFragment : Fragment() {
             interventionManager.saveToPrefs()
             updateScheduledInterventionsUI()
             Log.d(TAG, "Tutti gli interventi programmati sono stati eliminati")
+            Toast.makeText(requireContext(), "Tutti gli interventi sono stati eliminati", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -368,6 +373,7 @@ class InterventionFragment : Fragment() {
         scheduledInterventions.add(intervention)
         updateScheduledInterventionsUI()
         Log.d(TAG, "Added new intervention: $intervention")
+        Toast.makeText(requireContext(), "Intervento aggiunto correttamente", Toast.LENGTH_SHORT).show()
     }
 
     private fun updateScheduledInterventionsUI() {
@@ -390,8 +396,8 @@ class InterventionFragment : Fragment() {
             Intervento ${index + 1}:
             • Tipo: ${intervention.typeEnum?.name?.lowercase() ?: "unknown"}
             • Timestamp: $formattedTime
-            • Periodo (s): ${intervention.period}
-            • Offset (s): ${intervention.offset}
+            • Periodo (min): ${(intervention.period.toDouble() / 60).roundToInt()}
+            • Offset (min): ${(intervention.offset.toDouble() / 60).roundToInt()}
             • Topic: $topics
             • Azioni: $actions
             • Sequenza interazione: $sequence

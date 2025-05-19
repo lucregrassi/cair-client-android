@@ -16,13 +16,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.aldebaran.qi.sdk.builder.HolderBuilder
 import com.aldebaran.qi.sdk.`object`.autonomousabilities.DegreeOfFreedom
+import com.aldebaran.qi.sdk.`object`.conversation.Phrase
 import com.aldebaran.qi.sdk.`object`.holder.Holder
 
 private const val TAG = "PepperInterface"
 private var holder: Holder? = null
 
 class PepperInterface(
-    private var qiContext: QiContext? = null
+    private var qiContext: QiContext? = null,
+    private var voiceSpeed: Int = 100
 ) {
     private var goToFuture: Future<Void>? = null
 
@@ -40,8 +42,11 @@ class PepperInterface(
                         Locale(Language.ITALIAN, Region.ITALY)
                     }
 
+                    // Create a phrase.
+                    val phrase = Phrase("\\rspd=$voiceSpeed\\$text")
+
                     val say = SayBuilder.with(qiContext)
-                        .withText(text)
+                        .withPhrase(phrase)
                         .withLocale(locale)
                         .build()
                     say.run()
@@ -161,5 +166,9 @@ class PepperInterface(
 
     fun releaseBaseMovement() {
         holder?.async()?.release()
+    }
+
+    fun setVoiceSpeed(speed: Int) {
+        voiceSpeed = speed
     }
 }

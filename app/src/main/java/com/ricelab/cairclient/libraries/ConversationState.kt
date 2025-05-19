@@ -30,10 +30,8 @@ class ConversationState(
 
         // Step 2: If it's the first time, initialize dialogueNuances
         if (dialogueState.dialogueNuances.flags.isEmpty() && dialogueState.dialogueNuances.values.isEmpty()) {
-            Log.i(TAG, "dialogueState.dialogueNuances is empty, loading from file")
-            val dialogueNuances = fileStorageManager.readFromFile(DialogueNuances::class.java)!!
-            dialogueState.dialogueNuances = dialogueNuances
-            Log.i(TAG, "dialogueState.dialogueNuances initialized")
+            Log.i(TAG, "dialogueNuances is empty, loading default values")
+            dialogueState.dialogueNuances = DialogueNuances()  // <- uses constructor defaults
         }
 
         // Step 3: Store the welcome or welcome back message in the conversation history

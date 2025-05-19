@@ -1,13 +1,17 @@
-package com.ricelab.cairclient
+package com.ricelab.cairclient.libraries
 
 import android.content.Context
 import android.media.AudioManager
 import android.util.Log
 import com.aldebaran.qi.sdk.QiContext
-import com.ricelab.cairclient.libraries.PepperInterface
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.SocketException
 
 class TeleoperationManager(
     private val context: Context,
@@ -40,7 +44,7 @@ class TeleoperationManager(
                     handleCommand(command)
                 }
             } catch (e: Exception) {
-                if (e is java.net.SocketException && e.message == "Socket closed") {
+                if (e is SocketException && e.message == "Socket closed") {
                     Log.i(TAG, "UDP listener closed cleanly.")
                 } else {
                     Log.e(TAG, "UDP listener error: ${e.message}", e)

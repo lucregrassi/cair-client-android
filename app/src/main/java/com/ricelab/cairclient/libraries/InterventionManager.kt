@@ -1,4 +1,4 @@
-package com.ricelab.cairclient
+package com.ricelab.cairclient.libraries
 
 import android.content.Context
 import android.util.Log
@@ -77,16 +77,17 @@ class InterventionManager private constructor(context: Context) {
             !next.topics.isNullOrEmpty() -> {
                 val topic = next.topics!![next.counter % next.topics!!.size]
                 Log.d(TAG, "Returning topic sentence = ${topic.sentence} counter = ${next.counter}")
+                Log.d(TAG, "Returning dueIntervention topic with counter = ${next.counter}")
                 DueIntervention("topic", topic.exclusive, topic.sentence, next.timestamp, next.contextualData, next.counter)
             }
             !next.actions.isNullOrEmpty() -> {
                 val action = next.actions!![next.counter % next.actions!!.size]
-                Log.d(TAG, "Returning action action = $action counter = ${next.counter}")
+                Log.d(TAG, "Returning dueIntervention action = $action with counter = ${next.counter}")
                 DueIntervention("action", false, action, next.timestamp, next.contextualData, next.counter)
             }
             !next.interactionSequence.isNullOrEmpty() -> {
                 val sentence = next.interactionSequence!![next.counter % next.interactionSequence!!.size]
-                Log.d(TAG, "Returning interaction_sequence sentence = $sentence counter = ${next.counter} size = ${next.interactionSequence!!.size}")
+                Log.d(TAG, "Returning dueIntervention interaction_sequence sentence = $sentence counter = ${next.counter} size = ${next.interactionSequence!!.size}")
                 DueIntervention("interaction_sequence", false, sentence, next.timestamp, next.contextualData, next.counter)
             }
             else -> {
@@ -96,7 +97,7 @@ class InterventionManager private constructor(context: Context) {
         } ?: return null
 
         next.counter++
-        Log.d(TAG, "dueIntervention counter = ${next.counter}")
+        Log.d(TAG, "dueIntervention counter after increasing = ${next.counter}")
 
         val isEndOfSequence = !next.interactionSequence.isNullOrEmpty() && next.counter == next.interactionSequence!!.size
         Log.d(TAG, "isEndOfSequence = $isEndOfSequence")

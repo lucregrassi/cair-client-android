@@ -12,6 +12,7 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.ricelab.cairclient.libraries.FileStorageManager
+import com.ricelab.cairclient.libraries.InterventionManager
 import java.io.IOException
 
 private const val TAG = "SettingsActivity"
@@ -23,13 +24,17 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var experimentIdEditText: EditText
     private lateinit var deviceIdEditText: EditText
     private lateinit var personNameEditText: EditText
-    private lateinit var personGenderEditText: EditText
+    private lateinit var personGenderSpinner: Spinner
     private lateinit var personAgeEditText: EditText
     private lateinit var openAIApiKeyEditText: EditText
     private lateinit var azureSpeechKeyEditText: EditText
     private lateinit var fillerSentenceSwitch: SwitchCompat
     private lateinit var autoDetectLanguageSwitch: SwitchCompat
     private lateinit var formalLanguageSwitch: SwitchCompat
+    private lateinit var voiceSpeedSeekBar: SeekBar
+    private lateinit var voiceSpeedLabel: TextView
+    private lateinit var fontSizeSeekBar: SeekBar
+    private lateinit var fontSizeLabel: TextView
     private lateinit var proceedButton: Button
 
     private val serverIpList = mutableListOf<String>()
@@ -47,13 +52,60 @@ class SettingsActivity : AppCompatActivity() {
         experimentIdEditText = findViewById(R.id.experimentIdEditText)
         deviceIdEditText = findViewById(R.id.deviceIdEditText)
         personNameEditText = findViewById(R.id.personNameEditText)
-        personGenderEditText = findViewById(R.id.personGenderEditText)
+        personGenderSpinner = findViewById(R.id.personGenderSpinner)
+        val genderOptions = listOf("Femmina", "Maschio", "Non binario")
+        val genderAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, genderOptions)
+        genderAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        personGenderSpinner.adapter = genderAdapter
         personAgeEditText = findViewById(R.id.personAgeEditText)
         openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
         azureSpeechKeyEditText = findViewById(R.id.azureSpeechKeyEditText)
         fillerSentenceSwitch = findViewById(R.id.fillerSentenceSwitch)
         autoDetectLanguageSwitch = findViewById(R.id.autoDetectLanguageSwitch)
         formalLanguageSwitch = findViewById(R.id.formalLanguageSwitch)
+        voiceSpeedSeekBar = findViewById(R.id.voiceSpeedSeekBar)
+        voiceSpeedLabel = findViewById(R.id.voiceSpeedLabel)
+
+        fontSizeSeekBar = findViewById(R.id.fontSizeSeekBar)
+        fontSizeLabel = findViewById(R.id.fontSizeLabel)
+
+        // Set saved value (default 100 if none)
+        val masterKeyAlias = MasterKey.Builder(this)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        val sharedPreferences = EncryptedSharedPreferences.create(
+            this,
+            "secure_prefs",
+            masterKeyAlias,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+
+        val savedVoiceSpeed = sharedPreferences.getInt("voice_speed", 100)
+        voiceSpeedSeekBar.progress = savedVoiceSpeed
+        voiceSpeedLabel.text = "Velocità voce: $savedVoiceSpeed%"
+
+        voiceSpeedSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                voiceSpeedLabel.text = "Velocità voce: ${progress}%"
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        val savedFontSize = sharedPreferences.getInt("font_size", 24)
+        fontSizeSeekBar.progress = savedFontSize
+        fontSizeLabel.text = "Dimensione testo: ${savedFontSize}sp"
+
+        fontSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                fontSizeLabel.text = "Dimensione testo: ${progress}sp"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
         proceedButton = findViewById(R.id.proceedButton)
 
         val fromMenu = intent.getBooleanExtra("fromMenu", false)
@@ -74,7 +126,13 @@ class SettingsActivity : AppCompatActivity() {
             val experimentId = experimentIdEditText.text.toString().trim()
             val deviceId = deviceIdEditText.text.toString().trim()
             val personName = personNameEditText.text.toString().trim()
-            val personGender = personGenderEditText.text.toString().trim()
+            val selectedGenderLabel = personGenderSpinner.selectedItem.toString()
+            val personGender = when (selectedGenderLabel) {
+                "Femmina" -> "f"
+                "Maschio" -> "m"
+                "Non binario" -> "nb"
+                else -> ""
+            }
             val personAge = personAgeEditText.text.toString().trim()
             val openAIApiKey = openAIApiKeyEditText.text.toString().trim()
             val azureSpeechKey = azureSpeechKeyEditText.text.toString().trim()
@@ -90,6 +148,8 @@ class SettingsActivity : AppCompatActivity() {
             Log.d(TAG, "Azure Speech Key: $azureSpeechKey")
             Log.d(TAG, "Use Filler Sentence: $useFillerSentence")
             Log.d(TAG, "Auto Detect Language: $autoDetectLanguage")
+            Log.d(TAG, "Use Formal Language: $useFormalLanguage")
+            Log.d(TAG, "Voice Speed: ${voiceSpeedSeekBar.progress}")
 
             if (openAIApiKey.isEmpty() || serverPortText.isEmpty()) {
                 Toast.makeText(this, "Please enter your OpenAI API Key and Server Port.", Toast.LENGTH_SHORT).show()
@@ -113,7 +173,10 @@ class SettingsActivity : AppCompatActivity() {
                         azureSpeechKey,
                         useFillerSentence,
                         autoDetectLanguage,
-                        useFormalLanguage)
+                        useFormalLanguage,
+                        voiceSpeedSeekBar.progress,
+                        fontSizeSeekBar.progress
+                        )
 
                     if (!fromMenu) {
                         Log.i(TAG, "FromMenu False, spawning new MainActivity")
@@ -192,13 +255,25 @@ class SettingsActivity : AppCompatActivity() {
             savedExperimentId?.let { experimentIdEditText.setText(it) }
             savedDeviceId?.let { deviceIdEditText.setText(it) }
             savedPersonName?.let { personNameEditText.setText(it) }
-            savedPersonGender?.let { personGenderEditText.setText(it) }
+            savedPersonGender?.let {
+                val index = when (it) {
+                    "f" -> 0
+                    "m" -> 1
+                    "nb" -> 2
+                    else -> -1
+                }
+                if (index != -1) personGenderSpinner.setSelection(index)
+            }
             savedPersonAge?.let { personAgeEditText.setText(it) }
             savedOpenAIApiKey?.let { openAIApiKeyEditText.setText(it) }
             savedAzureSpeechKey?.let { azureSpeechKeyEditText.setText(it) }
             fillerSentenceSwitch.isChecked = useFillerSentence
             autoDetectLanguageSwitch.isChecked = autoDetectLanguage
             formalLanguageSwitch.isChecked = useFormalLanguage
+
+            val savedVoiceSpeed = sharedPreferences.getInt("voice_speed", 100)
+            voiceSpeedSeekBar.progress = savedVoiceSpeed
+            voiceSpeedLabel.text = "Velocità voce: ${savedVoiceSpeed}%"
         }
     }
 
@@ -245,7 +320,9 @@ class SettingsActivity : AppCompatActivity() {
         azureSpeechKey: String,
         useFillerSentence: Boolean,
         autoDetectLanguage: Boolean,
-        useFormalLanguage: Boolean
+        useFormalLanguage: Boolean,
+        voiceSpeed: Int,
+        fontSize: Int
     ) {
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -272,6 +349,8 @@ class SettingsActivity : AppCompatActivity() {
             putBoolean("use_filler_sentence", useFillerSentence)
             putBoolean("auto_detect_language", autoDetectLanguage)
             putBoolean("use_formal_language", useFormalLanguage)
+            putInt("voice_speed", voiceSpeed)
+            putInt("font_size", fontSize)
             apply()
         }
     }
@@ -307,6 +386,9 @@ class SettingsActivity : AppCompatActivity() {
             clear()
             apply()
         }
+
+        // Also clear in-memory interventions
+        InterventionManager.getInstance(this).clearAll()
 
         Toast.makeText(this, "Tutti i dati sono stati cancellati.", Toast.LENGTH_LONG).show()
     }

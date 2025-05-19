@@ -1,9 +1,10 @@
-package com.ricelab.cairclient
+package com.ricelab.cairclient.libraries
 
 import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.NoiseSuppressor
@@ -14,6 +15,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.microsoft.cognitiveservices.speech.*
 import com.microsoft.cognitiveservices.speech.audio.*
+import com.ricelab.cairclient.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.*
@@ -22,6 +24,9 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
 private const val TAG = "AudioRecorder"
@@ -37,8 +42,8 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     // Audio recording configuration
     private val sampleRate = 16000
     private val audioSource = MediaRecorder.AudioSource.MIC
-    private val channelConfig = android.media.AudioFormat.CHANNEL_IN_MONO
-    private val audioFormat = android.media.AudioFormat.ENCODING_PCM_16BIT
+    private val channelConfig = AudioFormat.CHANNEL_IN_MONO
+    private val audioFormat = AudioFormat.ENCODING_PCM_16BIT
     private val bufferSize = 2*AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
 
     // Detection thresholds
@@ -122,8 +127,8 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     }
 
     private fun getCurrentTimestamp(): String {
-        return java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
-            .format(java.util.Date())
+        return SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+            .format(Date())
     }
 
     suspend fun listenAndSplit(): AudioResult {

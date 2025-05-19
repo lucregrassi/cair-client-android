@@ -125,14 +125,12 @@
             android:textSize="16sp"
             android:textColor="@color/black" />
 
-        <EditText
-            android:id="@+id/personGenderEditText"
+        <Spinner
+            android:id="@+id/personGenderSpinner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            android:hint="Inserisci il genere (m/f/nb)"
-            android:minHeight="48dp"
-            tools:ignore="VisualLintTextFieldSize" />
+            android:minHeight="48dp" />
 
         <!-- Person Age -->
         <TextView
@@ -216,6 +214,42 @@
             android:checked="true"
             android:layout_marginTop="12dp"/>
 
+        <!-- Voice Speed -->
+        <TextView
+            android:id="@+id/voiceSpeedLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Velocità voce: 100%"
+            android:textSize="16sp"
+            android:textColor="@color/black"
+            android:layout_marginTop="16dp" />
+
+        <SeekBar
+            android:id="@+id/voiceSpeedSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="150"
+            android:progress="100"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <TextView
+            android:id="@+id/fontSizeLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Dimensione testo: 24sp"
+            android:textSize="16sp"
+            android:textColor="@color/black"
+            android:layout_marginTop="16dp" />
+
+        <SeekBar
+            android:id="@+id/fontSizeSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="50"
+            android:progress="24"
+            android:min="20"
+            android:layout_marginBottom="16dp" />
         <!-- Proceed Button -->
         <Button
             android:id="@+id/proceedButton"
