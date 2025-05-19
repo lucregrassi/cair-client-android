@@ -6,15 +6,15 @@
 
 ## 🚀 Funzionalità principali
 
-- 🎤 Riconoscimento vocale con microfono esterno o integrato
-- 🗣️ Conversazioni personalizzate tramite LLM e API Azure/OpenAI
+- 🎤 Riconoscimento vocale con microfono integrato
+- 🗣️ Conversazioni personalizzate grazie alla connessione con il server CAIR
 - 🕑 Interventi programmati (immediati, a orario fisso, periodici)
 - 🧠 Personalizzazione degli argomenti e delle domande da porre
 - 🔐 Salvataggio sicuro delle impostazioni con `EncryptedSharedPreferences`
-- 🎛️ Interfaccia grafica per configurazioni rapide
+- 🎛️ Interfaccia per configurare l'interazione
 - 📱 Adattamento dinamico di **dimensione del testo** e **velocità della voce**
-- ⚙️ Teleoperazione del robot via UDP
-- 🧪 Logging dettagliato per test su campo
+- ⚙️ Teleoperazione del robot via UDP tramite interfaccia web
+- 🧪 Logging dettagliato per debug
 
 ---
 
@@ -24,9 +24,9 @@
 - **`SettingsActivity`**: consente la configurazione di parametri come IP, API keys, identità e preferenze utente.
 - **`InterventionFragment`**: per la programmazione di interventi (interviste, topic, azioni).
 - **`PersonalizationFragment`**: modifica dinamica dei parametri di dialogo.
-- **`PepperInterface`**: incapsula le API QiSDK per controllare il robot.
+- **`PepperInterface`**: interfaccia per le API QiSDK che controllano il robot.
 - **`AudioRecorder`**: gestisce efficientemente l'acquisizione dell'input dell'utente dal microfono del tablet.
-- **`ServerCommunicationManager`**: connessione al server CAIR per ottenere le risposte.
+- **`ServerCommunicationManager`**: gestisce la connessione al server CAIR.
 
 ---
 
@@ -42,7 +42,7 @@
 
 ## 🛠️ Configurazione
 
-1. Clona il repository:
+1. Scarica il repository come archivio ZIP oppure clonalo digitando il seguente comando in un terminale aperto nella cartella dove si deridera scaricare il software:
    ```bash
    git clone https://github.com/lucregrassi/cair-client-android.git
    ```
@@ -54,7 +54,7 @@
     ```bash
     adb connect <ip-del-robot>
     ```
-6.	Attendi che su Android Studio in alto compaia il nome ARTNCORE LPT_200AR e premi il simbolo play per installare l'app sul tablet di Pepper.
+6.	Attendi che su Android Studio in alto compaia il nome "ARTNCORE LPT_200AR" come dispositivo connesso e premi il simbolo verde play per installare e avviare l'app sul tablet di Pepper.
 
 ---
 
@@ -62,20 +62,19 @@
 1.	Avvia l’app sul tablet di Pepper.
 2.	Imposta i parametri iniziali nella sezione Impostazioni.
 3.	Premi il tasto "Avanti" per iniziare il dialogo.
-4. Accedi alla sezione **"Interventi"** tramite il **Menu** (i tre puntini in alto a destra) per:
-   - ✅ Aggiungere **domande predefinite**
-   - 🧠 Programmare **argomenti di conversazione**
-   - 🤖 Impostare **azioni robotiche**
-
-5. Accedi alla sezione **"Personalizzazione"** per modificare le *dialogue nuances*, ovvero i valori che vengono usati per **personalizzare il dialogo** in tempo reale.
-
-6. I dati vengono **salvati in modo sicuro** e **ricaricati automaticamente al riavvio** dell’app.
+4. Accedi alla sezione "Interventi" tramite il Menu (i tre puntini in alto a destra) per:
+   - ✅ Aggiungere domande predefinite
+   - 🧠 Programmare argomenti di conversazione
+   - 🤖 Impostare azioni
+5. Accedi alla sezione "Personalizzazione" per modificare le *dialogue nuances*, ovvero i valori che vengono usati per personalizzare il dialogo in tempo reale.
+6. I dati vengono salvati in modo sicuro e ricaricati automaticamente al riavvio dell’app.
 
 ---
 
 ## 🔐 Salvataggio sicuro
 -	Le preferenze utente vengono salvate in EncryptedSharedPreferences (AES-256).
 -	I file relativi al dialogo sono salvati su memoria interna (filesDir) tramite FileStorageManager.
+-	I dati scambiati con il server sono inviati tramite connessioni crittografati e non vengono mai salvati permanentemente sul server.
 
 ⸻
 
