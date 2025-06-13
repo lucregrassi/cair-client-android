@@ -41,6 +41,8 @@
                 android:text="non rilevante"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="8dp" />
 
             <EditText
@@ -49,6 +51,8 @@
                 android:text="buona salute mentale"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="8dp" />
 
             <EditText
@@ -57,6 +61,8 @@
                 android:text="nessun problema fisico"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="16dp" />
 
             <!-- TEMPO -->
@@ -75,6 +81,8 @@
                 android:text="niente di specifico"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="8dp" />
 
             <EditText
@@ -83,6 +91,8 @@
                 android:text="niente di specifico"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="8dp" />
 
             <EditText
@@ -91,6 +101,8 @@
                 android:text="niente di specifico"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="16dp" />
 
             <!-- LUOGO -->
@@ -109,6 +121,8 @@
                 android:text="nessun luogo specifico"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="8dp" />
 
             <EditText
@@ -117,6 +131,8 @@
                 android:text="nessun luogo specifico"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="8dp" />
 
             <EditText
@@ -125,6 +141,8 @@
                 android:text="nessun luogo specifico"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="16dp" />
 
             <!-- TONO -->
@@ -143,6 +161,8 @@
                 android:text="neutrale,neutrale,neutrale,neutrale,neutrale,neutrale,neutrale,neutrale,neutrale"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="16dp" />
 
             <!-- ATTI LOCUTIVI POSITIVI -->
@@ -161,6 +181,8 @@
                 android:text="assertivo,commissivo,espressivo"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="16dp" />
 
             <!-- ATTI LOCUTIVI CONTESTUALI -->
@@ -179,6 +201,8 @@
                 android:text="assertivo,commissivo,espressivo,dichiarativo"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="24dp" />
 
             <!-- Pulsante Salva -->
@@ -187,17 +211,24 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Salva le modifiche"
+                android:textSize="16sp"
                 android:backgroundTint="@color/christmas_green"
                 android:textColor="@color/white"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="16dp" />
+
             <!-- Pulsante Reset -->
             <Button
                 android:id="@+id/btnResetDefaults"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Ripristina valori predefiniti"
+                android:textSize="16sp"
                 android:backgroundTint="@android:color/holo_red_dark"
                 android:textColor="@color/white"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="16dp" />
         </LinearLayout>
     </ScrollView>

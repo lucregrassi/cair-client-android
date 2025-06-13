@@ -25,51 +25,60 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="24dp" />
 
-        <!-- Server IP Address Selection -->
+        <!-- Server IP -->
         <TextView
             android:id="@+id/serverIpLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="IP del server"
             android:textSize="16sp"
-            android:textColor="@color/black" />
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <Spinner
             android:id="@+id/serverIpSpinner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:minHeight="48dp" />
+            android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp" />
 
-        <!-- Server Port Number Input -->
+        <!-- Server Port -->
         <TextView
             android:id="@+id/serverPortLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Porta per connettersi al server"
             android:textSize="16sp"
-            android:textColor="@color/black" />
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <EditText
             android:id="@+id/serverPortEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:autofillHints="12345"
             android:hint="Inserisci la porta"
             android:inputType="number"
             android:minHeight="48dp"
             android:text="12345"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp"
             tools:ignore="VisualLintTextFieldSize" />
 
-        <!-- Device name -->
+        <!-- Device ID -->
         <TextView
             android:id="@+id/deviceIdLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Nome del robot"
             android:textSize="16sp"
-            android:textColor="@color/black" />
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <EditText
             android:id="@+id/deviceIdEditText"
@@ -78,6 +87,9 @@
             android:hint="Inserisci il nome del robot"
             android:inputType="text"
             android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp"
             tools:ignore="VisualLintTextFieldSize" />
 
         <!-- Experiment ID -->
@@ -87,7 +99,9 @@
             android:layout_height="wrap_content"
             android:text="ID esperimento"
             android:textSize="16sp"
-            android:textColor="@color/black" />
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <EditText
             android:id="@+id/experimentIdEditText"
@@ -96,6 +110,9 @@
             android:hint="Inserisci l'ID dell'esperimento"
             android:inputType="text"
             android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp"
             tools:ignore="VisualLintTextFieldSize" />
 
         <!-- Person Name -->
@@ -105,114 +122,140 @@
             android:layout_height="wrap_content"
             android:text="Nome della persona"
             android:textSize="16sp"
-            android:textColor="@color/black" />
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <EditText
             android:id="@+id/personNameEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
             android:hint="Inserisci il nome"
             android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp"
             tools:ignore="VisualLintTextFieldSize" />
 
-        <!-- Person Gender -->
+        <!-- Gender -->
         <TextView
             android:id="@+id/personGenderLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Genere"
             android:textSize="16sp"
-            android:textColor="@color/black" />
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <Spinner
             android:id="@+id/personGenderSpinner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:minHeight="48dp" />
+            android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp" />
 
-        <!-- Person Age -->
+        <!-- Age -->
         <TextView
             android:id="@+id/personAgeLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Età"
             android:textSize="16sp"
-            android:textColor="@color/black" />
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <EditText
             android:id="@+id/personAgeEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
             android:hint="Inserisci l'età"
             android:inputType="number"
             android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp"
             tools:ignore="VisualLintTextFieldSize" />
 
-        <!-- OpenAI API Key Input -->
+        <!-- OpenAI API Key -->
         <TextView
             android:id="@+id/openAIApiKeyLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Chiave OpenAI"
             android:textSize="16sp"
-            android:textColor="@color/black" />
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <EditText
             android:id="@+id/openAIApiKeyEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:autofillHints=""
             android:hint="Inserisci la chiave di OpenAI"
             android:inputType="textPassword"
             android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp"
             tools:ignore="VisualLintTextFieldSize" />
 
-        <!-- OpenAI API Key Input -->
+        <!-- Azure API Key -->
         <TextView
             android:id="@+id/azureSpeechKeyLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Chiave Microsoft Azure"
             android:textSize="16sp"
-            android:textColor="@color/black" />
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <EditText
             android:id="@+id/azureSpeechKeyEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:autofillHints=""
             android:hint="Inserisci la chiave di Microsoft Azure"
             android:inputType="textPassword"
             android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp"
             tools:ignore="VisualLintTextFieldSize" />
 
+        <!-- Switches -->
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/fillerSentenceSwitch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Filler sentence"
-            android:layout_marginBottom="12dp"
-            android:checked="true"/>
+            android:textSize="16sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp" />
 
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/autoDetectLanguageSwitch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Auto Detect Language"
-            android:checked="false"/>
+            android:textSize="16sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp" />
 
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/formalLanguageSwitch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Usa linguaggio formale (dare del Lei)"
-            android:checked="true"
-            android:layout_marginTop="12dp"/>
+            android:textSize="16sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp" />
 
         <!-- Voice Speed -->
         <TextView
@@ -222,7 +265,8 @@
             android:text="Velocità voce: 100%"
             android:textSize="16sp"
             android:textColor="@color/black"
-            android:layout_marginTop="16dp" />
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <SeekBar
             android:id="@+id/voiceSpeedSeekBar"
@@ -231,8 +275,11 @@
             android:max="150"
             android:progress="100"
             android:minHeight="48dp"
-            android:layout_marginBottom="16dp" />
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp" />
 
+        <!-- Font Size -->
         <TextView
             android:id="@+id/fontSizeLabel"
             android:layout_width="wrap_content"
@@ -240,7 +287,8 @@
             android:text="Dimensione testo: 24sp"
             android:textSize="16sp"
             android:textColor="@color/black"
-            android:layout_marginTop="16dp" />
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
 
         <SeekBar
             android:id="@+id/fontSizeSeekBar"
@@ -249,32 +297,62 @@
             android:max="50"
             android:progress="24"
             android:min="20"
+            android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Silence Duration -->
+        <TextView
+            android:id="@+id/silenceDurationLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Durata silenzio (s): 2"
+            android:textSize="16sp"
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <SeekBar
+            android:id="@+id/silenceDurationSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="10"
+            android:progress="2"
+            android:min="1"
+            android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
             android:layout_marginBottom="16dp" />
-        <!-- Proceed Button -->
+
+        <!-- Buttons -->
         <Button
             android:id="@+id/proceedButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Avanti"
+            android:textSize="16sp"
             android:backgroundTint="@color/christmas_green"
             android:textColor="@color/white"
             android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
             android:paddingStart="24dp"
             android:paddingEnd="24dp" />
 
-        <!-- Red Button for Deleting All Data -->
         <Button
             android:id="@+id/deleteAllButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Cancella Tutti i Dati"
+            android:textSize="16sp"
             android:backgroundTint="@android:color/holo_red_dark"
             android:textColor="@color/white"
             android:layout_gravity="center_horizontal"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="12dp"
             android:paddingStart="24dp"
             android:paddingEnd="24dp"
             android:paddingTop="12dp"
             android:paddingBottom="12dp" />
+
     </LinearLayout>
 </ScrollView>

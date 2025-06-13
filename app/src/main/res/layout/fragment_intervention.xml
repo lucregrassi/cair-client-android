@@ -31,12 +31,15 @@
                 android:textColor="@color/black"
                 android:textSize="16sp"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp" />
             <EditText
                 android:id="@+id/inputName"
                 android:inputType="textPersonName"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="8dp" />
 
             <TextView
@@ -44,12 +47,15 @@
                 android:textColor="@color/black"
                 android:textSize="16sp"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp" />
             <EditText
                 android:id="@+id/inputConversationPlace"
                 android:inputType="text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="8dp" />
 
             <TextView
@@ -57,12 +63,15 @@
                 android:textColor="@color/black"
                 android:textSize="16sp"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp" />
             <EditText
                 android:id="@+id/inputLivingPlace"
                 android:inputType="text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="8dp" />
 
             <TextView
@@ -70,12 +79,15 @@
                 android:textColor="@color/black"
                 android:textSize="16sp"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp" />
             <EditText
                 android:id="@+id/inputLivingCompanion"
                 android:inputType="text"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="16dp" />
 
             <TextView
@@ -83,14 +95,16 @@
                 android:textColor="@color/black"
                 android:textSize="16sp"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content" />
-            <!-- Spinner -->
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp" />
+
             <Spinner
                 android:id="@+id/spinnerInterventionType"
                 android:layout_width="match_parent"
-
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="20dp" />
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:layout_marginBottom="16dp" />
 
             <!-- TimePicker for fixed -->
             <LinearLayout
@@ -119,24 +133,33 @@
 
                 <TextView
                     android:text="Periodo (minuti)"
+                    android:textSize="16sp"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp" />
                 <EditText
                     android:id="@+id/periodInput"
                     android:inputType="number"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
                     android:layout_marginBottom="8dp" />
 
                 <TextView
                     android:text="Offset (minuti)"
+                    android:textSize="16sp"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp" />
                 <EditText
                     android:id="@+id/offsetInput"
                     android:inputType="number"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
+                    android:layout_height="wrap_content"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:layout_marginBottom="8dp" />
             </LinearLayout>
 
             <!-- Exclusive Options -->
@@ -147,6 +170,7 @@
                 android:textSize="20sp"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:layout_marginBottom="4dp" />
 
             <LinearLayout
@@ -194,6 +218,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="Aggiungi intervento"
+                android:textSize="16sp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="16dp" />
 
             <TextView
@@ -216,18 +243,25 @@
                 android:id="@+id/btnConfirm"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:text="Conferma gli interventi programmati"
+                android:textSize="16sp"
                 android:backgroundTint="@color/christmas_green"
                 android:textColor="@color/white"
-                android:text="Conferma gli interventi programmati"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:layout_marginBottom="8dp" />
 
             <Button
                 android:id="@+id/btnClear"
-                android:backgroundTint="@android:color/holo_red_dark"
-                android:textColor="@color/white"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Elimina tutti gli interventi programmati" />
+                android:text="Elimina tutti gli interventi programmati"
+                android:textSize="16sp"
+                android:backgroundTint="@android:color/holo_red_dark"
+                android:textColor="@color/white"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:layout_marginBottom="16dp" />
         </LinearLayout>
     </ScrollView>
 </layout>

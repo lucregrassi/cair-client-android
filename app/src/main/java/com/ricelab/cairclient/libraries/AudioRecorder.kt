@@ -37,7 +37,7 @@ data class AudioResult(
     val log: JSONObject
 )
 
-class AudioRecorder(private val context: Context, private val autoDetectLanguage: Boolean) {
+class AudioRecorder(private val context: Context, private val autoDetectLanguage: Boolean, silenceDuration: Int) {
 
     // Audio recording configuration
     private val sampleRate = 16000
@@ -50,7 +50,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     private var speechDetectionThreshold = 2000
     private val thresholdAdjustmentValue = 2000
     private val shortSilenceDurationMillis = 500L
-    private val longSilenceDurationMillis = 2000L
+    var longSilenceDurationMillis = silenceDuration * 1000L
     private val initialTimeoutMillis = 60_000L
 
     @Volatile
@@ -234,7 +234,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                     }
 
                     if (lastSpeechTime != null && currentTime - lastSpeechTime > longSilenceDurationMillis) {
-                        Log.d(TAG, "Long silence detected, breaking recording.")
+                        Log.d(TAG, "Long silence of ${longSilenceDurationMillis/1000} seconds detected, breaking recording.")
                         break
                     }
                 }

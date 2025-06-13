@@ -47,7 +47,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private lateinit var thresholdTextView: TextView
     private lateinit var recalibrateButton: Button
 
-    private val gson = Gson()
 
     // Network
     private var serverPort: Int = 12345 // Default value
@@ -88,6 +87,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var onGoingIntervention: DueIntervention? = null
     private var profileId: String = "00000000-0000-0000-0000-000000000000"
 
+    private var headTouchCount = 0
+    private var lastHeadTouchTime: Long = 0
+    private val headTouchInterval = 1000L // 1 second to complete 3 touches
+    private var silenceDuration : Int = 2
+
     private val requestAudioPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -100,7 +104,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         super.onCreate(savedInstanceState)
         personalizationManager = InterventionManager.getInstance(this)
 
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_main_acquario)
         QiSDK.register(this, this)
         sentenceGenerator.loadFillerSentences(this)
         // retrieve values stored in settings
@@ -118,7 +122,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         recalibrateButton = findViewById(R.id.recalibrateButton)
 
         // Pass autoDetectLanguage to AudioRecorder
-        audioRecorder = AudioRecorder(this, autoDetectLanguage)
+        audioRecorder = AudioRecorder(this, autoDetectLanguage, silenceDuration)
 
         recalibrateButton.setOnClickListener {
             lifecycleScope.launch {
@@ -248,6 +252,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         formalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
         voiceSpeed = sharedPreferences.getInt("voice_speed", 100)
         fontSize = sharedPreferences.getInt("font_size", 24)
+        silenceDuration = sharedPreferences.getInt("silence_duration", 2)
 
         Log.i(TAG, "personName=$personName, personGender=$personGender, personAge=$personAge")
         Log.i(TAG, "useFillerSentence=$useFillerSentence")
@@ -298,18 +303,23 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private fun toggleListening() {
         isListeningEnabled = !isListeningEnabled
-
-        if (!isListeningEnabled) {
+        val toastMessage = if (!isListeningEnabled) {
             Log.i(TAG, "Stopping listening...")
             audioRecorder.stopRecording()
             runOnUiThread {
                 userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone")
             }
+            "Microfono disattivato"
         } else {
             Log.i(TAG, "Restarting listening...")
             runOnUiThread {
                 userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening")
             }
+            "Microfono attivato"
+        }
+
+        runOnUiThread {
+            Toast.makeText(this, toastMessage, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -325,11 +335,20 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             Log.w(TAG, "ADDING TOUCH LISTENER")
             touch.getSensor("Head/Touch")?.addOnStateChangedListener { touchState ->
                 if (touchState.touched) {
-                    Log.i(TAG, "Head touched. Toggling listening...")
-                    toggleListening()
-                } else {
-                    // Optional: do something if needed on release
-                    Log.i(TAG, "Head touch released.")
+                    val currentTime = System.currentTimeMillis()
+                    if (currentTime - lastHeadTouchTime <= headTouchInterval) {
+                        headTouchCount++
+                    } else {
+                        headTouchCount = 1 // Reset count if touches are too far apart
+                    }
+
+                    lastHeadTouchTime = currentTime
+
+                    if (headTouchCount >= 4) {
+                        Log.i(TAG, "Triple head touch detected. Toggling listening...")
+                        toggleListening()
+                        headTouchCount = 0
+                    }
                 }
             }
             isTouchListenerAdded = true
@@ -338,8 +357,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         teleoperationManager = TeleoperationManager(this, qiContext, pepperInterface)
         teleoperationManager?.startUdpListener()
 
-        // retrieve values stored in shared preferences and update UI
+        // retrieve values stored in shared preferences and update silence duration
         retrieveStoredValues()
+        audioRecorder.longSilenceDurationMillis = silenceDuration * 1000L
         pepperInterface.setVoiceSpeed(voiceSpeed)
         runOnUiThread {
             userSpeechTextView.textSize = fontSize.toFloat()
@@ -839,7 +859,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                     // Wait for the first reply to finish
                                     Log.d("Debug", "Waiting sayReplyJob")
                                     sayReplyJob?.join()
-                                    // recalibrateThresholdBlocking()
                                     // Update UI on Main
                                     withContext(Dispatchers.Main) {
                                         robotSpeechTextView.text = ("Pepper: $continuationSentence")

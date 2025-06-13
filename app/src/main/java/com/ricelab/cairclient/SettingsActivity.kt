@@ -35,6 +35,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var voiceSpeedLabel: TextView
     private lateinit var fontSizeSeekBar: SeekBar
     private lateinit var fontSizeLabel: TextView
+    private lateinit var silenceDurationSeekBar: SeekBar
+    private lateinit var silenceDurationLabel: TextView
     private lateinit var proceedButton: Button
 
     private val serverIpList = mutableListOf<String>()
@@ -65,9 +67,10 @@ class SettingsActivity : AppCompatActivity() {
         formalLanguageSwitch = findViewById(R.id.formalLanguageSwitch)
         voiceSpeedSeekBar = findViewById(R.id.voiceSpeedSeekBar)
         voiceSpeedLabel = findViewById(R.id.voiceSpeedLabel)
-
         fontSizeSeekBar = findViewById(R.id.fontSizeSeekBar)
         fontSizeLabel = findViewById(R.id.fontSizeLabel)
+        silenceDurationSeekBar = findViewById(R.id.silenceDurationSeekBar)
+        silenceDurationLabel = findViewById(R.id.silenceDurationLabel)
 
         // Set saved value (default 100 if none)
         val masterKeyAlias = MasterKey.Builder(this)
@@ -103,6 +106,19 @@ class SettingsActivity : AppCompatActivity() {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 fontSizeLabel.text = "Dimensione testo: ${progress}sp"
             }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        val savedSilenceDuration = sharedPreferences.getInt("silence_duration", 2)
+        silenceDurationSeekBar.progress = savedSilenceDuration
+        silenceDurationLabel.text = "Durata silenzio (s): ${savedSilenceDuration}"
+
+        silenceDurationSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                silenceDurationLabel.text = "Durata silenzio (s): $progress"
+            }
+
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
@@ -175,7 +191,8 @@ class SettingsActivity : AppCompatActivity() {
                         autoDetectLanguage,
                         useFormalLanguage,
                         voiceSpeedSeekBar.progress,
-                        fontSizeSeekBar.progress
+                        fontSizeSeekBar.progress,
+                        silenceDurationSeekBar.progress
                         )
 
                     if (!fromMenu) {
@@ -274,6 +291,10 @@ class SettingsActivity : AppCompatActivity() {
             val savedVoiceSpeed = sharedPreferences.getInt("voice_speed", 100)
             voiceSpeedSeekBar.progress = savedVoiceSpeed
             voiceSpeedLabel.text = "Velocità voce: ${savedVoiceSpeed}%"
+
+            val savedSilenceDuration = sharedPreferences.getInt("silence_duration", 2)
+            silenceDurationSeekBar.progress = savedSilenceDuration
+            silenceDurationLabel.text = "Durata silenzio (s): $savedSilenceDuration"
         }
     }
 
@@ -322,7 +343,8 @@ class SettingsActivity : AppCompatActivity() {
         autoDetectLanguage: Boolean,
         useFormalLanguage: Boolean,
         voiceSpeed: Int,
-        fontSize: Int
+        fontSize: Int,
+        silenceDuration: Int
     ) {
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -351,6 +373,7 @@ class SettingsActivity : AppCompatActivity() {
             putBoolean("use_formal_language", useFormalLanguage)
             putInt("voice_speed", voiceSpeed)
             putInt("font_size", fontSize)
+            putInt("silence_duration", silenceDuration)
             apply()
         }
     }
