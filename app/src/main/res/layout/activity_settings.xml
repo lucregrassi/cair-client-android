@@ -40,6 +40,7 @@
             android:id="@+id/serverIpSpinner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:textColor="@color/black"
             android:minHeight="48dp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
@@ -281,17 +282,40 @@
 
         <!-- Font Size -->
         <TextView
-            android:id="@+id/fontSizeLabel"
+            android:id="@+id/userFontSizeLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Dimensione testo: 24sp"
+            android:text="Dimensione testo utente: 24sp"
             android:textSize="16sp"
             android:textColor="@color/black"
             android:layout_marginTop="8dp"
             android:layout_marginBottom="4dp" />
 
         <SeekBar
-            android:id="@+id/fontSizeSeekBar"
+            android:id="@+id/userFontSizeSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="50"
+            android:progress="24"
+            android:min="20"
+            android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Font Size -->
+        <TextView
+            android:id="@+id/robotFontSizeLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Dimensione testo robot: 24sp"
+            android:textSize="16sp"
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <SeekBar
+            android:id="@+id/robotFontSizeSeekBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:max="50"

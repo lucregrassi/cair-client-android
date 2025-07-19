@@ -33,8 +33,10 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var formalLanguageSwitch: SwitchCompat
     private lateinit var voiceSpeedSeekBar: SeekBar
     private lateinit var voiceSpeedLabel: TextView
-    private lateinit var fontSizeSeekBar: SeekBar
-    private lateinit var fontSizeLabel: TextView
+    private lateinit var userFontSizeSeekBar: SeekBar
+    private lateinit var userFontSizeLabel: TextView
+    private lateinit var robotFontSizeSeekBar: SeekBar
+    private lateinit var robotFontSizeLabel: TextView
     private lateinit var silenceDurationSeekBar: SeekBar
     private lateinit var silenceDurationLabel: TextView
     private lateinit var proceedButton: Button
@@ -67,8 +69,10 @@ class SettingsActivity : AppCompatActivity() {
         formalLanguageSwitch = findViewById(R.id.formalLanguageSwitch)
         voiceSpeedSeekBar = findViewById(R.id.voiceSpeedSeekBar)
         voiceSpeedLabel = findViewById(R.id.voiceSpeedLabel)
-        fontSizeSeekBar = findViewById(R.id.fontSizeSeekBar)
-        fontSizeLabel = findViewById(R.id.fontSizeLabel)
+        userFontSizeSeekBar = findViewById(R.id.userFontSizeSeekBar)
+        userFontSizeLabel = findViewById(R.id.userFontSizeLabel)
+        robotFontSizeSeekBar = findViewById(R.id.robotFontSizeSeekBar)
+        robotFontSizeLabel = findViewById(R.id.robotFontSizeLabel)
         silenceDurationSeekBar = findViewById(R.id.silenceDurationSeekBar)
         silenceDurationLabel = findViewById(R.id.silenceDurationLabel)
 
@@ -98,13 +102,25 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        val savedFontSize = sharedPreferences.getInt("font_size", 24)
-        fontSizeSeekBar.progress = savedFontSize
-        fontSizeLabel.text = "Dimensione testo: ${savedFontSize}sp"
+        val savedUserFontSize = sharedPreferences.getInt("user_font_size", 24)
+        userFontSizeSeekBar.progress = savedUserFontSize
+        userFontSizeLabel.text = "Dimensione testo utente: ${savedUserFontSize}sp"
 
-        fontSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+        userFontSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                fontSizeLabel.text = "Dimensione testo: ${progress}sp"
+                userFontSizeLabel.text = "Dimensione testo utente: ${progress}sp"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        val savedRobotFontSize = sharedPreferences.getInt("robot_font_size", 24)
+        robotFontSizeSeekBar.progress = savedRobotFontSize
+        robotFontSizeLabel.text = "Dimensione testo robot: ${savedRobotFontSize}sp"
+
+        robotFontSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                robotFontSizeLabel.text = "Dimensione testo robot: ${progress}sp"
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -191,7 +207,8 @@ class SettingsActivity : AppCompatActivity() {
                         autoDetectLanguage,
                         useFormalLanguage,
                         voiceSpeedSeekBar.progress,
-                        fontSizeSeekBar.progress,
+                        userFontSizeSeekBar.progress,
+                        robotFontSizeSeekBar.progress,
                         silenceDurationSeekBar.progress
                         )
 
@@ -343,7 +360,8 @@ class SettingsActivity : AppCompatActivity() {
         autoDetectLanguage: Boolean,
         useFormalLanguage: Boolean,
         voiceSpeed: Int,
-        fontSize: Int,
+        userFontSize: Int,
+        robotFontSize: Int,
         silenceDuration: Int
     ) {
         val masterKeyAlias = MasterKey.Builder(this)
@@ -372,7 +390,8 @@ class SettingsActivity : AppCompatActivity() {
             putBoolean("auto_detect_language", autoDetectLanguage)
             putBoolean("use_formal_language", useFormalLanguage)
             putInt("voice_speed", voiceSpeed)
-            putInt("font_size", fontSize)
+            putInt("user_font_size", userFontSize)
+            putInt("robot_font_size", robotFontSize)
             putInt("silence_duration", silenceDuration)
             apply()
         }
@@ -404,14 +423,14 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         // Delete all scheduled interventions
-        val interventionPrefs = getSharedPreferences("interventions", MODE_PRIVATE)
-        with(interventionPrefs.edit()) {
-            clear()
-            apply()
-        }
+        // val interventionPrefs = getSharedPreferences("interventions", MODE_PRIVATE)
+        // with(interventionPrefs.edit()) {
+        //    clear()
+        //    apply()
+        //}
 
         // Also clear in-memory interventions
-        InterventionManager.getInstance(this).clearAll()
+        //InterventionManager.getInstance(this).clearAll()
 
         Toast.makeText(this, "Tutti i dati sono stati cancellati.", Toast.LENGTH_LONG).show()
     }

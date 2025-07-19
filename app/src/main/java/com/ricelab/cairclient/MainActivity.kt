@@ -22,6 +22,9 @@ import com.ricelab.cairclient.libraries.*
 import kotlinx.coroutines.*
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import com.aldebaran.qi.sdk.builder.ListenBuilder
+import com.aldebaran.qi.sdk.builder.PhraseSetBuilder
+import com.aldebaran.qi.sdk.`object`.conversation.ListenResult
 import com.aldebaran.qi.sdk.`object`.touch.Touch
 import org.w3c.dom.Element
 import org.w3c.dom.Node
@@ -29,6 +32,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import org.json.JSONObject
+import java.util.concurrent.Future
 
 
 private const val TAG = "MainActivity"
@@ -74,7 +78,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var isTouchListenerAdded = false
     private var experimentId: String = ""
     private var deviceId: String = ""
-    private var fontSize: Int = 24
+    private var userFontSize: Int = 24
+    private var robotFontSize: Int = 24
 
     private lateinit var fileStorageManager: FileStorageManager
     internal lateinit var conversationState: ConversationState
@@ -100,11 +105,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
+    // To handle hotword detection for microphone
+    private var hotwordFuture: com.aldebaran.qi.Future<ListenResult>? = null
+    private val micOffKeywords = listOf("disattiva il microfono", "smetti di ascoltare")
+    private val micOnKeyword = "Hey Pepper"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         personalizationManager = InterventionManager.getInstance(this)
 
-        setContentView(R.layout.activity_main_acquario)
+        setContentView(R.layout.activity_main)
         QiSDK.register(this, this)
         sentenceGenerator.loadFillerSentences(this)
         // retrieve values stored in settings
@@ -115,11 +125,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         fileStorageManager = FileStorageManager(this, filesDir)
 
         userSpeechTextView = findViewById(R.id.userSpeechTextView)
-        userSpeechTextView.textSize = fontSize.toFloat()
+        userSpeechTextView.textSize = userFontSize.toFloat()
         robotSpeechTextView = findViewById(R.id.robotSpeechTextView)
-        robotSpeechTextView.textSize = fontSize.toFloat()
+        robotSpeechTextView.textSize = robotFontSize.toFloat()
         thresholdTextView = findViewById(R.id.thresholdTextView)
         recalibrateButton = findViewById(R.id.recalibrateButton)
+
+        isListeningEnabled = true
 
         // Pass autoDetectLanguage to AudioRecorder
         audioRecorder = AudioRecorder(this, autoDetectLanguage, silenceDuration)
@@ -164,6 +176,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 isFragmentActive = true
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isListeningEnabled = true
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -251,7 +268,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
         formalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
         voiceSpeed = sharedPreferences.getInt("voice_speed", 100)
-        fontSize = sharedPreferences.getInt("font_size", 24)
+        userFontSize = sharedPreferences.getInt("user_font_size", 24)
+        robotFontSize = sharedPreferences.getInt("robot_font_size", 24)
         silenceDuration = sharedPreferences.getInt("silence_duration", 2)
 
         Log.i(TAG, "personName=$personName, personGender=$personGender, personAge=$personAge")
@@ -301,25 +319,64 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private fun toggleListening() {
-        isListeningEnabled = !isListeningEnabled
-        val toastMessage = if (!isListeningEnabled) {
-            Log.i(TAG, "Stopping listening...")
-            audioRecorder.stopRecording()
-            runOnUiThread {
-                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone")
-            }
-            "Microfono disattivato"
-        } else {
-            Log.i(TAG, "Restarting listening...")
-            runOnUiThread {
-                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening")
-            }
-            "Microfono attivato"
+    private suspend fun startHotwordRecognition(qiContext: QiContext) {
+        //Both build should be outside the Main thread
+        val (phraseSet, listen) = withContext(Dispatchers.IO) {
+            val builtPhraseSet = PhraseSetBuilder.with(qiContext)
+                .withTexts(micOnKeyword)
+                .build()
+
+            val builtListen = ListenBuilder.with(qiContext)
+                .withPhraseSet(builtPhraseSet)
+                .build()
+
+            Pair(builtPhraseSet, builtListen)
         }
 
-        runOnUiThread {
-            Toast.makeText(this, toastMessage, Toast.LENGTH_SHORT).show()
+        // Call async().run() on the Main thread
+        hotwordFuture = listen.async().run()
+        hotwordFuture?.andThenConsume { result ->
+            val matchedPhrase = result.heardPhrase.text
+            if (matchedPhrase.equals(micOnKeyword, ignoreCase = true)) {
+                Log.i(TAG, "Hotword detected: $matchedPhrase")
+                lifecycleScope.launch {
+                    toggleListening()
+                }
+            }
+        }
+    }
+
+    private suspend fun toggleListening() {
+        isListeningEnabled = !isListeningEnabled
+
+        if (!isListeningEnabled) {
+            Log.i(TAG, "Stopping listening...")
+            audioRecorder.stopRecording()
+
+            runOnUiThread {
+                Toast.makeText(this, "Microfono disattivato", Toast.LENGTH_SHORT).show()
+                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone_user")
+                robotSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone_robot")
+            }
+
+            pepperInterface.sayMessage(
+                sentenceGenerator.getPredefinedSentence(language, "microphone_robot"),
+                language
+            )
+
+            qiContext?.let { startHotwordRecognition(it) }
+        } else {
+            Log.i(TAG, "Restarting listening...")
+
+            runOnUiThread {
+                Toast.makeText(this, "Microfono attivato", Toast.LENGTH_SHORT).show()
+                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
+                robotSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_robot")
+            }
+
+            hotwordFuture?.cancel(true)
+            hotwordFuture = null
+            pepperInterface.sayMessage(sentenceGenerator.getPredefinedSentence(language, "listening_robot"), language)
         }
     }
 
@@ -339,15 +396,18 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     if (currentTime - lastHeadTouchTime <= headTouchInterval) {
                         headTouchCount++
                     } else {
-                        headTouchCount = 1 // Reset count if touches are too far apart
+                        headTouchCount = 1
                     }
-
                     lastHeadTouchTime = currentTime
 
                     if (headTouchCount >= 4) {
-                        Log.i(TAG, "Triple head touch detected. Toggling listening...")
-                        toggleListening()
+                        Log.i(TAG, "Quadruple head touch detected. Posting toggleListening to Main thread.")
                         headTouchCount = 0
+                        runOnUiThread {
+                            lifecycleScope.launch {
+                                toggleListening()
+                            }
+                        }
                     }
                 }
             }
@@ -362,8 +422,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         audioRecorder.longSilenceDurationMillis = silenceDuration * 1000L
         pepperInterface.setVoiceSpeed(voiceSpeed)
         runOnUiThread {
-            userSpeechTextView.textSize = fontSize.toFloat()
-            robotSpeechTextView.textSize = fontSize.toFloat()
+            userSpeechTextView.textSize = userFontSize.toFloat()
+            robotSpeechTextView.textSize = robotFontSize.toFloat()
         }
 
         serverCommunicationManager =
@@ -440,7 +500,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 continue
             }
             // Check if listening is enabled
-            if (!isListeningEnabled && !isFragmentActive) {
+            if (!isListeningEnabled) {
                 // userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone")
 
                 // Check for due interventions even if mic is off
@@ -582,7 +642,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private suspend fun startListening(): AudioResult {
         while (true) {
-            userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening")
+            userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
 
             val audioResult = withContext(Dispatchers.IO) {
                 audioRecorder.listenAndSplit()
@@ -591,7 +651,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             val xmlResult = audioResult.xmlResult
             val (userSentence, detectedLang) = parseXmlForSentenceAndLanguage(xmlResult)
 
-            userSpeechTextView.text = "Utente: $userSentence"
+            // Update the user sentence TextView only if listening is enabled
+            if(isListeningEnabled)
+                userSpeechTextView.text = "Utente: $userSentence"
 
             if (detectedLang.isNotEmpty() && detectedLang != "und") {
                 language = detectedLang
@@ -704,7 +766,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             isAlive = false
             return
         }
-
+        // Check for mic off keywords
+        if (micOffKeywords.any { sentence.contains(it, ignoreCase = true) }) {
+            toggleListening()
+            return
+        }
+        // Check for repeat keywords
         if (repeatKeywords.any { sentence.contains(it, ignoreCase = true) }) {
             if (previousSentence.isNotEmpty()) {
                 pepperInterface.sayMessage(sentenceGenerator.getPredefinedSentence(language, "repeat_previous") + " $previousSentence", language)

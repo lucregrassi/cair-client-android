@@ -33,18 +33,26 @@ class SentenceGenerator {
             "it-IT" to "Ho detto:",
             "en-US" to "I said:"
         ),
-        "listening" to mapOf(
+        "listening_user" to mapOf(
             "it-IT" to "Sto ascoltando...",
             "en-US" to "I'm listening..."
+        ),
+        "listening_robot" to mapOf(
+            "it-IT" to "Sì, ti ascolto...",
+            "en-US" to "Yes, I'm listening to you..."
         ),
         "prefix_repeat" to mapOf(
             "it-IT" to "Dicevo...",
             "en-US" to "I was saying..."
         ),
-        "microphone" to mapOf(
-            "it-IT" to "Microfono disattivato. Toccare la testa per riattivare l’ascolto.",
-            "en-US" to "Microphone disabled. Touch my head to reactivate listening."
+        "microphone_user" to mapOf(
+            "it-IT" to "Microfono disattivato.",
+            "en-US" to "Microphone disabled."
         ),
+        "microphone_robot" to mapOf(
+            "it-IT" to "Va bene, smetto di ascoltare. Toccami 4 volte la testa o dimmi: \"Hey, Pèpper\", quando vuoi che mi rimetta in ascolto.",
+            "en-US" to "Ok, I'll stop listening. Touch my head four times or say \"Hey, Pepper\" when you want me to start listening again."
+        )
     )
 
     /**
