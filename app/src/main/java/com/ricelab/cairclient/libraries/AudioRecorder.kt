@@ -39,6 +39,8 @@ data class AudioResult(
 
 class AudioRecorder(private val context: Context, private val autoDetectLanguage: Boolean, silenceDuration: Int) {
 
+    var onSilenceDetected: (() -> Unit)? = null
+
     // Audio recording configuration
     private val sampleRate = 16000
     private val audioSource = MediaRecorder.AudioSource.MIC
@@ -49,14 +51,14 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     // Detection thresholds
     private var speechDetectionThreshold = 2000
     private val thresholdAdjustmentValue = 2000
-    private val shortSilenceDurationMillis = 500L
+    private val shortSilenceDurationMillis = 400L
     var longSilenceDurationMillis = silenceDuration * 1000L
     private val initialTimeoutMillis = 60_000L
 
     @Volatile
     private var isRecording = false
 
-    private var lastStartTime: Long = 0
+    private var lastStartTime: Long = System.currentTimeMillis()
 
     private val subscriptionKey: String by lazy {
         val masterKeyAlias = MasterKey.Builder(context)
@@ -134,7 +136,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     suspend fun listenAndSplit(): AudioResult {
         val audioLogMap = mutableMapOf<String, Any>()
         Log.d(TAG, "Starting listenAndSplit method.")
-
+        Log.d(TAG, "autodetection=$autoDetectLanguage")
         detectedLanguages.clear()
 
         return withContext(Dispatchers.IO) {
@@ -165,9 +167,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
 
         val audioBuffer = ShortArray(bufferSize)
         val byteArrayStream = ByteArrayOutputStream()
-        var lastSpeechTime: Long? = null
         var lastDetectionTime: Long? = null
-        val startTime = System.currentTimeMillis()
         val jobs = mutableListOf<Job>()
         val results = ConcurrentHashMap<Int, String>()
         var chunkIndex = 0
@@ -190,15 +190,19 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
 
                 val maxAmplitude = audioBuffer.maxOrNull()?.toInt() ?: 0
                 if (maxAmplitude > speechDetectionThreshold) {
+                    // It could be noise but otherwise the filler sentence may triggered while the
+                    // person is still speaking.
                     lastDetectionTime = currentTime
                     byteArrayStream.write(shortsToBytes(audioBuffer))
                 }
 
-                if (lastSpeechTime == null && currentTime - startTime > initialTimeoutMillis) {
+                if (currentTime - lastStartTime > initialTimeoutMillis) {
                     Log.d(TAG, "Timeout due to no speech detected.")
                     isRecording = false
                     audioLogMap["timestamp"] = getCurrentTimestamp()
                     audioLogMap["error_message"] = "TIMEOUT"
+                    // update lastStartTime to avoid continuous TIMEOUTS
+                    lastStartTime = System.currentTimeMillis()
                     return AudioResult(generateXmlString("*TIMEOUT*", "und"), JSONObject(audioLogMap))
                 }
 
@@ -218,10 +222,6 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                             val sttTime = (recognitionEnd - recognitionStart) / 1000.0
 
                             if (partialText.isNotEmpty()) {
-                                if (lastSpeechTime == null || recognitionStart > lastSpeechTime!!) {
-                                    Log.d(TAG, "New speech detected, setting lastSpeechTime to $recognitionStart.")
-                                    lastSpeechTime = recognitionEnd
-                                }
                                 results[index] = partialText
                                 // Only log chunk info if something was recognized
                                 audioLogMap["timestamp"] = timestamp
@@ -232,14 +232,20 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                         }
                         jobs.add(job)
                     }
-
-                    if (lastSpeechTime != null && currentTime - lastSpeechTime > longSilenceDurationMillis) {
-                        Log.d(TAG, "Long silence of ${longSilenceDurationMillis/1000} seconds detected, breaking recording.")
+                    // stop listening after long silence
+                    if (currentTime - lastDetectionTime > longSilenceDurationMillis) {
+                        Log.d(TAG, "Long silence of ${longSilenceDurationMillis / 1000} seconds detected.")
                         break
                     }
                 }
             }
-
+            // Trigger filler callback if something has been recognized, even if the final text is
+            // still not available
+            if (results.isNotEmpty()){
+                onSilenceDetected?.invoke()
+                Log.d(TAG, "Filler callback launched")
+            }
+            // wait for all jobs to finish
             val beforeJoinTime = System.currentTimeMillis()
             jobs.forEach { it.join() }
             val afterJoinTime = System.currentTimeMillis()
@@ -254,7 +260,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
 
             if (finalText.isEmpty()) {
                 Log.i(TAG, "Nothing recognized in this attempt. Retrying...")
-                return null // <---- KEY CHANGE
+                return null
             }
 
             val finalLanguage = determineMajorityLanguage()
@@ -300,7 +306,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
         var recognizedText = ""
         var detectedLang = "und"
 
-        // We'll store the cleanup actions and run them after returning the result.
+        // Store the cleanup actions and run them after returning the result.
         val cleanupActions: () -> Unit = {
             recognizer.close()
             autoDetectSourceLanguageConfig?.close()

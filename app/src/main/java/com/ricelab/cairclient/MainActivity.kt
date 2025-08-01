@@ -31,6 +31,7 @@ import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import okhttp3.internal.wait
 import org.json.JSONObject
 import java.util.concurrent.Future
 
@@ -107,8 +108,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     // To handle hotword detection for microphone
     private var hotwordFuture: com.aldebaran.qi.Future<ListenResult>? = null
-    private val micOffKeywords = listOf("disattiva il microfono", "smetti di ascoltare")
+    private val micOffKeywords = listOf("disattiva il microfono", "smetti di ascoltare", "non ho più voglia di parlare", "smetti di parlare")
     private val micOnKeyword = "Hey Pepper"
+    private var lastFillerSpeakingTime: Double? = null
+    var fillerJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -135,6 +138,35 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         // Pass autoDetectLanguage to AudioRecorder
         audioRecorder = AudioRecorder(this, autoDetectLanguage, silenceDuration)
+
+        audioRecorder.onSilenceDetected = {
+            if (useFillerSentence && isListeningEnabled && !isFragmentActive) {
+                val shouldSayFiller = onGoingIntervention == null ||
+                        (onGoingIntervention?.type == "interaction_sequence" && onGoingIntervention?.counter != 0)
+
+                Log.d(TAG, "[onSilenceDetected] Triggered. useFillerSentence=$useFillerSentence, isListeningEnabled=$isListeningEnabled, isFragmentActive=$isFragmentActive, shouldSayFiller=$shouldSayFiller")
+
+                if (shouldSayFiller) {
+                    val filler = sentenceGenerator.getFillerSentence(language)
+                    Log.i(TAG, "[onSilenceDetected] Saying filler: \"$filler\"")
+
+                    runOnUiThread {
+                        robotSpeechTextView.text = "Pepper: $filler"
+                    }
+                    fillerJob = lifecycleScope.launch(Dispatchers.IO) {
+                        val fillerStart = System.currentTimeMillis()
+                        pepperInterface.sayMessage(filler, language)
+                        val fillerEnd = System.currentTimeMillis()
+                        lastFillerSpeakingTime = (fillerEnd - fillerStart) / 1000.0
+                        Log.i(TAG, "[onSilenceDetected] Filler speaking time: $lastFillerSpeakingTime s")
+                    }
+                } else {
+                    Log.d(TAG, "[onSilenceDetected] Filler skipped due to condition.")
+                }
+            } else {
+                Log.d(TAG, "[onSilenceDetected] Filler skipped: one or more conditions not met.")
+            }
+        }
 
         recalibrateButton.setOnClickListener {
             lifecycleScope.launch {
@@ -346,7 +378,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private suspend fun toggleListening() {
+    private suspend fun toggleListening(announce: Boolean = true) {
         isListeningEnabled = !isListeningEnabled
 
         if (!isListeningEnabled) {
@@ -358,7 +390,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone_user")
                 robotSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone_robot")
             }
-
+            fillerJob?.join()
             pepperInterface.sayMessage(
                 sentenceGenerator.getPredefinedSentence(language, "microphone_robot"),
                 language
@@ -368,15 +400,27 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         } else {
             Log.i(TAG, "Restarting listening...")
 
-            runOnUiThread {
-                Toast.makeText(this, "Microfono attivato", Toast.LENGTH_SHORT).show()
-                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
-                robotSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_robot")
-            }
-
+            // when mic on, stop hotword
             hotwordFuture?.cancel(true)
             hotwordFuture = null
-            pepperInterface.sayMessage(sentenceGenerator.getPredefinedSentence(language, "listening_robot"), language)
+
+            if (announce) {
+                runOnUiThread {
+                    Toast.makeText(this, "Microfono attivato", Toast.LENGTH_SHORT).show()
+                    userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
+                    robotSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_robot")
+                }
+                pepperInterface.sayMessage(
+                    sentenceGenerator.getPredefinedSentence(language, "listening_robot"),
+                    language
+                )
+            } else {
+                // silent enable for interventions: no TTS / toast
+                runOnUiThread {
+                    Toast.makeText(this, "Microfono attivato", Toast.LENGTH_SHORT).show()
+                    userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
+                }
+            }
         }
     }
 
@@ -513,6 +557,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                             conversationState.dialogueState.resetConversation()
                         }
                         handle("")
+                        continue
                     }
                 }
                 delay(INTERVENTION_POLLING_DELAY_MIC_OFF)
@@ -702,10 +747,20 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private suspend fun handle(xmlStringInput: String) {
+        // If we're about to process an intervention and the mic is OFF, turn it ON.
+        if (onGoingIntervention != null && !onGoingIntervention!!.type.isNullOrEmpty() && !isListeningEnabled) {
+            Log.d(TAG, "handle(): enabling listening for incoming intervention...")
+            toggleListening(announce = false)
+        }
+
         val logMap = mutableMapOf<String, Any>()
         logMap["timestamp"] = getCurrentTimestamp()
+        lastFillerSpeakingTime?.let {
+            logMap["ack_sentence_speaking_time"] = it
+            Log.d(TAG, "[handle] Using logged filler speaking time: $it s")
+            lastFillerSpeakingTime = null
+        } ?: Log.d(TAG, "[handle] No filler speaking time logged (filler not said or still in progress)")
 
-        var ackSpeakingTime = -1.0
         var firstRequestTime = -1.0
         var replySpeakingTime = -1.0
         var secondRequestTime = -1.0
@@ -790,7 +845,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
             // We'll store both jobs so we can await/join them
             val hubRequestDeferred: Deferred<ConversationState?>
-            var fillerJob: Job? = null
 
             // Run them in parallel in a coroutineScope
             val requestStart = System.currentTimeMillis()
@@ -813,42 +867,21 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         dueIntervention
                     )
                 }
-
-                // 2) Say the filler sentence when it's not an intervention or when it's an
-                // intervention of type interaction_sequence and the conversation is ongoing.
-                // If the conversation is not ongoing, say it only if it's not the first sentence
-                if ((!isIntervention ||
-                    (dueIntervention.type == "interaction_sequence" && dueIntervention.counter != 0))
-                     && useFillerSentence) {
-                    fillerJob = launch(Dispatchers.IO) {
-                        val randomFillerSentence = sentenceGenerator.getFillerSentence(language)
-
-                        // Switch to Main thread for updating UI
-                        withContext(Dispatchers.Main) {
-                            robotSpeechTextView.text = "Pepper: $randomFillerSentence"
-                        }
-                        // Then speak the filler (in the Dispatchers.IO thread)
-                        val fillerStart = System.currentTimeMillis()
-                        pepperInterface.sayMessage(randomFillerSentence, language)
-                        val fillerEnd = System.currentTimeMillis()
-                        ackSpeakingTime = (fillerEnd - fillerStart) / 1000.0
-                        logMap["ack_sentence_speaking_time"] = ackSpeakingTime
-                    }
-                }
             }
 
-            // At this point, the coroutineScope above is done,
-            // so both the hubRequestDeferred and fillerJob have *started*,
-            // but we haven't awaited them yet.
-
-            // 3) Await the hub request result
+            // 2) Await the hub request result
             val updatedConversationState = hubRequestDeferred.await()
             val requestEnd = System.currentTimeMillis()
             firstRequestTime = (requestEnd - requestStart) / 1000.0
             logMap["first_request_response_time"] = firstRequestTime
 
-            // 4) Wait for the filler to finish speaking (if it was started)
-            fillerJob?.join()
+            // Wait for any ongoing filler to finish
+            if (fillerJob != null) {
+                Log.d(TAG, "Waiting for fillerJob to finish before speaking reply...")
+                fillerJob?.join()
+                Log.d(TAG, "FillerJob completed.")
+                fillerJob = null
+            }
 
             // Now we can safely speak the reply *after* the filler is done
             if (updatedConversationState != null) {

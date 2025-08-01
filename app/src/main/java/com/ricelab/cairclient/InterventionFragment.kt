@@ -31,15 +31,16 @@ class InterventionFragment : Fragment() {
 
     private val topicTriggerMap = mapOf(
         //"Questionario SM" to "Parliamo del questionario di valultazione della mia esperienza presso la Stazione Marittima",
-        //"Musica" to "Parliamo di musica",
-        //"Cinema" to "Parliamo di film e cinema",
-        //"Hobby" to "Parliamo delle cose che mi piace fare e dei miei hobby",
-        //"Cibo" to "Parliamo di cibo"
-        "Barriere coralline" to "Parliamo delle scogliere coralline",
-        "Protezione delle barriere coralline" to "Parliamo della protezione delle barriere coralline",
-        "Polipi corallini" to "Parliamo dei polipi corallini",
-        "Coralli molli" to "Parliamo dei coralli molli",
-        "Forme dei pesci" to "Parliamo delle forme dei pesci"
+        "Musica" to "Parliamo di musica",
+        "Cinema" to "Parliamo di film e cinema",
+        "Hobby" to "Parliamo delle cose che mi piace fare e dei miei hobby",
+        "Cibo" to "Parliamo di cibo",
+        "Famiglia" to "Parliamo della mia famiglia"
+        //"Barriere coralline" to "Parliamo delle scogliere coralline",
+        //"Protezione delle barriere coralline" to "Parliamo della protezione delle barriere coralline",
+        //"Polipi corallini" to "Parliamo dei polipi corallini",
+        //"Coralli molli" to "Parliamo dei coralli molli",
+        //"Forme dei pesci" to "Parliamo delle forme dei pesci"
     )
 
     private val actionTriggerMap = mapOf(
@@ -51,7 +52,7 @@ class InterventionFragment : Fragment() {
         "salutare alla persona e chiedere come sta" to "greeting the person and ask them how they are feeling",
         "chiedere alla persona se le si può dare del tu" to "asking the person if you can address them informally",
         "chiedere alla persona dove si trova" to "asking the person where they are",
-        "chiedere alla persona la data e l'ora di oggi" to "asking the person which are today's date and time",
+        "chiedere alla persona la data di oggi" to "asking the person which are today's date",
         "chiedere alla persona dove abita" to "asking the person where they live",
         "chiedere alla persona con chi abita" to "asking the person who they live with"
     )

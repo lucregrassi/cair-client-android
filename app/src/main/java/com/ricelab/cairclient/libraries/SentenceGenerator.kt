@@ -50,8 +50,8 @@ class SentenceGenerator {
             "en-US" to "Microphone disabled."
         ),
         "microphone_robot" to mapOf(
-            "it-IT" to "Va bene, smetto di ascoltare. Toccami 4 volte la testa o dimmi: \"Hey, Pèpper\", quando vuoi che mi rimetta in ascolto.",
-            "en-US" to "Ok, I'll stop listening. Touch my head four times or say \"Hey, Pepper\" when you want me to start listening again."
+            "it-IT" to "Va bene, smetto di ascoltare. Toccami 4 volte la testa o dimmi: \"Hey, Pèpper\", quando vuoi parlare di nuovo con me.",
+            "en-US" to "Ok, I'll stop listening. Touch my head four times or say \"Hey, Pepper\" when you want to talk to me again."
         )
     )
 
