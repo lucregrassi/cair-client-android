@@ -54,8 +54,6 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     private val shortSilenceDurationMillis = 400L
     var longSilenceDurationMillis = silenceDuration * 1000L
     private val initialTimeoutMillis = 60_000L
-    var fillerInvoked = false
-    var longSilenceTriggered = false
 
     @Volatile
     private var isRecording = false
@@ -173,6 +171,8 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
         val jobs = mutableListOf<Job>()
         val results = ConcurrentHashMap<Int, String>()
         var chunkIndex = 0
+        var fillerInvoked = false
+        var longSilenceTriggered = false
 
         try {
             audioRecord.startRecording()
