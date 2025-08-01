@@ -31,9 +31,9 @@ import org.w3c.dom.Node
 import javax.xml.parsers.DocumentBuilderFactory
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import okhttp3.internal.wait
 import org.json.JSONObject
-import java.util.concurrent.Future
+import com.aldebaran.qi.*
+import kotlin.text.get
 
 
 private const val TAG = "MainActivity"
@@ -112,6 +112,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private val micOnKeyword = "Hey Pepper"
     private var lastFillerSpeakingTime: Double? = null
     var fillerJob: Job? = null
+
+    private lateinit var session: Session
+    private lateinit var leds: AnyObject
+    private var ledRefreshJob: Job? = null
+    private var ledsShouldBeOn = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -428,6 +433,19 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         this.qiContext = qiContext
         pepperInterface.setContext(this.qiContext)
         pepperInterface.holdBaseMovement()
+        // initialize connection with head and leds inside dispatcher to avoid blocks
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                session = Session().apply {
+                    setClientAuthenticator(UserTokenAuthenticator("nao", "basmati"))
+                    connect("tcps://198.18.0.1:9503").get()
+                }
+                leds = session.service("ALLeds").get()
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Errore nella connessione alla sessione", e)
+            }
+        }
 
         if (!isTouchListenerAdded) {
             // Retrieve the Touch service
@@ -685,10 +703,42 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
+    private fun ledsOn() {
+        ledsShouldBeOn = true
+
+        if (ledRefreshJob?.isActive == true) return  // già attivo
+
+        ledRefreshJob = lifecycleScope.launch(Dispatchers.IO) {
+            while (ledsShouldBeOn) {
+                try {
+                    leds.call<Void>("fadeRGB", "ChestLeds", 0x000000FF, 0.3).get()
+                    leds.call<Void>("setIntensity", "EarLeds", 1.0).get()
+                } catch (e: Exception) {
+                    Log.w(TAG, "LED refresh failed", e)
+                }
+                delay(1000)
+            }
+        }
+    }
+
+    private fun ledsOff() {
+        ledsShouldBeOn = false
+        ledRefreshJob?.cancel()
+        ledRefreshJob = null
+
+        try {
+            leds.call<Void>("setIntensity", "EarLeds", 0.0).get()
+            leds.call<Void>("fadeRGB", "ChestLeds", 0x00000000, 0.3).get()
+            Log.d(TAG, "LEDs turned off")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to turn off LEDs", e)
+        }
+    }
+
     private suspend fun startListening(): AudioResult {
+        ledsOn()
         while (true) {
             userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
-
             val audioResult = withContext(Dispatchers.IO) {
                 audioRecorder.listenAndSplit()
             }
@@ -697,8 +747,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             val (userSentence, detectedLang) = parseXmlForSentenceAndLanguage(xmlResult)
 
             // Update the user sentence TextView only if listening is enabled
-            if(isListeningEnabled)
+            if(isListeningEnabled) {
                 userSpeechTextView.text = "Utente: $userSentence"
+            }
 
             if (detectedLang.isNotEmpty() && detectedLang != "und") {
                 language = detectedLang
@@ -706,6 +757,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
             if (xmlResult.isNotBlank()) {
                 Log.i(TAG, "xmlResult = $xmlResult")
+                ledsOff()
                 return audioResult
             }
         }
@@ -720,6 +772,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         super.onDestroy()
         QiSDK.unregister(this, this)
         audioRecorder.stopRecording()
+        lifecycleScope.launch { ledsOff() }
         teleoperationManager?.stopUdpListener()
     }
 

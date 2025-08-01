@@ -304,7 +304,7 @@ class InterventionFragment : Fragment() {
 
         if (selectedQuestions.isNotEmpty()) {
             // selectedQuestions.add(0, "start the programmed intervention")
-            selectedQuestions.add("telling the user that the programmed intervention has ended")
+            selectedQuestions.add("telling the user that the question session has ended")
         }
 
         val selectedTopics = mutableListOf<Topic>()
