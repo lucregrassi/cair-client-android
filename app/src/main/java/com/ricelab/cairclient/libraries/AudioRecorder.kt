@@ -54,6 +54,8 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
     private val shortSilenceDurationMillis = 400L
     var longSilenceDurationMillis = silenceDuration * 1000L
     private val initialTimeoutMillis = 60_000L
+    var fillerInvoked = false
+    var longSilenceTriggered = false
 
     @Volatile
     private var isRecording = false
@@ -235,6 +237,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
                     // stop listening after long silence
                     if (currentTime - lastDetectionTime > longSilenceDurationMillis) {
                         Log.d(TAG, "Long silence of ${longSilenceDurationMillis / 1000} seconds detected.")
+                        longSilenceTriggered = true
                         break
                     }
                 }
@@ -243,6 +246,7 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
             // still not available
             if (results.isNotEmpty()){
                 onSilenceDetected?.invoke()
+                fillerInvoked = true
                 Log.d(TAG, "Filler callback launched")
             }
             // wait for all jobs to finish
@@ -252,15 +256,21 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
 
             val finalText = results.toSortedMap().values.joinToString(" ").trim()
 
-            if (finalText.isNotEmpty()) {
-                val finalDelayTime = (afterJoinTime - beforeJoinTime) / 1000.0
-                audioLogMap["final_delay_time"] = finalDelayTime
-                Log.d(TAG, "Final delay time logged: $finalDelayTime")
-            }
-
             if (finalText.isEmpty()) {
                 Log.i(TAG, "Nothing recognized in this attempt. Retrying...")
                 return null
+            }
+
+            val finalDelayTime = (afterJoinTime - beforeJoinTime) / 1000.0
+            audioLogMap["final_delay_time"] = finalDelayTime
+            Log.d(TAG, "Final delay time logged: $finalDelayTime")
+
+            // NEW: se il break era per long silence ma NON avevi parziali al break,
+            // e ora dopo il join hai un testo finale, lancia il filler adesso.
+            if (longSilenceTriggered && !fillerInvoked) {
+                onSilenceDetected?.invoke()
+                fillerInvoked = true
+                Log.d(TAG, "Filler callback launched (post-join)")
             }
 
             val finalLanguage = determineMajorityLanguage()
