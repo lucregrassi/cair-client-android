@@ -258,6 +258,39 @@
             android:paddingEnd="8dp"
             android:layout_marginBottom="8dp" />
 
+        <!-- Usa LED -->
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/useLedsSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Usa LED"
+            android:textSize="16sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Robot Password -->
+        <TextView
+            android:id="@+id/robotPasswordLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Password del robot"
+            android:textSize="16sp"
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/robotPasswordEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Inserisci la password del robot"
+            android:inputType="textPassword"
+            android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="8dp" />
+
         <!-- Voice Speed -->
         <TextView
             android:id="@+id/voiceSpeedLabel"

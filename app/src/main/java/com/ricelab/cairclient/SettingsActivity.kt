@@ -12,8 +12,10 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.ricelab.cairclient.libraries.FileStorageManager
-import com.ricelab.cairclient.libraries.InterventionManager
+import android.view.View
 import java.io.IOException
+import android.view.Menu
+import androidx.activity.OnBackPressedCallback
 
 private const val TAG = "SettingsActivity"
 
@@ -31,6 +33,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var fillerSentenceSwitch: SwitchCompat
     private lateinit var autoDetectLanguageSwitch: SwitchCompat
     private lateinit var formalLanguageSwitch: SwitchCompat
+    private lateinit var useLedsSwitch: SwitchCompat
+    private lateinit var robotPasswordEditText: EditText
     private lateinit var voiceSpeedSeekBar: SeekBar
     private lateinit var voiceSpeedLabel: TextView
     private lateinit var userFontSizeSeekBar: SeekBar
@@ -43,12 +47,17 @@ class SettingsActivity : AppCompatActivity() {
 
     private val serverIpList = mutableListOf<String>()
 
+    fun refreshRobotPasswordVisibility() {
+        val show = useLedsSwitch.isChecked
+        val visibility = if (show) View.VISIBLE else View.GONE
+        robotPasswordEditText.visibility = visibility
+        findViewById<TextView>(R.id.robotPasswordLabel).visibility = visibility
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Set the layout
         setContentView(R.layout.activity_settings)
-        // Enable the "Up" button in the action bar
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
         // Initialize UI elements
         serverIpSpinner = findViewById(R.id.serverIpSpinner)
@@ -67,6 +76,8 @@ class SettingsActivity : AppCompatActivity() {
         fillerSentenceSwitch = findViewById(R.id.fillerSentenceSwitch)
         autoDetectLanguageSwitch = findViewById(R.id.autoDetectLanguageSwitch)
         formalLanguageSwitch = findViewById(R.id.formalLanguageSwitch)
+        useLedsSwitch = findViewById(R.id.useLedsSwitch)
+        robotPasswordEditText = findViewById(R.id.robotPasswordEditText)
         voiceSpeedSeekBar = findViewById(R.id.voiceSpeedSeekBar)
         voiceSpeedLabel = findViewById(R.id.voiceSpeedLabel)
         userFontSizeSeekBar = findViewById(R.id.userFontSizeSeekBar)
@@ -146,11 +157,22 @@ class SettingsActivity : AppCompatActivity() {
             showDeleteConfirmationDialog()
         }
 
+        // Load server IPs from certificates
+        loadServerIpsFromCertificates()
+
         // Load saved values
         loadSavedValues(fromMenu)
 
-        // Load server IPs from certificates
-        loadServerIpsFromCertificates()
+        refreshRobotPasswordVisibility()
+
+        useLedsSwitch.setOnCheckedChangeListener { _, isChecked ->
+            refreshRobotPasswordVisibility()
+            if (isChecked && robotPasswordEditText.text.toString().trim().isEmpty()) {
+                // Keep the switch ON; just guide the user to enter the password
+                Toast.makeText(this, "Per usare i LED inserisci la password del robot.", Toast.LENGTH_SHORT).show()
+                robotPasswordEditText.requestFocus()
+            }
+        }
 
         proceedButton.setOnClickListener {
             val serverIp = serverIpSpinner.selectedItem as String
@@ -171,6 +193,8 @@ class SettingsActivity : AppCompatActivity() {
             val useFillerSentence = fillerSentenceSwitch.isChecked
             val autoDetectLanguage = autoDetectLanguageSwitch.isChecked
             val useFormalLanguage = formalLanguageSwitch.isChecked
+            val useLeds = useLedsSwitch.isChecked
+            val robotPassword = robotPasswordEditText.text.toString().trim()
 
             Log.d(TAG, "Server IP: $serverIp")
             Log.d(TAG, "Server Port Text: $serverPortText")
@@ -191,7 +215,10 @@ class SettingsActivity : AppCompatActivity() {
                     Toast.makeText(this, "Please enter a valid port number (1-65535).", Toast.LENGTH_SHORT).show()
                 } else {
                     Log.d(TAG, "Validated Server Port: $serverPort")
-
+                    if (useLeds && robotPassword.isEmpty()) {
+                        Toast.makeText(this, "Inserisci la password del robot per usare i LED.", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
                     // Save the values securely including the autoDetectLanguage parameter
                     saveValues(
                         serverIp,
@@ -206,6 +233,8 @@ class SettingsActivity : AppCompatActivity() {
                         useFillerSentence,
                         autoDetectLanguage,
                         useFormalLanguage,
+                        useLeds,
+                        robotPassword,
                         voiceSpeedSeekBar.progress,
                         userFontSizeSeekBar.progress,
                         robotFontSizeSeekBar.progress,
@@ -240,14 +269,51 @@ class SettingsActivity : AppCompatActivity() {
         dialog.show()
     }
 
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
-            android.R.id.home -> {
-                // Navigate back to MainActivity when the back button is pressed
-                finish()
+            R.id.action_home -> {
+                safelyNavigateTo(
+                    Intent(this, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                )
+                true
+            }
+            R.id.action_personalization -> {
+                safelyNavigateTo(
+                    Intent(this, MainActivity::class.java)
+                        .putExtra(MainActivity.EXTRA_OPEN_FRAGMENT, MainActivity.OPEN_PERSONALIZATION)
+                        .putExtra(MainActivity.EXTRA_SUPPRESS_LISTENING, true)  // <—
+                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                )
+                true
+            }
+            R.id.action_intervention -> {
+                safelyNavigateTo(
+                    Intent(this, MainActivity::class.java)
+                        .putExtra(MainActivity.EXTRA_OPEN_FRAGMENT, MainActivity.OPEN_INTERVENTION)
+                        .putExtra(MainActivity.EXTRA_SUPPRESS_LISTENING, true)  // <—
+                        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                )
                 true
             }
             else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun safelyNavigateTo(intent: Intent) {
+        // chiudi l’overflow menu/popup
+        closeOptionsMenu()
+
+        // posta la navigazione al prossimo frame per dare tempo al popup di chiudersi
+        window?.decorView?.post {
+            startActivity(intent)
+            // volendo puoi NON chiamare finish() e usare solo CLEAR_TOP/SINGLE_TOP
+            finish()
         }
     }
 
@@ -304,6 +370,10 @@ class SettingsActivity : AppCompatActivity() {
             fillerSentenceSwitch.isChecked = useFillerSentence
             autoDetectLanguageSwitch.isChecked = autoDetectLanguage
             formalLanguageSwitch.isChecked = useFormalLanguage
+            val useLeds = sharedPreferences.getBoolean("use_leds", false)
+            val savedRobotPassword = sharedPreferences.getString("robot_password", "") ?: ""
+            useLedsSwitch.isChecked = useLeds
+            robotPasswordEditText.setText(savedRobotPassword)
 
             val savedVoiceSpeed = sharedPreferences.getInt("voice_speed", 100)
             voiceSpeedSeekBar.progress = savedVoiceSpeed
@@ -359,6 +429,8 @@ class SettingsActivity : AppCompatActivity() {
         useFillerSentence: Boolean,
         autoDetectLanguage: Boolean,
         useFormalLanguage: Boolean,
+        useLeds: Boolean,
+        robotPassword: String,
         voiceSpeed: Int,
         userFontSize: Int,
         robotFontSize: Int,
@@ -376,6 +448,8 @@ class SettingsActivity : AppCompatActivity() {
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
         )
 
+        val pwdToStore = if (useLeds) robotPassword else ""
+
         with(sharedPreferences.edit()) {
             putString("server_ip", serverIp)
             putInt("server_port", serverPort)
@@ -389,6 +463,8 @@ class SettingsActivity : AppCompatActivity() {
             putBoolean("use_filler_sentence", useFillerSentence)
             putBoolean("auto_detect_language", autoDetectLanguage)
             putBoolean("use_formal_language", useFormalLanguage)
+            putBoolean("use_leds", useLeds)
+            putString("robot_password", pwdToStore)
             putInt("voice_speed", voiceSpeed)
             putInt("user_font_size", userFontSize)
             putInt("robot_font_size", robotFontSize)

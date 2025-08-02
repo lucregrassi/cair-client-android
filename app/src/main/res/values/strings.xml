@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">Client CAIR</string>
+    <!-- res/values/strings.xml -->
+    <string name="menu_home">Home</string>
+    <string name="menu_settings">Impostazioni</string>
+    <string name="menu_intervention">Interventi</string>
+    <string name="menu_personalization">Personalizzazione</string>
 </resources>

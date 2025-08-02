@@ -42,6 +42,18 @@ private const val INTERVENTION_POLLING_DELAY_MIC_OFF = 2000L
 
 class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
+    companion object {
+        const val EXTRA_OPEN_FRAGMENT = "open_fragment"
+        const val OPEN_HOME = "home"
+        const val OPEN_PERSONALIZATION = "personalization"
+        const val OPEN_INTERVENTION = "intervention"
+
+        const val EXTRA_SUPPRESS_LISTENING = "suppress_listening" // <—
+    }
+
+    private var suppressOnStart = false  // <—
+    private var isFragmentActive = false
+
     private var qiContext: QiContext? = null
     private var coroutineJob: Job? = null
 
@@ -89,7 +101,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var teleoperationManager: TeleoperationManager? = null
     private var sentenceGenerator: SentenceGenerator = SentenceGenerator()
     private var isListeningEnabled = true
-    private var isFragmentActive = false
     private var onGoingIntervention: DueIntervention? = null
     private var profileId: String = "00000000-0000-0000-0000-000000000000"
 
@@ -116,14 +127,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private lateinit var session: Session
     private lateinit var leds: AnyObject
     private var ledRefreshJob: Job? = null
-    private var ledsShouldBeOn = false
+    private var useLeds: Boolean = false
+    private lateinit var robotPassword: String
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        personalizationManager = InterventionManager.getInstance(this)
-
         setContentView(R.layout.activity_main)
         QiSDK.register(this, this)
+
+        personalizationManager = InterventionManager.getInstance(this)
+
         sentenceGenerator.loadFillerSentences(this)
         // retrieve values stored in settings
         retrieveStoredValues()
@@ -184,6 +197,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             val mainUI = findViewById<View>(R.id.main_ui_container)
             val fragmentContainer = findViewById<View>(R.id.fragment_container)
 
+            val inFragment = supportFragmentManager.backStackEntryCount > 0
+            isFragmentActive = inFragment
+            setLeds(!inFragment)
+
             if (supportFragmentManager.backStackEntryCount == 0) {
                 mainUI.visibility = View.VISIBLE
                 fragmentContainer.visibility = View.GONE
@@ -213,11 +230,73 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 isFragmentActive = true
             }
         }
+        openFromIntent(intent)
+    }
+
+    private fun openFromIntent(intent: Intent?) {
+        val target = intent?.getStringExtra(EXTRA_OPEN_FRAGMENT)
+        suppressOnStart = intent?.getBooleanExtra(EXTRA_SUPPRESS_LISTENING, false) ?: false
+
+        // Svuota sempre lo stack dei fragment
+        supportFragmentManager.popBackStack(
+            null,
+            androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE
+        )
+
+        when (target) {
+            OPEN_PERSONALIZATION -> {
+                // Segna SUBITO che sei “in fragment”, disattiva tutto
+                isFragmentActive = true
+                if (suppressOnStart) {
+                    isListeningEnabled = false
+                    audioRecorder.stopRecording()
+                    setLeds(false)
+                }
+                showPersonalizationFragment()
+            }
+            OPEN_INTERVENTION -> {
+                isFragmentActive = true
+                if (suppressOnStart) {
+                    isListeningEnabled = false
+                    audioRecorder.stopRecording()
+                    setLeds(false)
+                }
+                showInterventionFragment()
+            }
+            else -> showHomeUi()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openFromIntent(intent)
+    }
+
+    private fun showHomeUi() {
+        findViewById<View>(R.id.main_ui_container)?.visibility = View.VISIBLE
+        findViewById<View>(R.id.fragment_container)?.visibility = View.GONE
+        isFragmentActive = false
+        if (!isFragmentActive) setLeds(true)
     }
 
     override fun onResume() {
         super.onResume()
         isListeningEnabled = true
+        if (!isFragmentActive && !suppressOnStart) {
+            setLeds(true)
+        } else {
+            setLeds(false)
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+    }
+
+    override fun onStop() {
+        setLeds(false)
+        super.onStop()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -237,18 +316,19 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_home -> {
+                // Chiude tutti i fragment nello stack e mostra la main UI
+                supportFragmentManager.popBackStack(null, androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE)
+                findViewById<View>(R.id.main_ui_container)?.visibility = View.VISIBLE
+                findViewById<View>(R.id.fragment_container)?.visibility = View.GONE
+                true
+            }
+            R.id.action_intervention -> { showInterventionFragment(); true }
+            R.id.action_personalization -> { showPersonalizationFragment(); true }
             R.id.action_setup -> {
                 val intent = Intent(this, SettingsActivity::class.java)
                 intent.putExtra("fromMenu", true)
                 startActivity(intent)
-                true
-            }
-            R.id.action_intervention -> {
-                showInterventionFragment()
-                true
-            }
-            R.id.action_personalization -> {
-                showPersonalizationFragment()
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -304,6 +384,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
         autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
         formalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
+        useLeds = sharedPreferences.getBoolean("use_leds", true)
+        robotPassword = sharedPreferences.getString("robot_password", "") ?: ""
         voiceSpeed = sharedPreferences.getInt("voice_speed", 100)
         userFontSize = sharedPreferences.getInt("user_font_size", 24)
         robotFontSize = sharedPreferences.getInt("robot_font_size", 24)
@@ -433,19 +515,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         this.qiContext = qiContext
         pepperInterface.setContext(this.qiContext)
         pepperInterface.holdBaseMovement()
-        // initialize connection with head and leds inside dispatcher to avoid blocks
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                session = Session().apply {
-                    setClientAuthenticator(UserTokenAuthenticator("nao", "basmati"))
-                    connect("tcps://198.18.0.1:9503").get()
-                }
-                leds = session.service("ALLeds").get()
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Errore nella connessione alla sessione", e)
-            }
-        }
 
         if (!isTouchListenerAdded) {
             // Retrieve the Touch service
@@ -479,8 +548,25 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         teleoperationManager = TeleoperationManager(this, qiContext, pepperInterface)
         teleoperationManager?.startUdpListener()
 
-        // retrieve values stored in shared preferences and update silence duration
+        // retrieve values stored in shared preferences
         retrieveStoredValues()
+        // initialize connection with head and leds inside dispatcher to avoid blocks
+        lifecycleScope.launch(Dispatchers.IO) {
+            if (!useLeds) return@launch
+            try {
+                session = Session().apply {
+                    setClientAuthenticator(UserTokenAuthenticator("nao", robotPassword))
+                    connect("tcps://198.18.0.1:9503").get()
+                }
+                leds = session.service("ALLeds").get()
+                // Se vuoi accendere i LED appena pronti:
+                withContext(Dispatchers.Main) { if (!isFragmentActive) setLeds(true) }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Errore nella connessione alla sessione", e)
+            }
+        }
+
         audioRecorder.longSilenceDurationMillis = silenceDuration * 1000L
         pepperInterface.setVoiceSpeed(voiceSpeed)
         runOnUiThread {
@@ -502,6 +588,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         this.qiContext = null
         pepperInterface.releaseBaseMovement()
         pepperInterface.setContext(null)
+        try { session.close() } catch (_: Exception) {}
     }
 
     override fun onRobotFocusRefused(reason: String) {
@@ -706,7 +793,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private fun setLeds(on: Boolean) {
-        ledsShouldBeOn = on
+        if (!useLeds || !this::leds.isInitialized) return
 
         // delete already existing jobs, if present
         ledRefreshJob?.cancel()
@@ -770,14 +857,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onPause() {
         super.onPause()
         coroutineJob?.cancel()
-        setLeds(false)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         QiSDK.unregister(this, this)
         audioRecorder.stopRecording()
-        lifecycleScope.launch { setLeds(false) }
         teleoperationManager?.stopUdpListener()
     }
 
