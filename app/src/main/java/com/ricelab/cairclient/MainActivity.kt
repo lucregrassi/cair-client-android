@@ -607,7 +607,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 handle("")
             }
 
+            setLeds(true)
             val audioResult = startListening()
+            setLeds(false)
             if (isFragmentActive) {
                 Log.w(TAG, "Fragment is active, skipping loop after startListening")
                 continue
@@ -703,40 +705,43 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private fun ledsOn() {
-        ledsShouldBeOn = true
+    private fun setLeds(on: Boolean) {
+        ledsShouldBeOn = on
 
-        if (ledRefreshJob?.isActive == true) return  // già attivo
-
-        ledRefreshJob = lifecycleScope.launch(Dispatchers.IO) {
-            while (ledsShouldBeOn) {
-                try {
-                    leds.call<Void>("fadeRGB", "ChestLeds", 0x000000FF, 0.3).get()
-                    leds.call<Void>("setIntensity", "EarLeds", 1.0).get()
-                } catch (e: Exception) {
-                    Log.w(TAG, "LED refresh failed", e)
-                }
-                delay(1000)
-            }
-        }
-    }
-
-    private fun ledsOff() {
-        ledsShouldBeOn = false
+        // delete already existing jobs, if present
         ledRefreshJob?.cancel()
         ledRefreshJob = null
 
-        try {
-            leds.call<Void>("setIntensity", "EarLeds", 0.0).get()
-            leds.call<Void>("fadeRGB", "ChestLeds", 0x00000000, 0.3).get()
-            Log.d(TAG, "LEDs turned off")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to turn off LEDs", e)
+        val duration = 5000L
+        val refreshInterval = 300L
+
+        ledRefreshJob = lifecycleScope.launch(Dispatchers.IO) {
+            val startTime = System.currentTimeMillis()
+
+            while (System.currentTimeMillis() - startTime < duration) {
+                try {
+                    if (on) {
+                        leds.call<Void>("fadeRGB", "ChestLeds", 0x000000FF, 0.0).get()
+                        leds.call<Void>("setIntensity", "EarLeds", 1.0).get()
+                    } else {
+                        leds.call<Void>("fadeRGB", "ChestLeds", 0x00000000, 0.0).get()
+                        leds.call<Void>("fadeRGB", "EarLeds", 0x00000000, 0.0).get()
+                        leds.call<Void>("setIntensity", "EarLeds", 0.0).get()
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "LED update failed", e)
+                }
+
+                delay(refreshInterval)
+            }
+
+            Log.d(TAG, "LEDs ${if (on) "on" else "off"} cycle complete")
+            ledRefreshJob?.cancel()
+            ledRefreshJob = null
         }
     }
 
     private suspend fun startListening(): AudioResult {
-        ledsOn()
         while (true) {
             userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
             val audioResult = withContext(Dispatchers.IO) {
@@ -757,7 +762,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
             if (xmlResult.isNotBlank()) {
                 Log.i(TAG, "xmlResult = $xmlResult")
-                ledsOff()
                 return audioResult
             }
         }
@@ -766,13 +770,14 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onPause() {
         super.onPause()
         coroutineJob?.cancel()
+        setLeds(false)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         QiSDK.unregister(this, this)
         audioRecorder.stopRecording()
-        lifecycleScope.launch { ledsOff() }
+        lifecycleScope.launch { setLeds(false) }
         teleoperationManager?.stopUdpListener()
     }
 
