@@ -33,7 +33,6 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import org.json.JSONObject
 import com.aldebaran.qi.*
-import kotlin.text.get
 
 
 private const val TAG = "MainActivity"
@@ -44,14 +43,14 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     companion object {
         const val EXTRA_OPEN_FRAGMENT = "open_fragment"
-        const val OPEN_HOME = "home"
         const val OPEN_PERSONALIZATION = "personalization"
         const val OPEN_INTERVENTION = "intervention"
-
-        const val EXTRA_SUPPRESS_LISTENING = "suppress_listening" // <—
+        const val EXTRA_SUPPRESS_LISTENING = "suppress_listening"
+        const val EXTRA_SUPPRESS_WELCOME = "suppress_welcome"
     }
 
-    private var suppressOnStart = false  // <—
+    private var suppressListeningOnStart = false
+    private var suppressWelcomeOnStart = false
     private var isFragmentActive = false
 
     private var qiContext: QiContext? = null
@@ -206,7 +205,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 fragmentContainer.visibility = View.GONE
 
                 // Re-enable teleoperation when back to MainActivity
-                teleoperationManager?.startUdpListener()
+                if (supportFragmentManager.backStackEntryCount == 0 && teleoperationManager?.isRunning() != true) {
+                    teleoperationManager?.startUdpListener(lifecycleScope)
+                }
                 Log.d(TAG, "Teleoperation listener restarted after fragment closed")
 
                 if (isListeningEnabled) {
@@ -235,9 +236,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private fun openFromIntent(intent: Intent?) {
         val target = intent?.getStringExtra(EXTRA_OPEN_FRAGMENT)
-        suppressOnStart = intent?.getBooleanExtra(EXTRA_SUPPRESS_LISTENING, false) ?: false
+        suppressListeningOnStart = intent?.getBooleanExtra(EXTRA_SUPPRESS_LISTENING, false) == true
+        suppressWelcomeOnStart = intent?.getBooleanExtra(EXTRA_SUPPRESS_WELCOME, false) == true
 
-        // Svuota sempre lo stack dei fragment
         supportFragmentManager.popBackStack(
             null,
             androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE
@@ -245,9 +246,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         when (target) {
             OPEN_PERSONALIZATION -> {
-                // Segna SUBITO che sei “in fragment”, disattiva tutto
                 isFragmentActive = true
-                if (suppressOnStart) {
+                if (suppressListeningOnStart) {
                     isListeningEnabled = false
                     audioRecorder.stopRecording()
                     setLeds(false)
@@ -256,7 +256,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             }
             OPEN_INTERVENTION -> {
                 isFragmentActive = true
-                if (suppressOnStart) {
+                if (suppressListeningOnStart) {
                     isListeningEnabled = false
                     audioRecorder.stopRecording()
                     setLeds(false)
@@ -283,7 +283,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onResume() {
         super.onResume()
         isListeningEnabled = true
-        if (!isFragmentActive && !suppressOnStart) {
+        if (!isFragmentActive && !suppressListeningOnStart) {
             setLeds(true)
         } else {
             setLeds(false)
@@ -297,6 +297,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onStop() {
         setLeds(false)
         super.onStop()
+        teleoperationManager?.stopUdpListener()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -625,7 +626,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         Log.i(TAG, "Starting dialogue")
         conversationState = ConversationState(fileStorageManager, previousSentence)
 
-        initializeUserSession()
+        if (!suppressWelcomeOnStart) {
+            initializeUserSession()
+        }
 
         withContext(Dispatchers.IO) {
           conversationState.loadFromFile()
@@ -857,6 +860,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onPause() {
         super.onPause()
         coroutineJob?.cancel()
+        teleoperationManager?.stopUdpListener()
     }
 
     override fun onDestroy() {

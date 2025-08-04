@@ -280,6 +280,7 @@ class SettingsActivity : AppCompatActivity() {
                 safelyNavigateTo(
                     Intent(this, MainActivity::class.java)
                         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        .putExtra(MainActivity.EXTRA_SUPPRESS_WELCOME, true)
                 )
                 true
             }
@@ -289,6 +290,7 @@ class SettingsActivity : AppCompatActivity() {
                         .putExtra(MainActivity.EXTRA_OPEN_FRAGMENT, MainActivity.OPEN_PERSONALIZATION)
                         .putExtra(MainActivity.EXTRA_SUPPRESS_LISTENING, true)  // <—
                         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        .putExtra(MainActivity.EXTRA_SUPPRESS_WELCOME, true)
                 )
                 true
             }
@@ -298,6 +300,7 @@ class SettingsActivity : AppCompatActivity() {
                         .putExtra(MainActivity.EXTRA_OPEN_FRAGMENT, MainActivity.OPEN_INTERVENTION)
                         .putExtra(MainActivity.EXTRA_SUPPRESS_LISTENING, true)  // <—
                         .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        .putExtra(MainActivity.EXTRA_SUPPRESS_WELCOME, true)
                 )
                 true
             }
