@@ -1354,6 +1354,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 onGoingIntervention = personalizationManager.getDueIntervention()
                 if (onGoingIntervention == null) {
                     Log.w(TAG, "No dueIntervention found")
+                    // restart timer after the interaction sequence ends
+                    if (isListeningEnabled && !isFragmentActive) {
+                        Log.d(TAG, "[AUTO_OFF] interaction_sequence ended -> restart timer")
+                        resetMicAutoOffTimerAsync()
+                    }
                 } else {
                     Log.w(TAG, "DueIntervention found: ${onGoingIntervention!!.type}")
                 }
