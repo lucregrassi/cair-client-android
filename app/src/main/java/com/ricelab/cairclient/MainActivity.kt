@@ -150,8 +150,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     // --- Auto-off Microfono ---
     private var micAutoOffJob: Job? = null
+    private var micAutoOffEnabled: Boolean = true
     private var micAutoOffMinutes: Long = 1L
+
     @Volatile private var isAnswering = false
+
+    private var lastServerCfg: Triple<String, Int, String>? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -166,7 +170,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         pepperInterface = PepperInterface(null, voiceSpeed)
         Log.i(TAG, "******autoDetectLanguage = $autoDetectLanguage")
         loadScheduledInterventions()
-        fileStorageManager = FileStorageManager(this, filesDir)
+        fileStorageManager = FileStorageManager(filesDir)
 
         userSpeechTextView = findViewById(R.id.userSpeechTextView)
         userSpeechTextView.textSize = userFontSize.toFloat()
@@ -310,14 +314,36 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         super.onStart()
     }
 
+    private fun ensureServerManagerUpToDate() {
+        val cfg = Triple(serverIp, serverPort, openAIApiKey)
+        if (!::serverCommunicationManager.isInitialized || lastServerCfg != cfg) {
+            serverCommunicationManager = ServerCommunicationManager(this, serverIp, serverPort, logPort, openAIApiKey)
+            lastServerCfg = cfg
+        }
+    }
+
     override fun onResume() {
         super.onResume()
+        val oldEnabled = micAutoOffEnabled
+        val oldMinutes = micAutoOffMinutes
+
+        retrieveStoredValues()          // <- read prefs here
+        ensureServerManagerUpToDate()
+        applySettingsToRuntime()        // <- apply to audio/UI/pepperInterface
+
         isListeningEnabled = true
         if (!isFragmentActive && !suppressListeningOnStart) {
             setLeds(true)
         } else {
             setLeds(false)
             cancelMicAutoOffTimer()
+        }
+
+        if (!micAutoOffEnabled) {
+            cancelMicAutoOffTimer()
+        } else if (oldEnabled != micAutoOffEnabled || oldMinutes != micAutoOffMinutes) {
+            Log.i(TAG, "[AUTO_OFF] settings changed -> reschedule")
+            resetMicAutoOffTimerAsync()
         }
     }
 
@@ -333,6 +359,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         super.onStop()
         teleoperationManager?.stopUdpListener()
         cancelMicAutoOffTimer()
+        ledRefreshJob?.cancel()
     }
 
     override fun onDestroy() {
@@ -405,6 +432,14 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             .commit()
     }
 
+    private fun applySettingsToRuntime() {
+        // Apply prefs to runtime components (no robot focus needed)
+        audioRecorder.longSilenceDurationMillis = silenceDuration * 1000L
+        pepperInterface.setVoiceSpeed(voiceSpeed)
+        userSpeechTextView.textSize = userFontSize.toFloat()
+        robotSpeechTextView.textSize = robotFontSize.toFloat()
+    }
+
     private fun retrieveStoredValues() {
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -435,6 +470,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         userFontSize = sharedPreferences.getInt("user_font_size", 24)
         robotFontSize = sharedPreferences.getInt("robot_font_size", 24)
         silenceDuration = sharedPreferences.getInt("silence_duration", 2)
+        micAutoOffEnabled = sharedPreferences.getBoolean("mic_auto_off_enabled", true)
+        micAutoOffMinutes = sharedPreferences.getInt("mic_auto_off_minutes", 1).toLong()
 
         Log.i(TAG, "personName=$personName, personGender=$personGender, personAge=$personAge")
         Log.i(TAG, "useFillerSentence=$useFillerSentence")
@@ -492,9 +529,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private fun resetMicAutoOffTimerAsync() {
         // kill any previous timer
         cancelMicAutoOffTimer()
+        if (!micAutoOffEnabled || micAutoOffMinutes <= 0) {
+            Log.d(TAG, "[AUTO_OFF] Disabled in settings -> no timer");
+            return
+        }
 
-        val blockForIntervention = onGoingIntervention?.type == "interaction_sequence"
-        if (!isListeningEnabled || isFragmentActive || blockForIntervention) {
+        val hasIntervention = onGoingIntervention?.type?.isNotEmpty() == true
+        if (!isListeningEnabled || isFragmentActive || hasIntervention || isAnswering) {
             Log.d(TAG, "[AUTO_OFF] Not starting: mic=$isListeningEnabled frag=$isFragmentActive int=${onGoingIntervention?.type}")
             return
         }
@@ -506,26 +547,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             try {
                 // wait for the absolute countdown
                 delay(delayMs)
-
+                val hasInterventionNow = onGoingIntervention?.type?.isNotEmpty() == true
                 // if conditions changed meanwhile, reschedule
-                if (!isListeningEnabled || isFragmentActive || (onGoingIntervention?.type == "interaction_sequence")) {
+                if (!isListeningEnabled || isFragmentActive || hasInterventionNow || isAnswering) {
                     resetMicAutoOffTimerAsync(); return@launch
                 }
-
-                // if the robot is answering, wait until it finishes (reply + continuation)
-                while (isAnswering) {
-                    // if you don't guard TTS inside isAnswering, also join these:
-                    currentTtsJob?.let { if (it.isActive) try { it.join() } catch (_: CancellationException) {} }
-                    if (!isAnswering) break
-                    delay(50)
-                }
-
-                // final guard before switching off
-                val stillBlocked = !isListeningEnabled || isFragmentActive || (onGoingIntervention?.type == "interaction_sequence")
-                if (stillBlocked) {
-                    resetMicAutoOffTimerAsync(); return@launch
-                }
-
                 Log.i(TAG, "[AUTO_OFF] Expired -> calling toggleListening(AUTO_OFF)")
                 withContext(NonCancellable) { toggleListening(MicEvent.AUTO_OFF) }
             } catch (_: CancellationException) {
@@ -569,7 +595,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 Log.d(TAG, "[MicToggle] AUTO_OFF: skip cancel of auto-off job (self)")
             }
 
-            // 1) Aspetta SEMPRE eventuale TTS in corso prima di parlare la frase di spegnimento
+            // 1) Aspetta SEMPRE eventuale TTS in corso prima di dire la frase di spegnimento
             currentTtsJob?.let { tts ->
                 if (tts.isActive) {
                     Log.i(TAG, "[MicToggle] wait current TTS before OFF")
@@ -601,7 +627,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 pepperInterface.sayMessage(phrase, language)
             }).join()
 
-            // 4) Spegni davvero e avvia hotword
+            // 4) Spegni e avvia hotword
             isListeningEnabled = false
             audioRecorder.stopRecording()
             runOnUiThread {
@@ -646,28 +672,18 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         pepperInterface.holdBaseMovement()
 
         if (!isTouchListenerAdded) {
-            // Retrieve the Touch service
             val touch: Touch = qiContext.touch
-
             Log.w(TAG, "ADDING TOUCH LISTENER")
             touch.getSensor("Head/Touch")?.addOnStateChangedListener { touchState ->
                 if (touchState.touched) {
                     val currentTime = System.currentTimeMillis()
-                    if (currentTime - lastHeadTouchTime <= headTouchInterval) {
-                        headTouchCount++
-                    } else {
-                        headTouchCount = 1
-                    }
+                    headTouchCount = if (currentTime - lastHeadTouchTime <= headTouchInterval) headTouchCount + 1 else 1
                     lastHeadTouchTime = currentTime
 
                     if (headTouchCount >= 4) {
                         Log.i(TAG, "Quadruple head touch detected. Posting toggleListening to Main thread.")
                         headTouchCount = 0
-                        runOnUiThread {
-                            lifecycleScope.launch {
-                                toggleListening(MicEvent.HEAD_TOUCH)
-                            }
-                        }
+                        runOnUiThread { lifecycleScope.launch { toggleListening(MicEvent.HEAD_TOUCH) } }
                     }
                 }
             }
@@ -677,9 +693,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         teleoperationManager = TeleoperationManager(this, qiContext, pepperInterface)
         teleoperationManager?.startUdpListener()
 
-        // retrieve values stored in shared preferences
-        retrieveStoredValues()
-        // initialize connection with head and leds inside dispatcher to avoid blocks
+        // Robot LED/session setup stays here (robot-lifecycle)
         lifecycleScope.launch(Dispatchers.IO) {
             if (!useLeds) return@launch
             try {
@@ -688,27 +702,19 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     connect("tcps://198.18.0.1:9503").get()
                 }
                 leds = session.service("ALLeds").get()
-                // Se vuoi accendere i LED appena pronti:
                 withContext(Dispatchers.Main) { if (!isFragmentActive) setLeds(true) }
-
             } catch (e: Exception) {
                 Log.e(TAG, "Errore nella connessione alla sessione", e)
             }
         }
 
-        audioRecorder.longSilenceDurationMillis = silenceDuration * 1000L
-        pepperInterface.setVoiceSpeed(voiceSpeed)
-        runOnUiThread {
-            userSpeechTextView.textSize = userFontSize.toFloat()
-            robotSpeechTextView.textSize = robotFontSize.toFloat()
+        // Only ensure it exists if onResume didn't create it yet (rare first-boot case)
+        if (!::serverCommunicationManager.isInitialized) {
+            serverCommunicationManager = ServerCommunicationManager(this, serverIp, serverPort, logPort, openAIApiKey)
         }
 
-        serverCommunicationManager =
-            ServerCommunicationManager(this, serverIp, serverPort, logPort, openAIApiKey)
-
-        coroutineJob = lifecycleScope.launch {
-            startDialogue()
-        }
+        // Start dialogue (needs qiContext)
+        coroutineJob = lifecycleScope.launch { startDialogue() }
     }
 
     override fun onRobotFocusLost() {
@@ -718,6 +724,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         pepperInterface.releaseBaseMovement()
         pepperInterface.setContext(null)
         try { session.close() } catch (_: Exception) {}
+        hotwordFuture?.cancel(true); hotwordFuture = null
+        ledRefreshJob?.cancel(); ledRefreshJob = null
     }
 
     override fun onRobotFocusRefused(reason: String) {
@@ -935,31 +943,23 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private fun setLeds(on: Boolean) {
         if (!useLeds || !this::leds.isInitialized) return
         ledRefreshJob?.cancel()
-
-        val refreshInterval = 1_500L // allinea commento e valore
-
+        if (!on) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    leds.call<Void>("fadeRGB", "ChestLeds", 0x00000000, 0.0).get()
+                    leds.call<Void>("fadeRGB", "EarLeds", 0x00000000, 0.0).get()
+                    leds.call<Void>("setIntensity", "EarLeds", 0.0).get()
+                } catch (e: Exception) { Log.e(TAG, "Error setting LEDs off", e) }
+            }
+            return
+        }
         ledRefreshJob = lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                while (isActive) {
-                    try {
-                        if (on) {
-                            leds.call<Void>("fadeRGB", "ChestLeds", 0x000000FF, 0.0).get()
-                            leds.call<Void>("setIntensity", "EarLeds", 1.0).get()
-                        } else {
-                            leds.call<Void>("fadeRGB", "ChestLeds", 0x00000000, 0.0).get()
-                            leds.call<Void>("fadeRGB", "EarLeds", 0x00000000, 0.0).get()
-                            leds.call<Void>("setIntensity", "EarLeds", 0.0).get()
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "LED update failed, will retry", e)
-                        // opzionale: tenta un reconnect qui se ti capita che si spengano “per sempre”
-                        // tryReconnectLeds()
-                    }
-                    delay(refreshInterval)
-                }
-            } finally {
-                // non cancellarti da solo; basta azzerare il riferimento
-                if (ledRefreshJob === this) ledRefreshJob = null
+            while (isActive) {
+                try {
+                    leds.call<Void>("fadeRGB", "ChestLeds", 0x000000FF, 0.0).get()
+                    leds.call<Void>("setIntensity", "EarLeds", 1.0).get()
+                } catch (e: Exception) { Log.e(TAG, "Error setting LEDs on", e) }
+                delay(1_500)
             }
         }
     }

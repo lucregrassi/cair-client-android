@@ -9,20 +9,16 @@ import java.io.File
 private const val TAG = "FileStorageManager"
 
 class FileStorageManager(
-    val filesDir: File,
     var dialogueStateFile: File? = null,
     val gson: Gson = GsonBuilder().setPrettyPrinting().create(),
     var speakersInfoFile: File? = null,
-    var dialogueStatisticsFile: File? = null,
-    var mycontext: Context? = null
+    var dialogueStatisticsFile: File? = null
 ) {
     // Secondary constructor that takes Context and filesDir
-    constructor(context: Context?, filesDir: File) : this(
-        filesDir = filesDir,
+    constructor(filesDir: File) : this(
         dialogueStateFile = File(filesDir, "dialogue_state.json"),
         speakersInfoFile = File(filesDir, "speakers_info.json"),
-        dialogueStatisticsFile = File(filesDir, "dialogue_statistics.json"),
-        mycontext = context
+        dialogueStatisticsFile = File(filesDir, "dialogue_statistics.json")
     ) {
         Log.d(TAG, "FileStorageManager Constructor with filesDir=$filesDir")
     }

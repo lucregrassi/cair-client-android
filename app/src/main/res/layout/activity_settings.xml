@@ -13,7 +13,7 @@
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
-        <!-- App Title -->
+        <!-- Titolo -->
         <TextView
             android:id="@+id/setupTitleTextView"
             android:layout_width="wrap_content"
@@ -25,6 +25,17 @@
             android:layout_gravity="center_horizontal"
             android:layout_marginBottom="24dp" />
 
+        <!-- ===================== CONNESSIONE ===================== -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Connessione"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="@color/black"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="8dp" />
+
         <!-- Server IP -->
         <TextView
             android:id="@+id/serverIpLabel"
@@ -32,15 +43,12 @@
             android:layout_height="wrap_content"
             android:text="IP del server"
             android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
+            android:textColor="@color/black" />
 
         <Spinner
             android:id="@+id/serverIpSpinner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/black"
             android:minHeight="48dp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
@@ -53,22 +61,83 @@
             android:layout_height="wrap_content"
             android:text="Porta per connettersi al server"
             android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
+            android:textColor="@color/black" />
 
         <EditText
             android:id="@+id/serverPortEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Inserisci la porta"
+            android:hint="es. 12345"
             android:inputType="number"
             android:minHeight="48dp"
             android:text="12345"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
+            android:layout_marginBottom="16dp"
+            tools:ignore="VisualLintTextFieldSize" />
+
+        <!-- ===================== SERVIZI ESTERNI ===================== -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Servizi esterni"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="@color/black"
+            android:layout_marginBottom="8dp" />
+
+        <!-- OpenAI API Key -->
+        <TextView
+            android:id="@+id/openAIApiKeyLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Chiave OpenAI"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <EditText
+            android:id="@+id/openAIApiKeyEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Inserisci la chiave di OpenAI"
+            android:inputType="textPassword"
+            android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
             android:layout_marginBottom="8dp"
             tools:ignore="VisualLintTextFieldSize" />
+
+        <TextView
+            android:id="@+id/azureSpeechKeyLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Chiave Microsoft Azure"
+            android:textSize="16sp"
+            android:textColor="@color/black"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/azureSpeechKeyEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Inserisci la chiave di Microsoft Azure"
+            android:inputType="textPassword"
+            android:minHeight="48dp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:layout_marginBottom="12dp"
+            tools:ignore="VisualLintTextFieldSize" />
+
+        <!-- ===================== IDENTITÀ ROBOT ===================== -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Identità robot"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp" />
 
         <!-- Device ID -->
         <TextView
@@ -77,9 +146,7 @@
             android:layout_height="wrap_content"
             android:text="Nome del robot"
             android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
+            android:textColor="@color/black" />
 
         <EditText
             android:id="@+id/deviceIdEditText"
@@ -100,9 +167,7 @@
             android:layout_height="wrap_content"
             android:text="ID esperimento"
             android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
+            android:textColor="@color/black" />
 
         <EditText
             android:id="@+id/experimentIdEditText"
@@ -113,8 +178,18 @@
             android:minHeight="48dp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
-            android:layout_marginBottom="8dp"
+            android:layout_marginBottom="16dp"
             tools:ignore="VisualLintTextFieldSize" />
+
+        <!-- ===================== PROFILO UTENTE ===================== -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Profilo utente"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="@color/black"
+            android:layout_marginBottom="8dp" />
 
         <!-- Person Name -->
         <TextView
@@ -123,9 +198,7 @@
             android:layout_height="wrap_content"
             android:text="Nome della persona"
             android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
+            android:textColor="@color/black" />
 
         <EditText
             android:id="@+id/personNameEditText"
@@ -145,9 +218,7 @@
             android:layout_height="wrap_content"
             android:text="Genere"
             android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
+            android:textColor="@color/black" />
 
         <Spinner
             android:id="@+id/personGenderSpinner"
@@ -165,9 +236,7 @@
             android:layout_height="wrap_content"
             android:text="Età"
             android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
+            android:textColor="@color/black" />
 
         <EditText
             android:id="@+id/personAgeEditText"
@@ -178,64 +247,17 @@
             android:minHeight="48dp"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
-            android:layout_marginBottom="8dp"
+            android:layout_marginBottom="16dp"
             tools:ignore="VisualLintTextFieldSize" />
 
-        <!-- OpenAI API Key -->
+        <!-- ===================== CONVERSAZIONE & LINGUA ===================== -->
         <TextView
-            android:id="@+id/openAIApiKeyLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Chiave OpenAI"
-            android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
-
-        <EditText
-            android:id="@+id/openAIApiKeyEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Inserisci la chiave di OpenAI"
-            android:inputType="textPassword"
-            android:minHeight="48dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:layout_marginBottom="8dp"
-            tools:ignore="VisualLintTextFieldSize" />
-
-        <!-- Azure API Key -->
-        <TextView
-            android:id="@+id/azureSpeechKeyLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Chiave Microsoft Azure"
-            android:textSize="16sp"
+            android:text="Conversazione e lingua"
+            android:textStyle="bold"
+            android:textSize="18sp"
             android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
-
-        <EditText
-            android:id="@+id/azureSpeechKeyEditText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="Inserisci la chiave di Microsoft Azure"
-            android:inputType="textPassword"
-            android:minHeight="48dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:layout_marginBottom="8dp"
-            tools:ignore="VisualLintTextFieldSize" />
-
-        <!-- Switches -->
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/fillerSentenceSwitch"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Filler sentence"
-            android:textSize="16sp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
             android:layout_marginBottom="8dp" />
 
         <androidx.appcompat.widget.SwitchCompat
@@ -244,8 +266,6 @@
             android:layout_height="wrap_content"
             android:text="Auto Detect Language"
             android:textSize="16sp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
             android:layout_marginBottom="8dp" />
 
         <androidx.appcompat.widget.SwitchCompat
@@ -254,41 +274,24 @@
             android:layout_height="wrap_content"
             android:text="Usa linguaggio formale (dare del Lei)"
             android:textSize="16sp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
             android:layout_marginBottom="8dp" />
 
-        <!-- Usa LED -->
         <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/useLedsSwitch"
+            android:id="@+id/fillerSentenceSwitch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Usa LED"
+            android:text="Filler sentence"
             android:textSize="16sp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="16dp" />
 
-        <!-- Robot Password -->
+        <!-- ===================== VOCE & TEMPI ===================== -->
         <TextView
-            android:id="@+id/robotPasswordLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Password del robot"
-            android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
-
-        <EditText
-            android:id="@+id/robotPasswordEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Inserisci la password del robot"
-            android:inputType="textPassword"
-            android:minHeight="48dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
+            android:text="Voce e tempi"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="@color/black"
             android:layout_marginBottom="8dp" />
 
         <!-- Voice Speed -->
@@ -298,9 +301,7 @@
             android:layout_height="wrap_content"
             android:text="Velocità voce: 100%"
             android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
+            android:textColor="@color/black" />
 
         <SeekBar
             android:id="@+id/voiceSpeedSeekBar"
@@ -309,54 +310,6 @@
             android:max="150"
             android:progress="100"
             android:minHeight="48dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:layout_marginBottom="8dp" />
-
-        <!-- Font Size -->
-        <TextView
-            android:id="@+id/userFontSizeLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Dimensione testo utente: 24sp"
-            android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
-
-        <SeekBar
-            android:id="@+id/userFontSizeSeekBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="50"
-            android:progress="24"
-            android:min="20"
-            android:minHeight="48dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:layout_marginBottom="8dp" />
-
-        <!-- Font Size -->
-        <TextView
-            android:id="@+id/robotFontSizeLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Dimensione testo robot: 24sp"
-            android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
-
-        <SeekBar
-            android:id="@+id/robotFontSizeSeekBar"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:max="50"
-            android:progress="24"
-            android:min="20"
-            android:minHeight="48dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
             android:layout_marginBottom="8dp" />
 
         <!-- Silence Duration -->
@@ -366,9 +319,7 @@
             android:layout_height="wrap_content"
             android:text="Durata silenzio (s): 2"
             android:textSize="16sp"
-            android:textColor="@color/black"
-            android:layout_marginTop="8dp"
-            android:layout_marginBottom="4dp" />
+            android:textColor="@color/black" />
 
         <SeekBar
             android:id="@+id/silenceDurationSeekBar"
@@ -378,11 +329,150 @@
             android:progress="2"
             android:min="1"
             android:minHeight="48dp"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
             android:layout_marginBottom="16dp" />
 
-        <!-- Buttons -->
+        <!-- ===================== INTERFACCIA ===================== -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Interfaccia"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="@color/black"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Font Size - User -->
+        <TextView
+            android:id="@+id/userFontSizeLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Dimensione testo utente: 24sp"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <SeekBar
+            android:id="@+id/userFontSizeSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="50"
+            android:progress="24"
+            android:min="20"
+            android:minHeight="48dp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Font Size - Robot -->
+        <TextView
+            android:id="@+id/robotFontSizeLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Dimensione testo robot: 24sp"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <SeekBar
+            android:id="@+id/robotFontSizeSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="50"
+            android:progress="24"
+            android:min="20"
+            android:minHeight="48dp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- ===================== LED / ROBOT ===================== -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="LED / Robot"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="@color/black"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/useLedsSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Usa LED"
+            android:textSize="16sp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Gruppo Password robot (solo se LED ON) -->
+        <LinearLayout
+            android:id="@+id/robotPasswordGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/robotPasswordLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Password del robot"
+                android:textSize="16sp"
+                android:textColor="@color/black"
+                android:layout_marginBottom="4dp" />
+
+            <EditText
+                android:id="@+id/robotPasswordEditText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Inserisci la password del robot"
+                android:inputType="textPassword"
+                android:minHeight="48dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:layout_marginBottom="12dp" />
+        </LinearLayout>
+
+        <!-- ===================== MICROFONO ===================== -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Microfono"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="@color/black"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/micAutoOffSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Auto-spegnimento microfono"
+            android:textSize="16sp"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Gruppo minuti (solo se switch è ON) -->
+        <LinearLayout
+            android:id="@+id/micAutoOffGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/micAutoOffLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Timer auto-spegnimento microfono (min): 1"
+                android:textSize="16sp"
+                android:textColor="@color/black"
+                android:layout_marginBottom="4dp" />
+
+            <SeekBar
+                android:id="@+id/micAutoOffSeekBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:max="60"
+                android:progress="1"
+                android:min="1"
+                android:minHeight="48dp"
+                android:layout_marginBottom="16dp" />
+        </LinearLayout>
+
+        <!-- ===================== AZIONI ===================== -->
         <Button
             android:id="@+id/proceedButton"
             android:layout_width="wrap_content"

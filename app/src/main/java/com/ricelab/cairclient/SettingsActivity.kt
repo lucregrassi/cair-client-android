@@ -1,6 +1,7 @@
 package com.ricelab.cairclient
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.res.AssetManager
 import android.os.Bundle
 import android.util.Log
@@ -15,7 +16,6 @@ import com.ricelab.cairclient.libraries.FileStorageManager
 import android.view.View
 import java.io.IOException
 import android.view.Menu
-import androidx.activity.OnBackPressedCallback
 
 private const val TAG = "SettingsActivity"
 
@@ -35,6 +35,7 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var formalLanguageSwitch: SwitchCompat
     private lateinit var useLedsSwitch: SwitchCompat
     private lateinit var robotPasswordEditText: EditText
+    private lateinit var robotPasswordGroup: View
     private lateinit var voiceSpeedSeekBar: SeekBar
     private lateinit var voiceSpeedLabel: TextView
     private lateinit var userFontSizeSeekBar: SeekBar
@@ -43,15 +44,24 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var robotFontSizeLabel: TextView
     private lateinit var silenceDurationSeekBar: SeekBar
     private lateinit var silenceDurationLabel: TextView
+    private lateinit var micAutoOffSwitch: SwitchCompat
+    private lateinit var micAutoOffSeekBar: SeekBar
+    private lateinit var micAutoOffLabel: TextView
+    private lateinit var micAutoOffGroup: View
     private lateinit var proceedButton: Button
 
     private val serverIpList = mutableListOf<String>()
 
-    fun refreshRobotPasswordVisibility() {
-        val show = useLedsSwitch.isChecked
-        val visibility = if (show) View.VISIBLE else View.GONE
-        robotPasswordEditText.visibility = visibility
-        findViewById<TextView>(R.id.robotPasswordLabel).visibility = visibility
+    // mostra/nascondi gruppo password robot
+    private fun refreshRobotPasswordVisibility() {
+        robotPasswordGroup.visibility = if (useLedsSwitch.isChecked) View.VISIBLE else View.GONE
+    }
+
+    // mostra/nascondi gruppo microfono
+    private fun refreshMicAutoOffVisibility() {
+        val on = micAutoOffSwitch.isChecked
+        micAutoOffGroup.visibility = if (on) View.VISIBLE else View.GONE
+        micAutoOffSeekBar.isEnabled = on
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,6 +87,7 @@ class SettingsActivity : AppCompatActivity() {
         autoDetectLanguageSwitch = findViewById(R.id.autoDetectLanguageSwitch)
         formalLanguageSwitch = findViewById(R.id.formalLanguageSwitch)
         useLedsSwitch = findViewById(R.id.useLedsSwitch)
+        robotPasswordGroup = findViewById(R.id.robotPasswordGroup)
         robotPasswordEditText = findViewById(R.id.robotPasswordEditText)
         voiceSpeedSeekBar = findViewById(R.id.voiceSpeedSeekBar)
         voiceSpeedLabel = findViewById(R.id.voiceSpeedLabel)
@@ -86,23 +97,11 @@ class SettingsActivity : AppCompatActivity() {
         robotFontSizeLabel = findViewById(R.id.robotFontSizeLabel)
         silenceDurationSeekBar = findViewById(R.id.silenceDurationSeekBar)
         silenceDurationLabel = findViewById(R.id.silenceDurationLabel)
-
-        // Set saved value (default 100 if none)
-        val masterKeyAlias = MasterKey.Builder(this)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-
-        val sharedPreferences = EncryptedSharedPreferences.create(
-            this,
-            "secure_prefs",
-            masterKeyAlias,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-
-        val savedVoiceSpeed = sharedPreferences.getInt("voice_speed", 100)
-        voiceSpeedSeekBar.progress = savedVoiceSpeed
-        voiceSpeedLabel.text = "Velocità voce: $savedVoiceSpeed%"
+        micAutoOffGroup    = findViewById(R.id.micAutoOffGroup)
+        micAutoOffSwitch = findViewById(R.id.micAutoOffSwitch)
+        micAutoOffSeekBar = findViewById(R.id.micAutoOffSeekBar)
+        micAutoOffLabel = findViewById(R.id.micAutoOffLabel)
+        proceedButton = findViewById(R.id.proceedButton)
 
         voiceSpeedSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -113,10 +112,6 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        val savedUserFontSize = sharedPreferences.getInt("user_font_size", 24)
-        userFontSizeSeekBar.progress = savedUserFontSize
-        userFontSizeLabel.text = "Dimensione testo utente: ${savedUserFontSize}sp"
-
         userFontSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 userFontSizeLabel.text = "Dimensione testo utente: ${progress}sp"
@@ -124,10 +119,6 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
-
-        val savedRobotFontSize = sharedPreferences.getInt("robot_font_size", 24)
-        robotFontSizeSeekBar.progress = savedRobotFontSize
-        robotFontSizeLabel.text = "Dimensione testo robot: ${savedRobotFontSize}sp"
 
         robotFontSizeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -137,10 +128,6 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        val savedSilenceDuration = sharedPreferences.getInt("silence_duration", 2)
-        silenceDurationSeekBar.progress = savedSilenceDuration
-        silenceDurationLabel.text = "Durata silenzio (s): ${savedSilenceDuration}"
-
         silenceDurationSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 silenceDurationLabel.text = "Durata silenzio (s): $progress"
@@ -149,7 +136,15 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
-        proceedButton = findViewById(R.id.proceedButton)
+
+        micAutoOffSwitch.setOnCheckedChangeListener { _, _ -> refreshMicAutoOffVisibility() }
+        micAutoOffSeekBar.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, p: Int, fromUser: Boolean) {
+                micAutoOffLabel.text = "Timer auto-spegnimento microfono (min): ${p.coerceAtLeast(1)}"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
 
         val fromMenu = intent.getBooleanExtra("fromMenu", false)
         val deleteAllButton: Button = findViewById(R.id.deleteAllButton)
@@ -160,10 +155,7 @@ class SettingsActivity : AppCompatActivity() {
         // Load server IPs from certificates
         loadServerIpsFromCertificates()
 
-        // Load saved values
-        loadSavedValues(fromMenu)
-
-        refreshRobotPasswordVisibility()
+        if (loadSavedValues(fromMenu)) return  // stop qui se hai navigato
 
         useLedsSwitch.setOnCheckedChangeListener { _, isChecked ->
             refreshRobotPasswordVisibility()
@@ -175,7 +167,14 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         proceedButton.setOnClickListener {
-            val serverIp = serverIpSpinner.selectedItem as String
+            if (serverIpSpinner.adapter == null || serverIpSpinner.adapter.count == 0) {
+                Toast.makeText(this, "Nessun server disponibile. Aggiungi certificati o riprova.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val serverIp = (serverIpSpinner.selectedItem as? String) ?: run {
+                Toast.makeText(this, "Seleziona un server.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             val serverPortText = serverPortEditText.text.toString().trim()
             val experimentId = experimentIdEditText.text.toString().trim()
             val deviceId = deviceIdEditText.text.toString().trim()
@@ -195,60 +194,82 @@ class SettingsActivity : AppCompatActivity() {
             val useFormalLanguage = formalLanguageSwitch.isChecked
             val useLeds = useLedsSwitch.isChecked
             val robotPassword = robotPasswordEditText.text.toString().trim()
+            val micAutoOffEnabled = micAutoOffSwitch.isChecked
+            val micAutoOffMinutes = micAutoOffSeekBar.progress.coerceAtLeast(1)
 
             Log.d(TAG, "Server IP: $serverIp")
             Log.d(TAG, "Server Port Text: $serverPortText")
             Log.d(TAG, "Experiment ID: $experimentId")
             Log.d(TAG, "Device ID: $deviceId")
-            Log.d(TAG, "OpenAI API Key: $openAIApiKey")
-            Log.d(TAG, "Azure Speech Key: $azureSpeechKey")
+            Log.d(TAG, "Person Name: $personName")
+            Log.d(TAG, "Person Gender: $personGender")
+            Log.d(TAG, "Person Age: $personAge")
             Log.d(TAG, "Use Filler Sentence: $useFillerSentence")
             Log.d(TAG, "Auto Detect Language: $autoDetectLanguage")
             Log.d(TAG, "Use Formal Language: $useFormalLanguage")
             Log.d(TAG, "Voice Speed: ${voiceSpeedSeekBar.progress}")
+            Log.d(TAG, "User Font Size: ${userFontSizeSeekBar.progress}")
+            Log.d(TAG, "Robot Font Size: ${robotFontSizeSeekBar.progress}")
+            Log.d(TAG, "Silence Duration: ${silenceDurationSeekBar.progress}")
+            Log.d(TAG, "Mic Auto Off Enabled: $micAutoOffEnabled")
+            Log.d(TAG, "Mic Auto Off Minutes: $micAutoOffMinutes")
+            Log.d(TAG, "Use Leds: $useLeds")
 
-            if (openAIApiKey.isEmpty() || serverPortText.isEmpty()) {
-                Toast.makeText(this, "Please enter your OpenAI API Key and Server Port.", Toast.LENGTH_SHORT).show()
-            } else {
-                val serverPort = serverPortText.toIntOrNull()
-                if (serverPort == null || serverPort <= 0 || serverPort > 65535) {
-                    Toast.makeText(this, "Please enter a valid port number (1-65535).", Toast.LENGTH_SHORT).show()
-                } else {
-                    Log.d(TAG, "Validated Server Port: $serverPort")
-                    if (useLeds && robotPassword.isEmpty()) {
-                        Toast.makeText(this, "Inserisci la password del robot per usare i LED.", Toast.LENGTH_SHORT).show()
-                        return@setOnClickListener
-                    }
-                    // Save the values securely including the autoDetectLanguage parameter
-                    saveValues(
-                        serverIp,
-                        serverPort,
-                        experimentId,
-                        deviceId,
-                        personName,
-                        personGender,
-                        personAge,
-                        openAIApiKey,
-                        azureSpeechKey,
-                        useFillerSentence,
-                        autoDetectLanguage,
-                        useFormalLanguage,
-                        useLeds,
-                        robotPassword,
-                        voiceSpeedSeekBar.progress,
-                        userFontSizeSeekBar.progress,
-                        robotFontSizeSeekBar.progress,
-                        silenceDurationSeekBar.progress
-                        )
-
-                    if (!fromMenu) {
-                        Log.i(TAG, "FromMenu False, spawning new MainActivity")
-                        val intent = Intent(this, MainActivity::class.java)
-                        startActivity(intent)
-                    }
-                    finish()
-                }
+            if (openAIApiKey.isEmpty()) {
+                Toast.makeText(this, "Per favore, inserisci la chiave OpenAI", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
+            if (serverPortText.isEmpty()) {
+                Toast.makeText(this, "Per favore, inserisci la porta del server", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val serverPort = serverPortText.toIntOrNull()
+            if (serverPort == null || serverPort <= 0 || serverPort > 65535) {
+                Toast.makeText(this, "Per favore, inserisci una porta valida (1-65535).", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val ageInt = personAge.toIntOrNull()
+            if (personAge.isNotEmpty() && (ageInt == null || ageInt <= 0)) {
+                Toast.makeText(this, "Età non valida.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (useLeds && robotPassword.isEmpty()) {
+                Toast.makeText(this, "Inserisci la password del robot per usare i LED.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            // Save the values securely including the autoDetectLanguage parameter
+            saveValues(
+                serverIp,
+                serverPort,
+                experimentId,
+                deviceId,
+                personName,
+                personGender,
+                personAge,
+                openAIApiKey,
+                azureSpeechKey,
+                useFillerSentence,
+                autoDetectLanguage,
+                useFormalLanguage,
+                useLeds,
+                robotPassword,
+                voiceSpeedSeekBar.progress,
+                userFontSizeSeekBar.progress,
+                robotFontSizeSeekBar.progress,
+                silenceDurationSeekBar.progress,
+                micAutoOffEnabled,
+                micAutoOffMinutes
+            )
+
+            if (!fromMenu) {
+                Log.i(TAG, "FromMenu False, spawning new MainActivity")
+                val intent = Intent(this, MainActivity::class.java)
+                startActivity(intent)
+            }
+            finish()
         }
     }
 
@@ -320,18 +341,8 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun loadSavedValues(fromMenu: Boolean) {
-        val masterKeyAlias = MasterKey.Builder(this)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-
-        val sharedPreferences = EncryptedSharedPreferences.create(
-            this,
-            "secure_prefs",
-            masterKeyAlias,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+    private fun loadSavedValues(fromMenu: Boolean) : Boolean {
+        val sharedPreferences = securePrefs()
 
         val savedServerIp = sharedPreferences.getString("server_ip", null)
         val savedServerPort = sharedPreferences.getInt("server_port", -1)
@@ -346,10 +357,11 @@ class SettingsActivity : AppCompatActivity() {
         val autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
         val useFormalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
 
-        if (!fromMenu && !savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
+        return if (!fromMenu && !savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
             val intent = Intent(this, MainActivity::class.java)
             startActivity(intent)
             finish()
+            true
         } else {
             savedServerIp?.let { setSelectedServerIp(it) }
             if (savedServerPort != -1) {
@@ -377,6 +389,7 @@ class SettingsActivity : AppCompatActivity() {
             val savedRobotPassword = sharedPreferences.getString("robot_password", "") ?: ""
             useLedsSwitch.isChecked = useLeds
             robotPasswordEditText.setText(savedRobotPassword)
+            refreshRobotPasswordVisibility()
 
             val savedVoiceSpeed = sharedPreferences.getInt("voice_speed", 100)
             voiceSpeedSeekBar.progress = savedVoiceSpeed
@@ -385,6 +398,22 @@ class SettingsActivity : AppCompatActivity() {
             val savedSilenceDuration = sharedPreferences.getInt("silence_duration", 2)
             silenceDurationSeekBar.progress = savedSilenceDuration
             silenceDurationLabel.text = "Durata silenzio (s): $savedSilenceDuration"
+
+            val savedUserFontSize = sharedPreferences.getInt("user_font_size", 24)
+            userFontSizeSeekBar.progress = savedUserFontSize
+            userFontSizeLabel.text = "Dimensione testo utente: ${savedUserFontSize}sp"
+
+            val savedRobotFontSize = sharedPreferences.getInt("robot_font_size", 24)
+            robotFontSizeSeekBar.progress = savedRobotFontSize
+            robotFontSizeLabel.text = "Dimensione testo robot: ${savedRobotFontSize}sp"
+
+            val savedMicAutoOffEnabled = sharedPreferences.getBoolean("mic_auto_off_enabled", true)
+            val savedMicAutoOffMinutes = sharedPreferences.getInt("mic_auto_off_minutes", 1)
+            micAutoOffSwitch.isChecked = savedMicAutoOffEnabled
+            micAutoOffSeekBar.progress = savedMicAutoOffMinutes
+            micAutoOffLabel.text = "Timer auto-spegnimento microfono (min): $savedMicAutoOffMinutes"
+            refreshMicAutoOffVisibility()
+            false
         }
     }
 
@@ -437,19 +466,11 @@ class SettingsActivity : AppCompatActivity() {
         voiceSpeed: Int,
         userFontSize: Int,
         robotFontSize: Int,
-        silenceDuration: Int
+        silenceDuration: Int,
+        micAutoOffEnabled: Boolean,
+        micAutoOffMinutes: Int
     ) {
-        val masterKeyAlias = MasterKey.Builder(this)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-
-        val sharedPreferences = EncryptedSharedPreferences.create(
-            this,
-            "secure_prefs",
-            masterKeyAlias,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+        val sharedPreferences = securePrefs()
 
         val pwdToStore = if (useLeds) robotPassword else ""
 
@@ -472,29 +493,31 @@ class SettingsActivity : AppCompatActivity() {
             putInt("user_font_size", userFontSize)
             putInt("robot_font_size", robotFontSize)
             putInt("silence_duration", silenceDuration)
+            putBoolean("mic_auto_off_enabled", micAutoOffEnabled)
+            putInt("mic_auto_off_minutes", micAutoOffMinutes)
             apply()
         }
     }
 
+    private fun securePrefs(): SharedPreferences {
+        val masterKey = MasterKey.Builder(this)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
+        return EncryptedSharedPreferences.create(
+            this, "secure_prefs", masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
     private fun deleteAllData() {
         Log.i(TAG, "deleteAllData() with filesDir=$filesDir")
-        val fileStorageManager = FileStorageManager(null, filesDir)
+        val fileStorageManager = FileStorageManager(filesDir)
 
         fileStorageManager.dialogueStateFile?.delete()
         fileStorageManager.speakersInfoFile?.delete()
         fileStorageManager.dialogueStatisticsFile?.delete()
 
-        val masterKeyAlias = MasterKey.Builder(this)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-
-        val sharedPreferences = EncryptedSharedPreferences.create(
-            this,
-            "secure_prefs",
-            masterKeyAlias,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+        val sharedPreferences = securePrefs()
 
         with(sharedPreferences.edit()) {
             clear()
