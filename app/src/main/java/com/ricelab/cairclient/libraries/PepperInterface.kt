@@ -24,7 +24,8 @@ private var holder: Holder? = null
 
 class PepperInterface(
     private var qiContext: QiContext? = null,
-    private var voiceSpeed: Int = 100
+    private var voiceSpeed: Int = 100,
+    private var voicePitch: Int = 100
 ) {
     private var goToFuture: Future<Void>? = null
 
@@ -43,7 +44,7 @@ class PepperInterface(
                     }
 
                     // Create a phrase.
-                    val phrase = Phrase("\\rspd=$voiceSpeed\\$text")
+                    val phrase = Phrase("\\rspd=$voiceSpeed\\\\\\vct=$voicePitch\\\\$text")
 
                     val say = SayBuilder.with(qiContext)
                         .withPhrase(phrase)
@@ -170,5 +171,9 @@ class PepperInterface(
 
     fun setVoiceSpeed(speed: Int) {
         voiceSpeed = speed
+    }
+
+    fun setVoicePitch(pitch: Int) {
+        voicePitch = pitch
     }
 }

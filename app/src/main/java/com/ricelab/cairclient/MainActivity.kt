@@ -104,6 +104,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var autoDetectLanguage = false // default
     private var formalLanguage = false
     private var voiceSpeed = 100
+    private var voicePitch = 100
     private var isTouchListenerAdded = false
     private var experimentId: String = ""
     private var deviceId: String = ""
@@ -167,7 +168,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         sentenceGenerator.loadFillerSentences(this)
         // retrieve values stored in settings
         retrieveStoredValues()
-        pepperInterface = PepperInterface(null, voiceSpeed)
+        pepperInterface = PepperInterface(null, voiceSpeed, voicePitch)
         Log.i(TAG, "******autoDetectLanguage = $autoDetectLanguage")
         loadScheduledInterventions()
         fileStorageManager = FileStorageManager(filesDir)
@@ -436,6 +437,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         // Apply prefs to runtime components (no robot focus needed)
         audioRecorder.longSilenceDurationMillis = silenceDuration * 1000L
         pepperInterface.setVoiceSpeed(voiceSpeed)
+        pepperInterface.setVoicePitch(voicePitch)
         userSpeechTextView.textSize = userFontSize.toFloat()
         robotSpeechTextView.textSize = robotFontSize.toFloat()
     }
@@ -467,6 +469,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         useLeds = sharedPreferences.getBoolean("use_leds", true)
         robotPassword = sharedPreferences.getString("robot_password", "") ?: ""
         voiceSpeed = sharedPreferences.getInt("voice_speed", 100)
+        voicePitch = sharedPreferences.getInt("voice_pitch", 100)
         userFontSize = sharedPreferences.getInt("user_font_size", 24)
         robotFontSize = sharedPreferences.getInt("robot_font_size", 24)
         silenceDuration = sharedPreferences.getInt("silence_duration", 2)

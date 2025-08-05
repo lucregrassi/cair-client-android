@@ -312,6 +312,24 @@
             android:minHeight="48dp"
             android:layout_marginBottom="8dp" />
 
+        <!-- Voice Pitch -->
+        <TextView
+            android:id="@+id/voicePitchLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tonalità voce: 100%"
+            android:textSize="16sp"
+            android:textColor="@color/black" />
+
+        <SeekBar
+            android:id="@+id/voicePitchSeekBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="150"
+            android:progress="100"
+            android:minHeight="48dp"
+            android:layout_marginBottom="8dp" />
+
         <!-- Silence Duration -->
         <TextView
             android:id="@+id/silenceDurationLabel"

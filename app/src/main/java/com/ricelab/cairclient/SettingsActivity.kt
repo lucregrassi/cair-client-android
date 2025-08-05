@@ -38,6 +38,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var robotPasswordGroup: View
     private lateinit var voiceSpeedSeekBar: SeekBar
     private lateinit var voiceSpeedLabel: TextView
+    private lateinit var voicePitchSeekBar: SeekBar
+    private lateinit var voicePitchLabel: TextView
     private lateinit var userFontSizeSeekBar: SeekBar
     private lateinit var userFontSizeLabel: TextView
     private lateinit var robotFontSizeSeekBar: SeekBar
@@ -91,6 +93,8 @@ class SettingsActivity : AppCompatActivity() {
         robotPasswordEditText = findViewById(R.id.robotPasswordEditText)
         voiceSpeedSeekBar = findViewById(R.id.voiceSpeedSeekBar)
         voiceSpeedLabel = findViewById(R.id.voiceSpeedLabel)
+        voicePitchSeekBar = findViewById(R.id.voicePitchSeekBar)
+        voicePitchLabel = findViewById(R.id.voicePitchLabel)
         userFontSizeSeekBar = findViewById(R.id.userFontSizeSeekBar)
         userFontSizeLabel = findViewById(R.id.userFontSizeLabel)
         robotFontSizeSeekBar = findViewById(R.id.robotFontSizeSeekBar)
@@ -108,6 +112,14 @@ class SettingsActivity : AppCompatActivity() {
                 voiceSpeedLabel.text = "Velocità voce: ${progress}%"
             }
 
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        voicePitchSeekBar.setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, p: Int, fromUser: Boolean) {
+                voicePitchLabel.text = "Tonalità voce: ${p.coerceAtLeast(50)}%"
+            }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
@@ -196,6 +208,7 @@ class SettingsActivity : AppCompatActivity() {
             val robotPassword = robotPasswordEditText.text.toString().trim()
             val micAutoOffEnabled = micAutoOffSwitch.isChecked
             val micAutoOffMinutes = micAutoOffSeekBar.progress.coerceAtLeast(1)
+            val voicePitch = voicePitchSeekBar.progress.coerceAtLeast(50)
 
             Log.d(TAG, "Server IP: $serverIp")
             Log.d(TAG, "Server Port Text: $serverPortText")
@@ -208,6 +221,7 @@ class SettingsActivity : AppCompatActivity() {
             Log.d(TAG, "Auto Detect Language: $autoDetectLanguage")
             Log.d(TAG, "Use Formal Language: $useFormalLanguage")
             Log.d(TAG, "Voice Speed: ${voiceSpeedSeekBar.progress}")
+            Log.d(TAG, "Voice Pitch: $voicePitch")
             Log.d(TAG, "User Font Size: ${userFontSizeSeekBar.progress}")
             Log.d(TAG, "Robot Font Size: ${robotFontSizeSeekBar.progress}")
             Log.d(TAG, "Silence Duration: ${silenceDurationSeekBar.progress}")
@@ -257,6 +271,7 @@ class SettingsActivity : AppCompatActivity() {
                 useLeds,
                 robotPassword,
                 voiceSpeedSeekBar.progress,
+                voicePitch,
                 userFontSizeSeekBar.progress,
                 robotFontSizeSeekBar.progress,
                 silenceDurationSeekBar.progress,
@@ -395,6 +410,10 @@ class SettingsActivity : AppCompatActivity() {
             voiceSpeedSeekBar.progress = savedVoiceSpeed
             voiceSpeedLabel.text = "Velocità voce: ${savedVoiceSpeed}%"
 
+            val savedVoicePitch = sharedPreferences.getInt("voice_pitch", 100)
+            voicePitchSeekBar.progress = savedVoicePitch
+            voicePitchLabel.text = "Tonalità voce: ${savedVoicePitch}%"
+
             val savedSilenceDuration = sharedPreferences.getInt("silence_duration", 2)
             silenceDurationSeekBar.progress = savedSilenceDuration
             silenceDurationLabel.text = "Durata silenzio (s): $savedSilenceDuration"
@@ -464,6 +483,7 @@ class SettingsActivity : AppCompatActivity() {
         useLeds: Boolean,
         robotPassword: String,
         voiceSpeed: Int,
+        voicePitch: Int,
         userFontSize: Int,
         robotFontSize: Int,
         silenceDuration: Int,
@@ -490,6 +510,7 @@ class SettingsActivity : AppCompatActivity() {
             putBoolean("use_leds", useLeds)
             putString("robot_password", pwdToStore)
             putInt("voice_speed", voiceSpeed)
+            putInt("voice_pitch", voicePitch)
             putInt("user_font_size", userFontSize)
             putInt("robot_font_size", robotFontSize)
             putInt("silence_duration", silenceDuration)
