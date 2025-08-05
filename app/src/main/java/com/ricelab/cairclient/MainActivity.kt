@@ -775,6 +775,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         resetMicAutoOffTimerAsync()
 
         while (isAlive) {
+            Log.i(TAG, "Time since last spoken words (ms) = ${System.currentTimeMillis() - lastActiveSpeakerTime}")
+            conversationState.dialogueState.ongoingConversation =
+                (System.currentTimeMillis() - lastActiveSpeakerTime) <= SILENCE_THRESHOLD * 1000
+            Log.i(TAG, "OngoingConversation = ${conversationState.dialogueState.ongoingConversation}")
+
             if (isFragmentActive) {
                 Log.w(TAG, "Fragment is active, skipping loop")
                 delay(1000)
@@ -801,11 +806,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 delay(INTERVENTION_POLLING_DELAY_MIC_OFF)
                 continue
             }
-
-            Log.i(TAG, "Time since last spoken words (ms) = ${System.currentTimeMillis() - lastActiveSpeakerTime}")
-            conversationState.dialogueState.ongoingConversation =
-                (System.currentTimeMillis() - lastActiveSpeakerTime) <= SILENCE_THRESHOLD * 1000
-            Log.i(TAG, "OngoingConversation = ${conversationState.dialogueState.ongoingConversation}")
 
             if (onGoingIntervention == null) {
                 Log.d("InterventionManager", "Entering DueIntervention 1 (onGoingIntervention = null)")
