@@ -52,7 +52,7 @@ class InterventionFragment : Fragment() {
         "salutare alla persona e chiedere come sta" to "greeting the person and ask them how they are feeling",
         "chiedere alla persona se le si può dare del tu" to "asking the person if you can address them informally",
         "chiedere alla persona dove si trova" to "asking the person where they are",
-        "chiedere alla persona la data againdi oggi" to "asking the person which are today's date",
+        "chiedere alla persona la data di oggi" to "asking the person which are today's date",
         "chiedere alla persona dove abita" to "asking the person where they live",
         "chiedere alla persona con chi abita" to "asking the person who they live with"
     )

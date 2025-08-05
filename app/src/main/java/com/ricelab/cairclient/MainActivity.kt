@@ -20,6 +20,7 @@ import com.aldebaran.qi.sdk.QiSDK
 import com.aldebaran.qi.sdk.RobotLifecycleCallbacks
 import com.ricelab.cairclient.libraries.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.yield
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.aldebaran.qi.sdk.builder.ListenBuilder
@@ -49,9 +50,14 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         const val EXTRA_SUPPRESS_WELCOME = "suppress_welcome"
     }
 
-    private var suppressListeningOnStart = false
-    private var suppressWelcomeOnStart = false
-    private var isFragmentActive = false
+    // in MainActivity
+    private var currentTtsJob: Job? = null
+
+    private fun trackTts(job: Job): Job {
+        currentTtsJob = job
+        job.invokeOnCompletion { if (currentTtsJob === job) currentTtsJob = null }
+        return job
+    }
 
     private var qiContext: QiContext? = null
     private var coroutineJob: Job? = null
@@ -63,6 +69,17 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private lateinit var thresholdTextView: TextView
     private lateinit var recalibrateButton: Button
 
+    private var suppressListeningOnStart = false
+    private var suppressWelcomeOnStart = false
+    private var isFragmentActive = false
+
+    private enum class MicEvent {
+        AUTO_OFF,        // spegnimento automatico
+        HEAD_TOUCH,      // tocco testa (toggle)
+        HOTWORD,         // "Hey Pepper" (toggle)
+        USER_COMMAND,    // comandi vocali (es. "disattiva il microfono")
+        INTERVENTION_RESUME // riaccendo il mic in silenzio perché è arrivato un intervento
+    }
 
     // Network
     private var serverPort: Int = 12345 // Default value
@@ -117,7 +134,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     // To handle hotword detection for microphone
-    private var hotwordFuture: com.aldebaran.qi.Future<ListenResult>? = null
+    private var hotwordFuture: Future<ListenResult>? = null
     private val micOffKeywords = listOf("disattiva il microfono", "smetti di ascoltare", "non ho più voglia di parlare", "smetti di parlare")
     private val micOnKeyword = "Hey Pepper"
     private var lastFillerSpeakingTime: Double? = null
@@ -128,6 +145,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var ledRefreshJob: Job? = null
     private var useLeds: Boolean = false
     private lateinit var robotPassword: String
+
+    private var startedCurrentIntervention = false
+
+    // --- Auto-off Microfono ---
+    private var micAutoOffJob: Job? = null
+    private var micAutoOffMinutes: Long = 1L
+    @Volatile private var isAnswering = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -170,13 +194,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     runOnUiThread {
                         robotSpeechTextView.text = "Pepper: $filler"
                     }
-                    fillerJob = lifecycleScope.launch(Dispatchers.IO) {
+                    fillerJob = trackTts(lifecycleScope.launch(Dispatchers.IO) {
                         val fillerStart = System.currentTimeMillis()
                         pepperInterface.sayMessage(filler, language)
                         val fillerEnd = System.currentTimeMillis()
                         lastFillerSpeakingTime = (fillerEnd - fillerStart) / 1000.0
-                        Log.i(TAG, "[onSilenceDetected] Filler speaking time: $lastFillerSpeakingTime s")
-                    }
+                    })
                 } else {
                     Log.d(TAG, "[onSilenceDetected] Filler skipped due to condition.")
                 }
@@ -212,9 +235,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
                 if (isListeningEnabled) {
                     // Start listening
+                    Log.i(TAG, "Reset timer: uscita dal fragment")
+                    resetMicAutoOffTimerAsync()
                     Log.i(TAG, "Restarting listening after exiting fragment...")
                 }
-
                 isFragmentActive = false
             } else {
                 mainUI.visibility = View.GONE
@@ -223,7 +247,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 // Stop teleoperation when entering fragment
                 teleoperationManager?.stopUdpListener()
                 Log.d(TAG, "Teleoperation listener stopped for fragment")
-
+                // Pausa timer
+                cancelMicAutoOffTimer()
                 // Stop listening
                 Log.i(TAG, "Stopping listening to enter fragment...")
                 audioRecorder.stopRecording()
@@ -280,6 +305,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         if (!isFragmentActive) setLeds(true)
     }
 
+
+    override fun onStart() {
+        super.onStart()
+    }
+
     override fun onResume() {
         super.onResume()
         isListeningEnabled = true
@@ -287,17 +317,30 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             setLeds(true)
         } else {
             setLeds(false)
+            cancelMicAutoOffTimer()
         }
     }
 
-    override fun onStart() {
-        super.onStart()
+    override fun onPause() {
+        super.onPause()
+        coroutineJob?.cancel()
+        teleoperationManager?.stopUdpListener()
+        cancelMicAutoOffTimer()
     }
 
     override fun onStop() {
         setLeds(false)
         super.onStop()
         teleoperationManager?.stopUdpListener()
+        cancelMicAutoOffTimer()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        QiSDK.unregister(this, this)
+        audioRecorder.stopRecording()
+        teleoperationManager?.stopUdpListener()
+        cancelMicAutoOffTimer()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -361,6 +404,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             .addToBackStack(null)
             .commit()
     }
+
     private fun retrieveStoredValues() {
         val masterKeyAlias = MasterKey.Builder(this)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -439,60 +483,143 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private suspend fun startHotwordRecognition(qiContext: QiContext) {
-        //Both build should be outside the Main thread
-        val (phraseSet, listen) = withContext(Dispatchers.IO) {
-            val builtPhraseSet = PhraseSetBuilder.with(qiContext)
-                .withTexts(micOnKeyword)
-                .build()
+    private fun cancelMicAutoOffTimer() {
+        micAutoOffJob?.cancel()
+        micAutoOffJob = null
+        Log.d(TAG, "Timer cancellato")
+    }
 
-            val builtListen = ListenBuilder.with(qiContext)
-                .withPhraseSet(builtPhraseSet)
-                .build()
+    private fun resetMicAutoOffTimerAsync() {
+        // kill any previous timer
+        cancelMicAutoOffTimer()
 
-            Pair(builtPhraseSet, builtListen)
+        val blockForIntervention = onGoingIntervention?.type == "interaction_sequence"
+        if (!isListeningEnabled || isFragmentActive || blockForIntervention) {
+            Log.d(TAG, "[AUTO_OFF] Not starting: mic=$isListeningEnabled frag=$isFragmentActive int=${onGoingIntervention?.type}")
+            return
         }
 
-        // Call async().run() on the Main thread
-        hotwordFuture = listen.async().run()
-        hotwordFuture?.andThenConsume { result ->
-            val matchedPhrase = result.heardPhrase.text
-            if (matchedPhrase.equals(micOnKeyword, ignoreCase = true)) {
-                Log.i(TAG, "Hotword detected: $matchedPhrase")
-                lifecycleScope.launch {
-                    toggleListening()
+        val delayMs = micAutoOffMinutes * 60_000L
+        Log.i(TAG, "[AUTO_OFF] Start/reset: will fire in ${micAutoOffMinutes} min")
+
+        micAutoOffJob = lifecycleScope.launch {
+            try {
+                // wait for the absolute countdown
+                delay(delayMs)
+
+                // if conditions changed meanwhile, reschedule
+                if (!isListeningEnabled || isFragmentActive || (onGoingIntervention?.type == "interaction_sequence")) {
+                    resetMicAutoOffTimerAsync(); return@launch
                 }
+
+                // if the robot is answering, wait until it finishes (reply + continuation)
+                while (isAnswering) {
+                    // if you don't guard TTS inside isAnswering, also join these:
+                    currentTtsJob?.let { if (it.isActive) try { it.join() } catch (_: CancellationException) {} }
+                    if (!isAnswering) break
+                    delay(50)
+                }
+
+                // final guard before switching off
+                val stillBlocked = !isListeningEnabled || isFragmentActive || (onGoingIntervention?.type == "interaction_sequence")
+                if (stillBlocked) {
+                    resetMicAutoOffTimerAsync(); return@launch
+                }
+
+                Log.i(TAG, "[AUTO_OFF] Expired -> calling toggleListening(AUTO_OFF)")
+                withContext(NonCancellable) { toggleListening(MicEvent.AUTO_OFF) }
+            } catch (_: CancellationException) {
+                Log.d(TAG, "[AUTO_OFF] Timer cancelled during delay")
+            } finally {
+                micAutoOffJob = null
             }
         }
     }
 
-    private suspend fun toggleListening(announce: Boolean = true) {
-        isListeningEnabled = !isListeningEnabled
+    private suspend fun startHotwordRecognition(qiContext: QiContext) {
+        val listen = withContext(Dispatchers.IO) {
+            val phraseSet = PhraseSetBuilder.with(qiContext).withTexts(micOnKeyword).build()
+            ListenBuilder.with(qiContext).withPhraseSet(phraseSet).build()
+        }
+        withContext(Dispatchers.Main) {
+            try {
+                hotwordFuture?.cancel(true)
+                hotwordFuture = listen.async().run()
+                hotwordFuture?.andThenConsume { result ->
+                    if (result.heardPhrase.text.equals(micOnKeyword, ignoreCase = true)) {
+                        Log.i(TAG, "Hotword Detected")
+                        lifecycleScope.launch { toggleListening(MicEvent.HOTWORD) }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Hotword start error", e)
+            }
+        }
+    }
 
-        if (!isListeningEnabled) {
-            Log.i(TAG, "Stopping listening...")
+    private suspend fun toggleListening(reason: MicEvent) {
+        val goingOff = isListeningEnabled
+
+        if (goingOff) {
+            setLeds(false)
+            // don't cancel the timer when it's the auto-off itself
+            if (reason != MicEvent.AUTO_OFF) {
+                cancelMicAutoOffTimer()
+            } else {
+                Log.d(TAG, "[MicToggle] AUTO_OFF: skip cancel of auto-off job (self)")
+            }
+
+            // 1) Aspetta SEMPRE eventuale TTS in corso prima di parlare la frase di spegnimento
+            currentTtsJob?.let { tts ->
+                if (tts.isActive) {
+                    Log.i(TAG, "[MicToggle] wait current TTS before OFF")
+                    val waited = withTimeoutOrNull(30_000) {  // safety, opzionale
+                        try { tts.join() } catch (_: CancellationException) {}
+                    }
+                    if (waited == null) Log.w(TAG, "[MicToggle] TTS wait timed out, proceeding to OFF")
+                }
+            }
+
+            // 2) SOLO per AUTO_OFF: ricontrolla le condizioni (es. è arrivato un intervento)
+            if (reason == MicEvent.AUTO_OFF) {
+                val stillHasIntervention = onGoingIntervention?.type?.isNotEmpty() == true
+                if (!isListeningEnabled || isFragmentActive || stillHasIntervention) {
+                    Log.i(TAG, "[MicToggle] AUTO_OFF: condizioni cambiate, non spengo")
+                    resetMicAutoOffTimerAsync()
+                    return
+                }
+            }
+
+            // 3) Dì la frase di spegnimento (sempre)
+            val phrase = if (reason == MicEvent.AUTO_OFF)
+                sentenceGenerator.getRandomAutoOff(language)
+            else
+                sentenceGenerator.getPredefinedSentence(language, "microphone_robot")
+
+            withContext(Dispatchers.Main) { robotSpeechTextView.text = "Pepper: $phrase" }
+            trackTts(lifecycleScope.launch(Dispatchers.IO) {
+                pepperInterface.sayMessage(phrase, language)
+            }).join()
+
+            // 4) Spegni davvero e avvia hotword
+            isListeningEnabled = false
             audioRecorder.stopRecording()
-
             runOnUiThread {
                 Toast.makeText(this, "Microfono disattivato", Toast.LENGTH_SHORT).show()
                 userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone_user")
-                robotSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone_robot")
             }
-            fillerJob?.join()
-            pepperInterface.sayMessage(
-                sentenceGenerator.getPredefinedSentence(language, "microphone_robot"),
-                language
-            )
-
+            delay(200)
             qiContext?.let { startHotwordRecognition(it) }
+            setLeds(true)
         } else {
-            Log.i(TAG, "Restarting listening...")
+            // --- Sto per accendere il microfono ---
+            Log.i(TAG, "MicToggle ON (reason=$reason)")
+            hotwordFuture?.cancel(true); hotwordFuture = null
+            isListeningEnabled = true
 
-            // when mic on, stop hotword
-            hotwordFuture?.cancel(true)
-            hotwordFuture = null
-
-            if (announce) {
+            // Parla SEMPRE quando accendi, tranne se è un resume silenzioso per intervento
+            val mustSpeakOn = reason != MicEvent.INTERVENTION_RESUME
+            if (mustSpeakOn) {
                 runOnUiThread {
                     Toast.makeText(this, "Microfono attivato", Toast.LENGTH_SHORT).show()
                     userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
@@ -503,12 +630,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     language
                 )
             } else {
-                // silent enable for interventions: no TTS / toast
                 runOnUiThread {
-                    Toast.makeText(this, "Microfono attivato", Toast.LENGTH_SHORT).show()
                     userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
                 }
             }
+
+            // Timer auto-off riparte (se non ci sono interventi attivi lo gestisce già la tua funzione)
+            resetMicAutoOffTimerAsync()
         }
     }
 
@@ -537,7 +665,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         headTouchCount = 0
                         runOnUiThread {
                             lifecycleScope.launch {
-                                toggleListening()
+                                toggleListening(MicEvent.HEAD_TOUCH)
                             }
                         }
                     }
@@ -644,6 +772,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
 
         lastActiveSpeakerTime = System.currentTimeMillis()
+        resetMicAutoOffTimerAsync()
 
         while (isAlive) {
             if (isFragmentActive) {
@@ -664,6 +793,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         if (onGoingIntervention!!.type == "interaction_sequence") {
                             conversationState.dialogueState.resetConversation()
                         }
+                        startedCurrentIntervention = true
                         handle("")
                         continue
                     }
@@ -686,28 +816,35 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         Log.d(TAG, "Resetting conversation history")
                         conversationState.dialogueState.resetConversation()
                     }
+                    startedCurrentIntervention = true
                     handle("")
                 }
-            } else if (onGoingIntervention!!.counter == 0) {
+            } else if (onGoingIntervention!!.counter == 0 && !startedCurrentIntervention) {
                 Log.d(TAG, "Entering handle for DueIntervention (counter = 0)")
                 if (onGoingIntervention!!.type == "interaction_sequence") {
                     Log.d(TAG, "Resetting conversation history")
                     conversationState.dialogueState.resetConversation()
+                    startedCurrentIntervention = true
                 }
                 handle("")
             }
 
+
+            // Accendi LED per stato "listening"
             setLeds(true)
-            val audioResult = startListening()
+            val audioResult = startListeningOrNull()
+            // Se l'ascolto è stato abortito (mic OFF o fragment), gestisci i LED in base al motivo
+            if (audioResult == null) {
+                if (!isListeningEnabled) {
+                    // mic è OFF: tieni i LED accesi
+                    setLeds(true)
+                } else if (isFragmentActive) {
+                    // sei entrato in un fragment: spegni
+                    setLeds(false)
+                }
+                continue
+            }
             setLeds(false)
-            if (isFragmentActive) {
-                Log.w(TAG, "Fragment is active, skipping loop after startListening")
-                continue
-            }
-            if (!isListeningEnabled) {
-                Log.w(TAG, "Listening is disabled, skipping loop after startListening")
-                continue
-            }
 
             val xmlString = audioResult.xmlResult
             val audioLog = audioResult.log
@@ -797,46 +934,49 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private fun setLeds(on: Boolean) {
         if (!useLeds || !this::leds.isInitialized) return
-
-        // delete already existing jobs, if present
         ledRefreshJob?.cancel()
-        ledRefreshJob = null
 
-        val duration = 5000L
-        val refreshInterval = 300L
+        val refreshInterval = 1_500L // allinea commento e valore
 
         ledRefreshJob = lifecycleScope.launch(Dispatchers.IO) {
-            val startTime = System.currentTimeMillis()
-
-            while (System.currentTimeMillis() - startTime < duration) {
-                try {
-                    if (on) {
-                        leds.call<Void>("fadeRGB", "ChestLeds", 0x000000FF, 0.0).get()
-                        leds.call<Void>("setIntensity", "EarLeds", 1.0).get()
-                    } else {
-                        leds.call<Void>("fadeRGB", "ChestLeds", 0x00000000, 0.0).get()
-                        leds.call<Void>("fadeRGB", "EarLeds", 0x00000000, 0.0).get()
-                        leds.call<Void>("setIntensity", "EarLeds", 0.0).get()
+            try {
+                while (isActive) {
+                    try {
+                        if (on) {
+                            leds.call<Void>("fadeRGB", "ChestLeds", 0x000000FF, 0.0).get()
+                            leds.call<Void>("setIntensity", "EarLeds", 1.0).get()
+                        } else {
+                            leds.call<Void>("fadeRGB", "ChestLeds", 0x00000000, 0.0).get()
+                            leds.call<Void>("fadeRGB", "EarLeds", 0x00000000, 0.0).get()
+                            leds.call<Void>("setIntensity", "EarLeds", 0.0).get()
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "LED update failed, will retry", e)
+                        // opzionale: tenta un reconnect qui se ti capita che si spengano “per sempre”
+                        // tryReconnectLeds()
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "LED update failed", e)
+                    delay(refreshInterval)
                 }
-
-                delay(refreshInterval)
+            } finally {
+                // non cancellarti da solo; basta azzerare il riferimento
+                if (ledRefreshJob === this) ledRefreshJob = null
             }
-
-            Log.d(TAG, "LEDs ${if (on) "on" else "off"} cycle complete")
-            ledRefreshJob?.cancel()
-            ledRefreshJob = null
         }
     }
 
-    private suspend fun startListening(): AudioResult {
+    private suspend fun startListeningOrNull(): AudioResult? {
         while (true) {
+            if (!isListeningEnabled || isFragmentActive) {
+                Log.w(TAG, "startListening aborted: micOff=${!isListeningEnabled}, fragment=$isFragmentActive")
+                return null
+            }
             userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
             val audioResult = withContext(Dispatchers.IO) {
                 audioRecorder.listenAndSplit()
             }
+
+            // Se durante l'ascolto il mic è stato spento o sei entrato in fragment, abbandona
+            if (!isListeningEnabled || isFragmentActive) return null
 
             val xmlResult = audioResult.xmlResult
             val (userSentence, detectedLang) = parseXmlForSentenceAndLanguage(xmlResult)
@@ -854,22 +994,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 Log.i(TAG, "xmlResult = $xmlResult")
                 return audioResult
             }
+            yield()
         }
+        return null
     }
-
-    override fun onPause() {
-        super.onPause()
-        coroutineJob?.cancel()
-        teleoperationManager?.stopUdpListener()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        QiSDK.unregister(this, this)
-        audioRecorder.stopRecording()
-        teleoperationManager?.stopUdpListener()
-    }
-
 
     // A helper function to persist the new formalLanguage to EncryptedSharedPreferences
     private fun updateFormalLanguageInPrefs(newValue: Boolean) {
@@ -897,7 +1025,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         // If we're about to process an intervention and the mic is OFF, turn it ON.
         if (onGoingIntervention != null && !onGoingIntervention!!.type.isNullOrEmpty() && !isListeningEnabled) {
             Log.d(TAG, "handle(): enabling listening for incoming intervention...")
-            toggleListening(announce = false)
+            toggleListening(MicEvent.INTERVENTION_RESUME)
         }
 
         val logMap = mutableMapOf<String, Any>()
@@ -970,7 +1098,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
         // Check for mic off keywords
         if (micOffKeywords.any { sentence.contains(it, ignoreCase = true) }) {
-            toggleListening()
+            toggleListening(MicEvent.USER_COMMAND)
             return
         }
         // Check for repeat keywords
@@ -985,218 +1113,244 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         // Proceed only if we have a meaningful user sentence
         if (sentence.isNotBlank() && (sentence != "*TIMEOUT*" || (isIntervention && onGoingIntervention!!.type == "interaction_sequence"))) {
-            if (xmlStringInput.isNotEmpty()) {
-                lastActiveSpeakerTime = System.currentTimeMillis()
-            }
-            conversationState.dialogueState.updateConversation("user", sentence)
-
-            // We'll store both jobs so we can await/join them
-            val hubRequestDeferred: Deferred<ConversationState?>
-
-            // Run them in parallel in a coroutineScope
-            val requestStart = System.currentTimeMillis()
-            coroutineScope {
-                val requestType = when (dueIntervention.type) {
-                    "interaction_sequence" -> dueIntervention.type!!
-                    else -> "reply"
+            isAnswering = true
+            try {
+                if (xmlStringInput.isNotEmpty()) {
+                    lastActiveSpeakerTime = System.currentTimeMillis()
                 }
-                Log.d(TAG, "handle: performing $requestType request")
-                // 1) The Hub request, returning a Deferred
-                hubRequestDeferred = async(Dispatchers.IO) {
-                    serverCommunicationManager.hubRequest(
-                        requestType,
-                        experimentId,
-                        deviceId,
-                        xmlString,
-                        language,
-                        conversationState,
-                        "",
-                        dueIntervention
-                    )
-                }
-            }
+                conversationState.dialogueState.updateConversation("user", sentence)
 
-            // 2) Await the hub request result
-            val updatedConversationState = hubRequestDeferred.await()
-            val requestEnd = System.currentTimeMillis()
-            firstRequestTime = (requestEnd - requestStart) / 1000.0
-            logMap["first_request_response_time"] = firstRequestTime
+                // We'll store both jobs so we can await/join them
+                val hubRequestDeferred: Deferred<ConversationState?>
 
-            // Wait for any ongoing filler to finish
-            if (fillerJob != null) {
-                Log.d(TAG, "Waiting for fillerJob to finish before speaking reply...")
-                fillerJob?.join()
-                Log.d(TAG, "FillerJob completed.")
-                fillerJob = null
-            }
-
-            // Now we can safely speak the reply *after* the filler is done
-            if (updatedConversationState != null) {
-                conversationState = updatedConversationState
-                // Whenever the server sets the formal language during an interaction_sequence
-                // (or at any other moment), store the new value in SharedPreferences if it changed.
-                if (conversationState.dialogueState.formalLanguage != formalLanguage) {
-                    formalLanguage = conversationState.dialogueState.formalLanguage
-                    // Persist it to EncryptedSharedPreferences
-                    updateFormalLanguageInPrefs(formalLanguage)
-                }
-
-                val replySentence = conversationState.getReplySentence(personName)
-                if (replySentence.isNotEmpty()) {
-                    conversationState.dialogueState.updateConversation("assistant", replySentence)
-                }
-
+                // Run them in parallel in a coroutineScope
+                val requestStart = System.currentTimeMillis()
                 coroutineScope {
-                    Log.d(TAG, "before sayMessage $replySentence")
-
-                    // Speak the reply sentence if present
-                    var sayReplyJob: Job? = null
-                    if (replySentence.isNotEmpty()) {
-                        // Update UI on Main
-                        withContext(Dispatchers.Main) {
-                            robotSpeechTextView.text = ("Pepper: $replySentence")
-                        }
-                        // Actually speak it (on IO)
-                        sayReplyJob = launch(Dispatchers.IO) {
-                            val replyStart = System.currentTimeMillis()
-                            pepperInterface.sayMessage(replySentence, language)
-                            val replyEnd = System.currentTimeMillis()
-                            replySpeakingTime = (replyEnd - replyStart) / 1000.0
-                            logMap["first_response_speaking_time"] = replySpeakingTime
-                        }
+                    val requestType = when (dueIntervention.type) {
+                        "interaction_sequence" -> dueIntervention.type!!
+                        else -> "reply"
                     }
-
-                    // Then perform the animation (this can also run in parallel or after speaking)
-                    Log.d("Debug", "before performAnimationFromPlan")
-                    performAnimationFromPlan(conversationState.plan)
-
-                    // Decide if we do the continuation logic
-                    if (!isIntervention || dueIntervention.type == "topic") {
-                        val contRequestStart = System.currentTimeMillis()
-                        val secondHubRequestJob = async(Dispatchers.IO) {
-                            Log.d("Debug", "before hubRequest continuation")
-                            serverCommunicationManager.hubRequest(
-                                "continuation",
-                                experimentId,
-                                deviceId,
-                                xmlString,
-                                language,
-                                conversationState,
-                                "",
-                                DueIntervention(type = null, exclusive = false, sentence = "")
-                            )
-                        }
-                        Log.d("Debug", "after performAnimationFromPlan")
-                        val continuationConversationState = secondHubRequestJob.await()
-                        val contRequestEnd = System.currentTimeMillis()
-                        secondRequestTime = (contRequestEnd - contRequestStart) / 1000.0
-                        logMap["second_request_response_time"] = secondRequestTime
-
-                        Log.d("Debug", "after performAnimationFromPlan await")
-
-                        if (continuationConversationState != null) {
-                            conversationState = continuationConversationState
-                            if (conversationState.dialogueState.dialogueSentence.size > 1 &&
-                                conversationState.dialogueState.dialogueSentence[1].size > 1
-                            ) {
-                                var continuationSentence = conversationState.getLastContinuationSentence(personName)
-
-                                if (continuationSentence.isNotEmpty()) {
-                                    conversationState.dialogueState.updateConversation("assistant", continuationSentence)
-                                    // Wait for the first reply to finish
-                                    Log.d("Debug", "Waiting sayReplyJob")
-                                    sayReplyJob?.join()
-                                    // Update UI on Main
-                                    withContext(Dispatchers.Main) {
-                                        robotSpeechTextView.text = ("Pepper: $continuationSentence")
-                                    }
-                                    Log.d("Debug", "After sayReplyJob")
-                                    val contSpeakStart = System.currentTimeMillis()
-                                    pepperInterface.sayMessage(continuationSentence, language)
-                                    val contSpeakEnd = System.currentTimeMillis()
-                                    continuationSpeakingTime = (contSpeakEnd - contSpeakStart) / 1000.0
-                                    logMap["second_sentence_speaking_time"] = continuationSpeakingTime
-                                    val logJson = JSONObject(logMap)
-                                    serverCommunicationManager.sendLogToServer(
-                                        logJson,
-                                        "client_dialogue",
-                                        experimentId,
-                                        deviceId,
-                                        serverPort
-                                    )
-                                    logMap.clear()
-                                    previousSentence = continuationSentence
-                                    conversationState.dialogueState.prevDialogueSentence =
-                                        conversationState.dialogueState.dialogueSentence
-                                } else {
-                                    Log.i(TAG, "No continuation sentence")
-                                }
-                            } else {
-                                Log.e(TAG, "No continuation sentence found")
-                            }
-                        } else {
-                            Log.e(TAG, "Failed continuation hub request.")
-                        }
-                    } else {
-                        val logJson = JSONObject(logMap)
-                        serverCommunicationManager.sendLogToServer(
-                            logJson,
-                            "client_dialogue",
+                    Log.d(TAG, "handle: performing $requestType request")
+                    // 1) The Hub request, returning a Deferred
+                    hubRequestDeferred = async(Dispatchers.IO) {
+                        serverCommunicationManager.hubRequest(
+                            requestType,
                             experimentId,
                             deviceId,
-                            serverPort
+                            xmlString,
+                            language,
+                            conversationState,
+                            "",
+                            dueIntervention
                         )
-                        logMap.clear()
-                        // If we're in an intervention scenario
-                        if (conversationState.dialogueState.ongoingConversation && dueIntervention.type == "action") {
-                            Log.d(TAG, "Ongoing conversation = true && intervention == action")
-                            coroutineScope {
-                                val prefix = sentenceGenerator.getPredefinedSentence(language, "prefix_repeat")
-                                val lastContinuationSentence = conversationState.getPreviousContinuationSentence(personName)
+                    }
+                }
 
-                                val repeatContinuation = "$prefix $lastContinuationSentence"
-                                Log.i(TAG, "Repeat continuation: $repeatContinuation")
+                // 2) Await the hub request result
+                val updatedConversationState = hubRequestDeferred.await()
+                val requestEnd = System.currentTimeMillis()
+                firstRequestTime = (requestEnd - requestStart) / 1000.0
+                logMap["first_request_response_time"] = firstRequestTime
 
-                                withContext(Dispatchers.Main) {
-                                    robotSpeechTextView.text = ("Pepper: $repeatContinuation")
+                // Wait for any ongoing filler to finish
+                if (fillerJob != null) {
+                    Log.d(TAG, "Waiting for fillerJob to finish before speaking reply...")
+                    fillerJob?.join()
+                    Log.d(TAG, "FillerJob completed.")
+                    fillerJob = null
+                }
+
+                // Now we can safely speak the reply *after* the filler is done
+                if (updatedConversationState != null) {
+                    conversationState = updatedConversationState
+                    // Whenever the server sets the formal language during an interaction_sequence
+                    // (or at any other moment), store the new value in SharedPreferences if it changed.
+                    if (conversationState.dialogueState.formalLanguage != formalLanguage) {
+                        formalLanguage = conversationState.dialogueState.formalLanguage
+                        // Persist it to EncryptedSharedPreferences
+                        updateFormalLanguageInPrefs(formalLanguage)
+                    }
+
+                    val replySentence = conversationState.getReplySentence(personName)
+                    if (replySentence.isNotEmpty()) {
+                        conversationState.dialogueState.updateConversation(
+                            "assistant",
+                            replySentence
+                        )
+                    }
+
+                    coroutineScope {
+                        Log.d(TAG, "before sayMessage $replySentence")
+
+                        // Speak the reply sentence if present
+                        var sayReplyJob: Job? = null
+                        if (replySentence.isNotEmpty()) {
+                            // Update UI on Main
+                            withContext(Dispatchers.Main) {
+                                robotSpeechTextView.text = ("Pepper: $replySentence")
+                            }
+                            // Actually speak it (on IO)
+                            sayReplyJob = trackTts(launch(Dispatchers.IO) {
+                                val replyStart = System.currentTimeMillis()
+                                pepperInterface.sayMessage(replySentence, language)
+                                val replyEnd = System.currentTimeMillis()
+                                replySpeakingTime = (replyEnd - replyStart) / 1000.0
+                                logMap["first_response_speaking_time"] = replySpeakingTime
+                            })
+                        }
+
+                        // Then perform the animation (this can also run in parallel or after speaking)
+                        Log.d("Debug", "before performAnimationFromPlan")
+                        performAnimationFromPlan(conversationState.plan)
+
+                        // Decide if we do the continuation logic
+                        if (!isIntervention || dueIntervention.type == "topic") {
+                            val contRequestStart = System.currentTimeMillis()
+                            val secondHubRequestJob = async(Dispatchers.IO) {
+                                Log.d("Debug", "before hubRequest continuation")
+                                serverCommunicationManager.hubRequest(
+                                    "continuation",
+                                    experimentId,
+                                    deviceId,
+                                    xmlString,
+                                    language,
+                                    conversationState,
+                                    "",
+                                    DueIntervention(type = null, exclusive = false, sentence = "")
+                                )
+                            }
+                            Log.d("Debug", "after performAnimationFromPlan")
+                            val continuationConversationState = secondHubRequestJob.await()
+                            val contRequestEnd = System.currentTimeMillis()
+                            secondRequestTime = (contRequestEnd - contRequestStart) / 1000.0
+                            logMap["second_request_response_time"] = secondRequestTime
+
+                            Log.d("Debug", "after performAnimationFromPlan await")
+
+                            if (continuationConversationState != null) {
+                                conversationState = continuationConversationState
+                                if (conversationState.dialogueState.dialogueSentence.size > 1 &&
+                                    conversationState.dialogueState.dialogueSentence[1].size > 1
+                                ) {
+                                    var continuationSentence =
+                                        conversationState.getLastContinuationSentence(personName)
+
+                                    if (continuationSentence.isNotEmpty()) {
+                                        conversationState.dialogueState.updateConversation(
+                                            "assistant",
+                                            continuationSentence
+                                        )
+                                        // Wait for the first reply to finish
+                                        Log.d("Debug", "Waiting sayReplyJob")
+                                        sayReplyJob?.join()
+                                        // Update UI on Main
+                                        withContext(Dispatchers.Main) {
+                                            robotSpeechTextView.text =
+                                                ("Pepper: $continuationSentence")
+                                        }
+                                        Log.d("Debug", "After sayReplyJob")
+                                        val contJob = trackTts(launch(Dispatchers.IO) {
+                                            val contSpeakStart = System.currentTimeMillis()
+                                            pepperInterface.sayMessage(
+                                                continuationSentence,
+                                                language
+                                            )
+                                            val contSpeakEnd = System.currentTimeMillis()
+                                            continuationSpeakingTime =
+                                                (contSpeakEnd - contSpeakStart) / 1000.0
+                                            logMap["second_sentence_speaking_time"] =
+                                                continuationSpeakingTime
+                                        })
+                                        contJob.join()
+                                        val logJson = JSONObject(logMap)
+                                        serverCommunicationManager.sendLogToServer(
+                                            logJson,
+                                            "client_dialogue",
+                                            experimentId,
+                                            deviceId,
+                                            serverPort
+                                        )
+                                        logMap.clear()
+                                        previousSentence = continuationSentence
+                                        conversationState.dialogueState.prevDialogueSentence =
+                                            conversationState.dialogueState.dialogueSentence
+                                    } else {
+                                        Log.i(TAG, "No continuation sentence")
+                                    }
+                                } else {
+                                    Log.e(TAG, "No continuation sentence found")
                                 }
-                                sayReplyJob?.join()
-                                pepperInterface.sayMessage(repeatContinuation, language)
+                            } else {
+                                Log.e(TAG, "Failed continuation hub request.")
+                            }
+                        } else {
+                            val logJson = JSONObject(logMap)
+                            serverCommunicationManager.sendLogToServer(
+                                logJson,
+                                "client_dialogue",
+                                experimentId,
+                                deviceId,
+                                serverPort
+                            )
+                            logMap.clear()
+                            // If we're in an intervention scenario
+                            if (conversationState.dialogueState.ongoingConversation && dueIntervention.type == "action") {
+                                Log.d(TAG, "Ongoing conversation = true && intervention == action")
+                                coroutineScope {
+                                    val prefix = sentenceGenerator.getPredefinedSentence(
+                                        language,
+                                        "prefix_repeat"
+                                    )
+                                    val lastContinuationSentence =
+                                        conversationState.getPreviousContinuationSentence(personName)
+
+                                    val repeatContinuation = "$prefix $lastContinuationSentence"
+                                    Log.i(TAG, "Repeat continuation: $repeatContinuation")
+
+                                    withContext(Dispatchers.Main) {
+                                        robotSpeechTextView.text = ("Pepper: $repeatContinuation")
+                                    }
+                                    sayReplyJob?.join()
+                                    pepperInterface.sayMessage(repeatContinuation, language)
+                                }
                             }
                         }
                     }
-                }
-            } else {
-                Log.e(TAG, "Failed to update conversation state.")
-                // Handle the null case with a fallback reply sentence
-                val fallbackSentence = when (language) {
-                    "it-IT" -> "Scusa, non ho capito, puoi ripetere?"
-                    "en-US" -> "Sorry, I didn't get it, can you repeat?"
-                    else -> "Sorry, I didn't understand, could you repeat?"
-                }
-
-                coroutineScope {
-                    // Update UI to display the fallback sentence
-                    withContext(Dispatchers.Main) {
-                        robotSpeechTextView.text = ("Pepper: $fallbackSentence")
+                } else {
+                    Log.e(TAG, "Failed to update conversation state.")
+                    // Handle the null case with a fallback reply sentence
+                    val fallbackSentence = when (language) {
+                        "it-IT" -> "Scusa, non ho capito, puoi ripetere?"
+                        "en-US" -> "Sorry, I didn't get it, can you repeat?"
+                        else -> "Sorry, I didn't understand, could you repeat?"
                     }
 
-                    // Speak the fallback sentence
-                    launch(Dispatchers.IO) {
-                        pepperInterface.sayMessage(fallbackSentence, language)
+                    coroutineScope {
+                        // Update UI to display the fallback sentence
+                        withContext(Dispatchers.Main) {
+                            robotSpeechTextView.text = ("Pepper: $fallbackSentence")
+                        }
+
+                        // Speak the fallback sentence
+                        launch(Dispatchers.IO) {
+                            pepperInterface.sayMessage(fallbackSentence, language)
+                        }
                     }
                 }
-            }
-            audioRecorder.resetTimeout()
+                audioRecorder.resetTimeout()
+            } finally{isAnswering=false}
+
         }
 
         if (isIntervention) {
             if (onGoingIntervention!!.type == "topic" || onGoingIntervention!!.type == "action") {
                 Log.w(TAG, "Resetting onGoingIntervention to null")
                 onGoingIntervention = null
+                startedCurrentIntervention = false
             } else if (sentence.isNotBlank() && sentence != "*START*") {
                 Log.w(TAG, "Getting the next dueIntervention")
                 Log.d("InterventionManager", "Entering DueIntervention 3 (sentenceNotBlank)")
+                startedCurrentIntervention = false
                 onGoingIntervention = personalizationManager.getDueIntervention()
                 if (onGoingIntervention == null) {
                     Log.w(TAG, "No dueIntervention found")
@@ -1225,7 +1379,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             job.join()
             Log.d(TAG, "Joined the Animation job")
         } else {
-            Log.e(TAG, "Plan is null or empty")
+            Log.d(TAG, "Plan is null or empty")
         }
     }
 }

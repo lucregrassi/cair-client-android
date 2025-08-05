@@ -52,6 +52,22 @@ class SentenceGenerator {
         "microphone_robot" to mapOf(
             "it-IT" to "Va bene, smetto di ascoltare. Toccami 4 volte la testa o dimmi: \"Hey, Pèpper\", quando vuoi parlare di nuovo con me.",
             "en-US" to "Ok, I'll stop listening. Touch my head four times or say \"Hey, Pepper\" when you want to talk to me again."
+        ),
+        "microphone_autooff_1" to mapOf(
+            "it-IT" to "Ora sono un po’ stanco, mi prendo una piccola pausa. Se vuoi continuare, dimmi: \"Hey, Pèpper\", o toccami 4 volte la testa.",
+            "en-US" to "I need a short break. If you want to continue, say \"Hey Pepper\" or tap my head four times."
+        ),
+        "microphone_autooff_2" to mapOf(
+            "it-IT" to "Faccio un breve riposo. Per riprendere, dimmi: \"Hey, Pèpper\", oppure toccami quattro volte la testa.",
+            "en-US" to "Taking a quick rest. To resume, say: \"Hey Pepper\" or tap my head four times."
+        ),
+        "microphone_autooff_3" to mapOf(
+            "it-IT" to "Mi fermo un attimo. Se vuoi continuare a chiacchierare, chiamami dicendo: \"Hey, Pèpper\", o toccami quattro volte la testa.",
+            "en-US" to "I'll pause for a moment. If you'd like to keep chatting, say \"Hey Pepper\" or tap my head four times."
+        ),
+        "microphone_autooff_4" to mapOf(
+            "it-IT" to "Anche i robot ogni tanto hanno bisogno di una pausa! Per continuare a parlare con me, dimmi: \"Hey, Pèpper\" o toccami la testa quattro volte.",
+            "en-US" to "Even robots need a short break! To continue, say: \"Hey Pepper\" or tap my head four times."
         )
     )
 
@@ -92,5 +108,11 @@ class SentenceGenerator {
         // Pick a random filler in IO context
         val fillerList = fillerSentencesMap[language] ?: fillerSentencesMap["it-IT"]!!
         return fillerList.random()
+    }
+
+    // in SentenceGenerator
+    fun getRandomAutoOff(lang: String): String {
+        val i = (1..4).random()
+        return getPredefinedSentence(lang, "microphone_autooff_$i")
     }
 }
