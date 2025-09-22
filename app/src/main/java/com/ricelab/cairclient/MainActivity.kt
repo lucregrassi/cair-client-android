@@ -136,7 +136,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     // To handle hotword detection for microphone
     private var hotwordFuture: Future<ListenResult>? = null
-    private val micOffKeywords = listOf("disattiva il microfono", "smetti di ascoltare", "non ho più voglia di parlare", "smetti di parlare")
+    private val micOffKeywords = listOf("disattiva il microfono", "smetti di ascoltare", "non ho più voglia di parlare", "smetti di parlare", "voglio fare una pausa")
     private val micOnKeyword = "Hey Pepper"
     private var lastFillerSpeakingTime: Double? = null
     var fillerJob: Job? = null
@@ -868,6 +868,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             )
             Log.d(TAG, "Entering handle for xmlString = $xmlString")
             handle(xmlString)
+            Log.d(TAG, "Exited handle function")
             withContext(Dispatchers.IO) {
                 conversationState.writeToFile()
             }
@@ -1203,14 +1204,14 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         }
 
                         // Then perform the animation (this can also run in parallel or after speaking)
-                        Log.d("Debug", "before performAnimationFromPlan")
+                        Log.d(TAG, "before performAnimationFromPlan")
                         performAnimationFromPlan(conversationState.plan)
 
                         // Decide if we do the continuation logic
                         if (!isIntervention || dueIntervention.type == "topic") {
                             val contRequestStart = System.currentTimeMillis()
                             val secondHubRequestJob = async(Dispatchers.IO) {
-                                Log.d("Debug", "before hubRequest continuation")
+                                Log.d(TAG, "before hubRequest continuation")
                                 serverCommunicationManager.hubRequest(
                                     "continuation",
                                     experimentId,
@@ -1222,13 +1223,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                     DueIntervention(type = null, exclusive = false, sentence = "")
                                 )
                             }
-                            Log.d("Debug", "after performAnimationFromPlan")
+                            Log.d(TAG, "after performAnimationFromPlan")
                             val continuationConversationState = secondHubRequestJob.await()
                             val contRequestEnd = System.currentTimeMillis()
                             secondRequestTime = (contRequestEnd - contRequestStart) / 1000.0
                             logMap["second_request_response_time"] = secondRequestTime
 
-                            Log.d("Debug", "after performAnimationFromPlan await")
+                            Log.d(TAG, "after performAnimationFromPlan await")
 
                             if (continuationConversationState != null) {
                                 conversationState = continuationConversationState
@@ -1244,15 +1245,15 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                             continuationSentence
                                         )
                                         // Wait for the first reply to finish
-                                        Log.d("Debug", "Waiting sayReplyJob")
+                                        Log.d(TAG, "Waiting sayReplyJob")
                                         sayReplyJob?.join()
                                         // Update UI on Main
                                         withContext(Dispatchers.Main) {
                                             robotSpeechTextView.text =
                                                 ("Pepper: $continuationSentence")
                                         }
-                                        Log.d("Debug", "After sayReplyJob")
-                                        val contJob = trackTts(launch(Dispatchers.IO) {
+                                        Log.d(TAG, "After sayReplyJob")
+                                        val contReplyJob = trackTts(launch(Dispatchers.IO) {
                                             val contSpeakStart = System.currentTimeMillis()
                                             pepperInterface.sayMessage(
                                                 continuationSentence,
@@ -1264,7 +1265,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                             logMap["second_sentence_speaking_time"] =
                                                 continuationSpeakingTime
                                         })
-                                        contJob.join()
+                                        contReplyJob.join()
+                                        Log.d(TAG, "After contReplyJob")
                                         val logJson = JSONObject(logMap)
                                         serverCommunicationManager.sendLogToServer(
                                             logJson,
@@ -1273,6 +1275,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                                             deviceId,
                                             serverPort
                                         )
+                                        Log.d(TAG, "Sent log to server")
                                         logMap.clear()
                                         previousSentence = continuationSentence
                                         conversationState.dialogueState.prevDialogueSentence =
