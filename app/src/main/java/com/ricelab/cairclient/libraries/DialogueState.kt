@@ -30,6 +30,7 @@ data class DialogueState(
     var conversationHistory: MutableList<Map<String, String>> = mutableListOf(),
     var ongoingConversation: Boolean = true,
     var formalLanguage: Boolean = true,
+    var topicMemory: MutableMap<String, String> = mutableMapOf()
 
 ) {
     // Constructor using snake_case from server-side
@@ -54,7 +55,9 @@ data class DialogueState(
         } ?: DialogueNuances(),
         conversationHistory = (dialogueState["conversation_history"] as? List<*>)?.filterIsInstance<Map<String, String>>()?.toMutableList() ?: mutableListOf(),
         ongoingConversation = dialogueState["ongoing_conversation"] as Boolean,
-        formalLanguage = dialogueState["formal_language"] as Boolean
+        formalLanguage = dialogueState["formal_language"] as Boolean,
+        topicMemory = (dialogueState["topic_memory"] as? Map<*, *>)?.mapKeys { it.key.toString() }?.mapValues { it.value.toString() }?.toMutableMap()
+            ?: mutableMapOf()
     )
     companion object {
         fun parseDialogueSentence(data: Any?): List<List<String>> {
@@ -100,6 +103,7 @@ data class DialogueState(
             "conversation_history" to conversationHistory,
             "ongoing_conversation" to ongoingConversation,
             "formal_language" to formalLanguage,
+            "topic_memory" to topicMemory,
         )
     }
 
@@ -199,6 +203,14 @@ data class DialogueState(
 
         // Update formalLanguage
         this.formalLanguage = if (json.has("formal_language")) json.optBoolean("formal_language") else this.formalLanguage
+
+        // Update topicMemory
+        this.topicMemory = json.optJSONObject("topic_memory")?.let { topicMemoryJson ->
+            topicMemoryJson.keys().asSequence()
+                .mapNotNull { key -> topicMemoryJson.optString(key)?.let { key to it } }
+                .toMap()
+                .toMutableMap()
+        } ?: this.topicMemory
 
         return this
     }
