@@ -14,7 +14,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:contentDescription="Image containing the QR code for the Maritime Station"
-            android:src="@drawable/qr_code_stazione_marittima"
+            android:src="@drawable/qr_code_pepper_new"
             android:scaleType="centerCrop" />
 
         <!-- Overlay Layout -->

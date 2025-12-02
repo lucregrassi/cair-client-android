@@ -123,7 +123,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private var headTouchCount = 0
     private var lastHeadTouchTime: Long = 0
-    private val headTouchInterval = 1000L // 1 second to complete 3 touches
+    private val headTouchInterval = 1000L // max interval between taps to group them
     private var silenceDuration : Int = 2
 
     private val requestAudioPermission = registerForActivityResult(
@@ -136,7 +136,28 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     // To handle hotword detection for microphone
     private var hotwordFuture: Future<ListenResult>? = null
-    private val micOffKeywords = listOf("disattiva il microfono", "smetti di ascoltare", "non ho più voglia di parlare", "smetti di parlare", "voglio fare una pausa")
+    // commands to disable the microphone
+    private val micOffKeywords = listOf(
+        "interrompi la conversazione",
+        "ferma la conversazione",
+        "sospendi la conversazione",
+        "termina la conversazione",
+        "metti in pausa la conversazione",
+        "puoi fermare la conversazione",
+
+        "smetti di parlare",
+        "smetti di ascoltare",
+
+        "non voglio continuare a parlare",
+        "non voglio più parlare",
+        "non ho più voglia di parlare",
+
+        "disattiva il microfono",
+        "spegni il microfono",
+
+        "puoi stare zitto per favore",
+        "hai rotto le scatole"
+    )
     private val micOnKeyword = "Hey Pepper"
     private var lastFillerSpeakingTime: Double? = null
     var fillerJob: Job? = null
@@ -158,10 +179,74 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private var lastServerCfg: Triple<String, Int, String>? = null
 
+    @Volatile
+    private var touchLocked: Boolean = true // blocca il touch dentro l’app
+
+    @Volatile
+    private var kioskEnabled: Boolean = false // stato di startLockTask / stopLockTask
+
+    private var headTouchEvalJob: Job? = null
+
+    private fun enableKioskMode() {
+        try {
+            startLockTask()
+            kioskEnabled = true
+            Log.i(TAG, "Kiosk mode ON (startLockTask)")
+        } catch (e: Exception) {
+            Log.e(TAG, "startLockTask failed", e)
+        }
+    }
+
+    private fun disableKioskMode() {
+        try {
+            stopLockTask()
+            kioskEnabled = false
+            Log.i(TAG, "Kiosk mode OFF (stopLockTask)")
+        } catch (e: Exception) {
+            Log.e(TAG, "stopLockTask failed", e)
+        }
+    }
+
+    /**
+     * locked = true  -> touch interno disabilitato + kiosk ON
+     * locked = false -> touch interno abilitato + kiosk OFF
+     */
+    private fun setGlobalLock(locked: Boolean) {
+        touchLocked = locked
+        if (locked) {
+            enableKioskMode()
+        } else {
+            disableKioskMode()
+        }
+    }
+
+    private fun toggleGlobalLock() {
+        val newLocked = !touchLocked
+        setGlobalLock(newLocked)
+    }
+
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+        if (touchLocked) return true   // blocca TUTTO il touch interno
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_main_maritime_station)
         QiSDK.register(this, this)
+
+        window.decorView.setOnSystemUiVisibilityChangeListener {
+            // if the user swipes we hide again the buttons
+            hideSystemUI()
+        }
+
+        // block home/recents/exit
+        try {
+            startLockTask()
+            Log.i(TAG, "startLockTask active")
+        } catch (e: Exception) {
+            Log.e(TAG, "startLockTask failed", e)
+        }
 
         personalizationManager = InterventionManager.getInstance(this)
 
@@ -325,6 +410,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onResume() {
         super.onResume()
+        // quando l'app viene riaperta: blocco totale (touch interno + tasti sistema)
+        setGlobalLock(true)
         val oldEnabled = micAutoOffEnabled
         val oldMinutes = micAutoOffMinutes
 
@@ -369,16 +456,18 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         audioRecorder.stopRecording()
         teleoperationManager?.stopUdpListener()
         cancelMicAutoOffTimer()
+        try { stopLockTask() } catch (_: Exception) {}
+    }
+
+    private fun hideSystemUI() {
+        window.decorView.systemUiVisibility =
+            (View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            window.decorView.systemUiVisibility = (
-                    View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    )
-        }
+        if (hasFocus) hideSystemUI()
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -389,7 +478,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_home -> {
-                // Chiude tutti i fragment nello stack e mostra la main UI
+                // Close all fragments in the stack and show main UI
                 supportFragmentManager.popBackStack(null, androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE)
                 findViewById<View>(R.id.main_ui_container)?.visibility = View.VISIBLE
                 findViewById<View>(R.id.fragment_container)?.visibility = View.GONE
@@ -677,16 +766,49 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         if (!isTouchListenerAdded) {
             val touch: Touch = qiContext.touch
             Log.w(TAG, "ADDING TOUCH LISTENER")
+
             touch.getSensor("Head/Touch")?.addOnStateChangedListener { touchState ->
                 if (touchState.touched) {
-                    val currentTime = System.currentTimeMillis()
-                    headTouchCount = if (currentTime - lastHeadTouchTime <= headTouchInterval) headTouchCount + 1 else 1
-                    lastHeadTouchTime = currentTime
+                    val now = System.currentTimeMillis()
 
-                    if (headTouchCount >= 4) {
-                        Log.i(TAG, "Quadruple head touch detected. Posting toggleListening to Main thread.")
+                    // Reset count if too much time has passed since last touch
+                    if (now - lastHeadTouchTime > headTouchInterval) {
                         headTouchCount = 0
-                        runOnUiThread { lifecycleScope.launch { toggleListening(MicEvent.HEAD_TOUCH) } }
+                    }
+
+                    headTouchCount++
+                    lastHeadTouchTime = now
+
+                    // Cancel any previous pending evaluation
+                    headTouchEvalJob?.cancel()
+
+                    // If we reached 4+ touches quickly -> mic toggle wins immediately
+                    if (headTouchCount >= 4) {
+                        Log.i(TAG, "Quadruple head touch detected -> toggleListening")
+                        headTouchCount = 0
+                        runOnUiThread {
+                            lifecycleScope.launch {
+                                toggleListening(MicEvent.HEAD_TOUCH)
+                            }
+                        }
+                        return@addOnStateChangedListener
+                    }
+
+                    // Otherwise, evaluate after headTouchInterval:
+                    // if it's 3 taps -> toggle touch lock; else -> ignore
+                    headTouchEvalJob = lifecycleScope.launch {
+                        delay(headTouchInterval)
+                        val taps = headTouchCount
+                        headTouchCount = 0
+
+                        if (taps == 3) {
+                            Log.i(TAG, "Triple head touch detected -> toggleGlobalLock")
+                            runOnUiThread {
+                                toggleGlobalLock()
+                            }
+                        } else {
+                            Log.i(TAG, "$taps head touches detected (no action)")
+                        }
                     }
                 }
             }
@@ -729,6 +851,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         try { session.close() } catch (_: Exception) {}
         hotwordFuture?.cancel(true); hotwordFuture = null
         ledRefreshJob?.cancel(); ledRefreshJob = null
+
+        headTouchEvalJob?.cancel()
+        headTouchEvalJob = null
+        headTouchCount = 0
+        lastHeadTouchTime = 0L
+        // touchLocked stays as-is
     }
 
     override fun onRobotFocusRefused(reason: String) {
