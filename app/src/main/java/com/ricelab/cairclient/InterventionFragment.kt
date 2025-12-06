@@ -29,24 +29,51 @@ class InterventionFragment : Fragment() {
 
     private val prefsName = "patient_fields"
 
-    private val topicTriggerMap = mapOf(
+    private val apathiaTopicsTriggerMap = mapOf(
+        "Cucina" to "Parliamo del cucinare",
+        "Musica" to "Parliamo di musica",
+        "Guardare la TV" to "Parliamo di cosa mi piace guardare in TV",
+        "Giardinaggio" to "Parliamo di giardinaggio",
+        "Disegno e schizzi" to "Parliamo del disegno e di fare schizzi",
+        "Leggere un libro" to "Parliamo dei libri che mi piace leggere",
+        "Attività all'aria aperta" to "Parliamo delle attività che mi piace fare all'aria aperta",
+        "Giochi tradizionali" to "Parliamo dei giochi tradizionali che conosco",
+        "Attualità" to "Parliamo di notizie e attualità",
+        "Arte e cultura" to "Parliamo di arte e cultura",
+        "Animali" to "Parliamo degli animali",
+        "Cibo" to "Parliamo di cibo",
+        "Sport" to "Parliamo di sport",
+        "Viaggi" to "Parliamo dei viaggi",
+        "Lavorare ai ferri" to "Parliamo del lavorare ai ferri",
+        "Attività cognitive" to "Parliamo di attività di stimolazione cognitiva come cruciverba, sudoku e altri giochi per allenare la mente"
+    )
+
+    private val deliriumTopicsTriggerMap = mapOf(
         "Musica" to "Parliamo di musica",
         "Cinema" to "Parliamo di film e cinema",
         "Hobby" to "Parliamo delle cose che mi piace fare e dei miei hobby",
         "Cibo" to "Parliamo di cibo",
-        "Famiglia" to "Parliamo della mia famiglia",
-        "Questionario SM" to "Parliamo del questionario di valultazione della mia esperienza presso la Stazione Marittima",
-        //"Barriere coralline" to "Parliamo delle scogliere coralline",
-        //"Protezione delle barriere coralline" to "Parliamo della protezione delle barriere coralline",
-        //"Polipi corallini" to "Parliamo dei polipi corallini",
-        //"Coralli molli" to "Parliamo dei coralli molli",
-        //"Forme dei pesci" to "Parliamo delle forme dei pesci"
+        "Famiglia" to "Parliamo della mia famiglia"
+    )
+
+    private val stazioneMarittimaTopicsTriggerMap = mapOf(
+        "Questionario SM" to "Parliamo del questionario di valutazione della mia esperienza presso la Stazione Marittima"
+    )
+
+    private val acquarioTopicsTriggerMap = mapOf(
+        "Barriere coralline" to "Parliamo delle scogliere coralline",
+        "Protezione delle barriere coralline" to "Parliamo della protezione delle barriere coralline",
+        "Polipi corallini" to "Parliamo dei polipi corallini",
+        "Coralli molli" to "Parliamo dei coralli molli",
+        "Forme dei pesci" to "Parliamo delle forme dei pesci"
     )
 
     private val actionTriggerMap = mapOf(
         "Richiama l'attenzione" to "Richiama l'attenzione",
-        "Invita a scansionare i codici QR" to "Scansiona i codici QR"
+        // "Invita a scansionare i codici QR" to "Scansiona i codici QR"
     )
+
+    private val topicTriggerMap = apathiaTopicsTriggerMap
 
     private val predefinedQuestionsMapping = mapOf(
         "salutare alla persona e chiedere come sta" to "greeting the person and ask them how they are feeling",

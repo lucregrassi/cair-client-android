@@ -232,7 +232,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main_maritime_station)
+        setContentView(R.layout.activity_main)
         QiSDK.register(this, this)
 
         window.decorView.setOnSystemUiVisibilityChangeListener {
