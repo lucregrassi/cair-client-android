@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <EditText
+        android:id="@+id/xEdit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="X (m) - es. 0.5"
+        android:inputType="numberDecimal" />
+
+    <EditText
+        android:id="@+id/yEdit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Y (m) - es. 0.0"
+        android:inputType="numberDecimal"
+        android:layout_marginTop="8dp"/>
+
+    <EditText
+        android:id="@+id/thetaEdit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Theta (deg) - es. 90"
+        android:inputType="numberDecimal"
+        android:layout_marginTop="8dp"/>
+
+    <EditText
+        android:id="@+id/dwellEdit"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Tempo (min) - es. 5"
+        android:inputType="numberDecimal"
+        android:layout_marginTop="8dp"/>
+
+    <!-- subito sotto dwellEdit (nell'XML che hai già) -->
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/mustReachSwitch"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Raggiungi ad ogni costo"
+        android:layout_marginTop="8dp"/>
+
+    <!-- Timeout (sec) visibile solo se mustReach ON -->
+    <LinearLayout
+        android:id="@+id/mustReachTimeoutGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginTop="8dp">
+
+        <EditText
+            android:id="@+id/mustReachTimeoutEdit"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Timeout (sec) - es. 30"
+            android:inputType="number" />
+    </LinearLayout>
+</LinearLayout>

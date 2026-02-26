@@ -490,6 +490,46 @@
                 android:layout_marginBottom="16dp" />
         </LinearLayout>
 
+        <!-- ===================== MOVIMENTO ===================== -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Movimento"
+            android:textStyle="bold"
+            android:textSize="18sp"
+            android:textColor="@color/black"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="8dp" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/ambientMoveSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Abilita movimento sequenziale"
+            android:textSize="16sp"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- gruppo visibile solo se switch ON -->
+        <LinearLayout
+            android:id="@+id/ambientMoveGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/addAmbientPointBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="+ Aggiungi punto"
+                android:layout_marginBottom="8dp"/>
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/ambientPointsRecycler"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"/>
+        </LinearLayout>
         <!-- ===================== AZIONI ===================== -->
         <Button
             android:id="@+id/proceedButton"

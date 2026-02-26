@@ -37,7 +37,9 @@ import com.aldebaran.qi.*
 
 
 private const val TAG = "MainActivity"
-private const val SILENCE_THRESHOLD: Long = 300 // in seconds
+private const val SILENCE_THRESHOLD: Long = 120L // in seconds
+// dopo quanti secondi di silenzio possiamo far muovere pepper
+private const val AMBIENT_MOVE_RESUME_AFTER_SECONDS: Long = 30L
 private const val INTERVENTION_POLLING_DELAY_MIC_OFF = 2000L
 
 class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
@@ -49,6 +51,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         const val EXTRA_SUPPRESS_LISTENING = "suppress_listening"
         const val EXTRA_SUPPRESS_WELCOME = "suppress_welcome"
     }
+
+    // -------- Ambient movement steps from settings --------
+    // Se è vuota -> Pepper NON si muove.
+    private var ambientMoveSteps: List<MoveStep> = emptyList()
 
     // in MainActivity
     private var currentTtsJob: Job? = null
@@ -155,6 +161,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         "disattiva il microfono",
         "spegni il microfono",
 
+        "stai zitto",
         "puoi stare zitto per favore",
         "hai rotto le scatole"
     )
@@ -186,6 +193,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var kioskEnabled: Boolean = false // stato di startLockTask / stopLockTask
 
     private var headTouchEvalJob: Job? = null
+
+    // --- Ambient movement (sequence) ---
+    private var ambientMoveEnabled: Boolean = false
+    private var ambientMoveSpeed: Float = 0.2f
+
+    private lateinit var sequenceMover: SequenceMover
 
     private fun enableKioskMode() {
         try {
@@ -254,6 +267,27 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         // retrieve values stored in settings
         retrieveStoredValues()
         pepperInterface = PepperInterface(null, voiceSpeed, voicePitch)
+
+        sequenceMover = SequenceMover(
+            scope = lifecycleScope,
+            pepper = pepperInterface,
+            canMoveNow = {
+                if (!::conversationState.isInitialized) return@SequenceMover false
+
+                ambientMoveEnabled &&
+                        ambientMoveSteps.isNotEmpty() &&
+                        !isFragmentActive &&
+                        !isAnswering &&
+                        (currentTtsJob?.isActive != true) &&
+                        (onGoingIntervention == null) &&
+                        movementSilenceOk()
+            },
+            onLog = { Log.i(TAG, it) }
+        ).apply {
+            speed = ambientMoveSpeed
+            steps = ambientMoveSteps
+        }
+
         Log.i(TAG, "******autoDetectLanguage = $autoDetectLanguage")
         loadScheduledInterventions()
         fileStorageManager = FileStorageManager(filesDir)
@@ -345,8 +379,20 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 //isListeningEnabled = false
                 isFragmentActive = true
             }
+            if (::sequenceMover.isInitialized) {
+                if (isFragmentActive) {
+                    sequenceMover.stop()
+                } else {
+                    if (ambientMoveEnabled && ambientMoveSteps.isNotEmpty()) sequenceMover.start() else sequenceMover.stop()
+                }
+            }
         }
         openFromIntent(intent)
+    }
+
+    private fun movementSilenceOk(): Boolean {
+        val elapsedMs = System.currentTimeMillis() - lastActiveSpeakerTime
+        return elapsedMs >= AMBIENT_MOVE_RESUME_AFTER_SECONDS * 1000L
     }
 
     private fun openFromIntent(intent: Intent?) {
@@ -429,9 +475,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         if (!micAutoOffEnabled) {
             cancelMicAutoOffTimer()
-        } else if (oldEnabled != micAutoOffEnabled || oldMinutes != micAutoOffMinutes) {
+        } else if (!oldEnabled || oldMinutes != micAutoOffMinutes) {
             Log.i(TAG, "[AUTO_OFF] settings changed -> reschedule")
             resetMicAutoOffTimerAsync()
+        }
+        if (::sequenceMover.isInitialized) {
+            sequenceMover.enabled = ambientMoveEnabled
+            sequenceMover.speed = ambientMoveSpeed
+            sequenceMover.steps = ambientMoveSteps
+
+            if (ambientMoveEnabled && ambientMoveSteps.isNotEmpty()) sequenceMover.start() else sequenceMover.stop()
         }
     }
 
@@ -564,11 +617,31 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         silenceDuration = sharedPreferences.getInt("silence_duration", 2)
         micAutoOffEnabled = sharedPreferences.getBoolean("mic_auto_off_enabled", true)
         micAutoOffMinutes = sharedPreferences.getInt("mic_auto_off_minutes", 1).toLong()
+        ambientMoveEnabled = sharedPreferences.getBoolean("ambient_move_enabled", false)
+        ambientMoveSpeed = sharedPreferences.getInt("ambient_move_speed_pct", 20) / 100.0f
 
-        Log.i(TAG, "personName=$personName, personGender=$personGender, personAge=$personAge")
-        Log.i(TAG, "useFillerSentence=$useFillerSentence")
-        Log.i(TAG, "autoDetectLanguage=$autoDetectLanguage")
-        Log.i(TAG, "formalLanguage=$formalLanguage")
+        // ----------------- READ STEPS FROM SETTINGS -----------------
+        val jsonSteps = sharedPreferences.getString("ambient_move_steps_json", null)
+
+        ambientMoveSteps = if (jsonSteps.isNullOrBlank()) {
+            emptyList()
+        } else {
+            try {
+                val t = object : TypeToken<List<MoveStepUi>>() {}.type
+                val uiSteps = Gson().fromJson<List<MoveStepUi>>(jsonSteps, t) ?: emptyList()
+                uiSteps.filter { it.isValid() }.map { it.toRuntime() }
+            } catch (e: Exception) {
+                Log.e(TAG, "Invalid ambient_move_steps_json -> disabling movement", e)
+                emptyList()
+            }
+        }
+
+        // se l'utente non ha inserito punti -> il robot NON deve muoversi
+        if (ambientMoveSteps.isEmpty()) {
+            ambientMoveEnabled = false
+        }
+
+        Log.i(TAG, "ambientMoveEnabled=$ambientMoveEnabled steps=${ambientMoveSteps.size}")
 
         if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
             val intent = Intent(this, SettingsActivity::class.java)
@@ -763,6 +836,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         pepperInterface.setContext(this.qiContext)
         pepperInterface.holdBaseMovement()
 
+        pepperInterface.initHomeFrame()
+
+        // avvia SOLO se abilitato E con punti
+        if (ambientMoveEnabled && ambientMoveSteps.isNotEmpty()) sequenceMover.start()
+        else sequenceMover.stop()
+
         if (!isTouchListenerAdded) {
             val touch: Touch = qiContext.touch
             Log.w(TAG, "ADDING TOUCH LISTENER")
@@ -856,7 +935,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         headTouchEvalJob = null
         headTouchCount = 0
         lastHeadTouchTime = 0L
-        // touchLocked stays as-is
+
+        sequenceMover.stop()
     }
 
     override fun onRobotFocusRefused(reason: String) {
@@ -1178,9 +1258,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             else -> false
         }
         Log.d(TAG, "Handle: isIntervention = $isIntervention")
-        val xmlString = if (xmlStringInput.isNotEmpty()) {
-            xmlStringInput
-        } else {
+        val xmlString = xmlStringInput.ifEmpty {
             if (isIntervention && onGoingIntervention!!.type != "interaction_sequence") {
                 """
                 <response>
@@ -1191,7 +1269,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                   </profile_id>
                 </response>
                 """.trimIndent()
-                    } else {
+            } else {
                 """
                 <response>
                   <profile_id value="00000000-0000-0000-0000-000000000000">*START*<language>$language</language>

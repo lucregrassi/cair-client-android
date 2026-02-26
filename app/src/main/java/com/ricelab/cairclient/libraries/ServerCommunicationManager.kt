@@ -369,6 +369,7 @@ class ServerCommunicationManager(
             "12347" -> "maritime_station_pepper"
             "12348" -> "maritime_station_alterego"
             "12349" -> "delirium"
+            "12351" -> "apathia"
             else -> "unknown"
         }
     }
