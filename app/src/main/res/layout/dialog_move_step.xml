@@ -10,22 +10,23 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="X (m) - es. 0.5"
-        android:inputType="numberDecimal" />
+        android:inputType="numberDecimal|numberSigned" />
 
     <EditText
         android:id="@+id/yEdit"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Y (m) - es. 0.0"
-        android:inputType="numberDecimal"
+        android:autofillHints=""
+        android:hint="Y (m) - es. -0.2"
+        android:inputType="numberDecimal|numberSigned"
         android:layout_marginTop="8dp"/>
 
     <EditText
         android:id="@+id/thetaEdit"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Theta (deg) - es. 90"
-        android:inputType="numberDecimal"
+        android:hint="Theta (deg) - es. -90"
+        android:inputType="numberDecimal|numberSigned"
         android:layout_marginTop="8dp"/>
 
     <EditText

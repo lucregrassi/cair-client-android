@@ -2,8 +2,6 @@ package com.ricelab.cairclient.libraries
 
 import kotlinx.coroutines.*
 
-private const val MUST_REACH_TIMEOUT_SECONDS = 30L
-
 data class MoveStep(
     val x: Double,
     val y: Double,

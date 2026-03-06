@@ -37,9 +37,9 @@ import com.aldebaran.qi.*
 
 
 private const val TAG = "MainActivity"
-private const val SILENCE_THRESHOLD: Long = 120L // in seconds
+private const val SILENCE_THRESHOLD: Long = 180L // in seconds
 // dopo quanti secondi di silenzio possiamo far muovere pepper
-private const val AMBIENT_MOVE_RESUME_AFTER_SECONDS: Long = 30L
+private const val AMBIENT_MOVE_RESUME_AFTER_SECONDS: Long = 60L
 private const val INTERVENTION_POLLING_DELAY_MIC_OFF = 2000L
 
 class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
@@ -245,7 +245,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_main_maritime_station)
         QiSDK.register(this, this)
 
         window.decorView.setOnSystemUiVisibilityChangeListener {
@@ -266,6 +266,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         sentenceGenerator.loadFillerSentences(this)
         // retrieve values stored in settings
         retrieveStoredValues()
+        // blocca movimenti per AMBIENT_MOVE_RESUME_AFTER_SECONDS dal primo avvio
+        lastActiveSpeakerTime = System.currentTimeMillis()
+
         pepperInterface = PepperInterface(null, voiceSpeed, voicePitch)
 
         sequenceMover = SequenceMover(

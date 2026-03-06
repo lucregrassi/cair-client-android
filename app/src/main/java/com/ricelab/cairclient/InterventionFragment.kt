@@ -57,7 +57,7 @@ class InterventionFragment : Fragment() {
     )
 
     private val stazioneMarittimaTopicsTriggerMap = mapOf(
-        "Questionario SM" to "Parliamo del questionario di valutazione della mia esperienza presso la Stazione Marittima"
+        "Questionario di valutazione del robot" to "Parliamo del riempimento del questionario di valutazione della mia esperienza con il robot"
     )
 
     private val acquarioTopicsTriggerMap = mapOf(
@@ -73,7 +73,7 @@ class InterventionFragment : Fragment() {
         // "Invita a scansionare i codici QR" to "Scansiona i codici QR"
     )
 
-    private val topicTriggerMap = apathiaTopicsTriggerMap
+    private val topicTriggerMap = stazioneMarittimaTopicsTriggerMap
 
     private val predefinedQuestionsMapping = mapOf(
         "salutare alla persona e chiedere come sta" to "greeting the person and ask them how they are feeling",
