@@ -397,6 +397,15 @@
             android:minHeight="48dp"
             android:layout_marginBottom="16dp" />
 
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/autoScreenLockSwitch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Blocco automatico touch/kiosk"
+            android:textSize="16sp"
+            android:checked="false"
+            android:layout_marginBottom="16dp" />
+
         <!-- ===================== LED / ROBOT ===================== -->
         <TextView
             android:layout_width="match_parent"

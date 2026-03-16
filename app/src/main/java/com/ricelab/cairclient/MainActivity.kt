@@ -34,6 +34,8 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import org.json.JSONObject
 import com.aldebaran.qi.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 
 private const val TAG = "MainActivity"
@@ -183,6 +185,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var micAutoOffMinutes: Long = 1L
 
     @Volatile private var isAnswering = false
+    private val micMutex = Mutex()
 
     private var lastServerCfg: Triple<String, Int, String>? = null
 
@@ -198,6 +201,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var ambientMoveEnabled: Boolean = false
     private var ambientMoveSpeed: Float = 0.2f
 
+    private var autoScreenLockEnabled: Boolean = false
+
     private lateinit var sequenceMover: SequenceMover
 
     private fun enableKioskMode() {
@@ -206,6 +211,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             kioskEnabled = true
             Log.i(TAG, "Kiosk mode ON (startLockTask)")
         } catch (e: Exception) {
+            kioskEnabled = false
             Log.e(TAG, "startLockTask failed", e)
         }
     }
@@ -220,17 +226,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    /**
-     * locked = true  -> touch interno disabilitato + kiosk ON
-     * locked = false -> touch interno abilitato + kiosk OFF
-     */
     private fun setGlobalLock(locked: Boolean) {
         touchLocked = locked
+
         if (locked) {
             enableKioskMode()
         } else {
             disableKioskMode()
         }
+
+        applySystemUiMode()
     }
 
     private fun toggleGlobalLock() {
@@ -239,7 +244,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
-        if (touchLocked) return true   // blocca TUTTO il touch interno
+        if (touchLocked) return true
         return super.dispatchTouchEvent(ev)
     }
 
@@ -248,24 +253,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         setContentView(R.layout.activity_main_maritime_station)
         QiSDK.register(this, this)
 
-        window.decorView.setOnSystemUiVisibilityChangeListener {
-            // if the user swipes we hide again the buttons
-            hideSystemUI()
-        }
-
-        // block home/recents/exit
-        try {
-            startLockTask()
-            Log.i(TAG, "startLockTask active")
-        } catch (e: Exception) {
-            Log.e(TAG, "startLockTask failed", e)
-        }
-
         personalizationManager = InterventionManager.getInstance(this)
 
         sentenceGenerator.loadFillerSentences(this)
         // retrieve values stored in settings
         retrieveStoredValues()
+        applyAutoScreenLockSetting()
         // blocca movimenti per AMBIENT_MOVE_RESUME_AFTER_SECONDS dal primo avvio
         lastActiveSpeakerTime = System.currentTimeMillis()
 
@@ -354,18 +347,20 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 mainUI.visibility = View.VISIBLE
                 fragmentContainer.visibility = View.GONE
 
-                // Re-enable teleoperation when back to MainActivity
                 if (supportFragmentManager.backStackEntryCount == 0 && teleoperationManager?.isRunning() != true) {
                     teleoperationManager?.startUdpListener(lifecycleScope)
                 }
                 Log.d(TAG, "Teleoperation listener restarted after fragment closed")
 
                 if (isListeningEnabled) {
-                    // Start listening
                     Log.i(TAG, "Reset timer: uscita dal fragment")
                     resetMicAutoOffTimerAsync()
                     Log.i(TAG, "Restarting listening after exiting fragment...")
                 }
+
+                lastActiveSpeakerTime = System.currentTimeMillis()
+                Log.i(TAG, "Ambient movement postponed after fragment close")
+
                 isFragmentActive = false
             } else {
                 mainUI.visibility = View.GONE
@@ -378,7 +373,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 cancelMicAutoOffTimer()
                 // Stop listening
                 Log.i(TAG, "Stopping listening to enter fragment...")
-                audioRecorder.stopRecording()
+                if (::audioRecorder.isInitialized) {
+                    try {
+                        audioRecorder.stopRecording()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error stopping recorder when entering fragment", e)
+                    }
+                }
                 //isListeningEnabled = false
                 isFragmentActive = true
             }
@@ -413,7 +414,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 isFragmentActive = true
                 if (suppressListeningOnStart) {
                     isListeningEnabled = false
-                    audioRecorder.stopRecording()
+                    if (::audioRecorder.isInitialized) {
+                        try {
+                            audioRecorder.stopRecording()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error stopping recorder while opening fragment", e)
+                        }
+                    }
                     setLeds(false)
                 }
                 showPersonalizationFragment()
@@ -422,7 +429,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 isFragmentActive = true
                 if (suppressListeningOnStart) {
                     isListeningEnabled = false
-                    audioRecorder.stopRecording()
+                    if (::audioRecorder.isInitialized) {
+                        try {
+                            audioRecorder.stopRecording()
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error stopping recorder while opening fragment", e)
+                        }
+                    }
                     setLeds(false)
                 }
                 showInterventionFragment()
@@ -459,14 +472,14 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onResume() {
         super.onResume()
-        // quando l'app viene riaperta: blocco totale (touch interno + tasti sistema)
-        setGlobalLock(true)
+
         val oldEnabled = micAutoOffEnabled
         val oldMinutes = micAutoOffMinutes
 
-        retrieveStoredValues()          // <- read prefs here
+        retrieveStoredValues()
+        applyAutoScreenLockSetting()
         ensureServerManagerUpToDate()
-        applySettingsToRuntime()        // <- apply to audio/UI/pepperInterface
+        applySettingsToRuntime()
 
         isListeningEnabled = true
         if (!isFragmentActive && !suppressListeningOnStart) {
@@ -482,18 +495,46 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             Log.i(TAG, "[AUTO_OFF] settings changed -> reschedule")
             resetMicAutoOffTimerAsync()
         }
+
         if (::sequenceMover.isInitialized) {
             sequenceMover.enabled = ambientMoveEnabled
             sequenceMover.speed = ambientMoveSpeed
             sequenceMover.steps = ambientMoveSteps
 
-            if (ambientMoveEnabled && ambientMoveSteps.isNotEmpty()) sequenceMover.start() else sequenceMover.stop()
+            if (ambientMoveEnabled && ambientMoveSteps.isNotEmpty()) {
+                sequenceMover.start()
+            } else {
+                sequenceMover.stop()
+            }
+        }
+
+        if (qiContext != null && coroutineJob == null && !isDestroyed && !isFinishing) {
+            Log.i(TAG, "Restarting dialogue coroutine in onResume")
+            suppressWelcomeOnStart = true
+            coroutineJob = lifecycleScope.launch {
+                try {
+                    startDialogue()
+                } finally {
+                    suppressWelcomeOnStart = false
+                }
+            }
         }
     }
 
     override fun onPause() {
         super.onPause()
+
         coroutineJob?.cancel()
+        coroutineJob = null
+
+        if (::audioRecorder.isInitialized) {
+            try {
+                audioRecorder.stopRecording()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping recorder in onPause", e)
+            }
+        }
+
         teleoperationManager?.stopUdpListener()
         cancelMicAutoOffTimer()
     }
@@ -507,23 +548,59 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        QiSDK.unregister(this, this)
-        audioRecorder.stopRecording()
+        isAlive = false
+        coroutineJob?.cancel()
+        fillerJob?.cancel()
+        currentTtsJob?.cancel()
+        headTouchEvalJob?.cancel()
+        ledRefreshJob?.cancel()
+        micAutoOffJob?.cancel()
+
+        hotwordFuture?.cancel(true)
+        hotwordFuture = null
+
+        if (::audioRecorder.isInitialized) {
+            try {
+                audioRecorder.stopRecording()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error stopping recorder in onDestroy", e)
+            }
+        }
+
         teleoperationManager?.stopUdpListener()
         cancelMicAutoOffTimer()
-        try { stopLockTask() } catch (_: Exception) {}
+
+        try {
+            stopLockTask()
+        } catch (_: Exception) {
+        }
+
+        QiSDK.unregister(this, this)
+        super.onDestroy()
     }
 
     private fun hideSystemUI() {
         window.decorView.systemUiVisibility =
             (View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
+                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    or View.SYSTEM_UI_FLAG_FULLSCREEN)
+    }
+
+    private fun showSystemUI() {
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+    }
+
+    private fun applySystemUiMode() {
+        if (touchLocked || kioskEnabled) {
+            hideSystemUI()
+        } else {
+            showSystemUI()
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemUI()
+        if (hasFocus) applySystemUiMode()
     }
 
     override fun onCreateOptionsMenu(menu: Menu?): Boolean {
@@ -579,92 +656,109 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private fun applySettingsToRuntime() {
-        // Apply prefs to runtime components (no robot focus needed)
-        audioRecorder.longSilenceDurationMillis = silenceDuration * 1000L
+        if (::audioRecorder.isInitialized) {
+            audioRecorder.longSilenceDurationMillis = silenceDuration * 1000L
+        }
         pepperInterface.setVoiceSpeed(voiceSpeed)
         pepperInterface.setVoicePitch(voicePitch)
-        userSpeechTextView.textSize = userFontSize.toFloat()
-        robotSpeechTextView.textSize = robotFontSize.toFloat()
+
+        if (::userSpeechTextView.isInitialized) {
+            userSpeechTextView.textSize = userFontSize.toFloat()
+        }
+        if (::robotSpeechTextView.isInitialized) {
+            robotSpeechTextView.textSize = robotFontSize.toFloat()
+        }
     }
 
     private fun retrieveStoredValues() {
-        val masterKeyAlias = MasterKey.Builder(this)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+        try {
+            val masterKeyAlias = MasterKey.Builder(this)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
 
-        val sharedPreferences = EncryptedSharedPreferences.create(
-            this,
-            "secure_prefs",
-            masterKeyAlias,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+            val sharedPreferences = EncryptedSharedPreferences.create(
+                this,
+                "secure_prefs",
+                masterKeyAlias,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
 
-        serverIp = sharedPreferences.getString("server_ip", null) ?: ""
-        serverPort = sharedPreferences.getInt("server_port", -1)
-        experimentId = sharedPreferences.getString("experiment_id", "test") ?: ""
-        deviceId = sharedPreferences.getString("device_id", "pepper") ?: ""
-        personName = sharedPreferences.getString("person_name", "") ?: ""
-        personGender = sharedPreferences.getString("person_gender", "") ?: ""
-        personAge = sharedPreferences.getString("person_age", "") ?: ""
-        openAIApiKey = sharedPreferences.getString("openai_api_key", null) ?: ""
-        useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
-        autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
-        formalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
-        useLeds = sharedPreferences.getBoolean("use_leds", true)
-        robotPassword = sharedPreferences.getString("robot_password", "") ?: ""
-        voiceSpeed = sharedPreferences.getInt("voice_speed", 100)
-        voicePitch = sharedPreferences.getInt("voice_pitch", 100)
-        userFontSize = sharedPreferences.getInt("user_font_size", 24)
-        robotFontSize = sharedPreferences.getInt("robot_font_size", 24)
-        silenceDuration = sharedPreferences.getInt("silence_duration", 2)
-        micAutoOffEnabled = sharedPreferences.getBoolean("mic_auto_off_enabled", true)
-        micAutoOffMinutes = sharedPreferences.getInt("mic_auto_off_minutes", 1).toLong()
-        ambientMoveEnabled = sharedPreferences.getBoolean("ambient_move_enabled", false)
-        ambientMoveSpeed = sharedPreferences.getInt("ambient_move_speed_pct", 20) / 100.0f
+            serverIp = sharedPreferences.getString("server_ip", null) ?: ""
+            serverPort = sharedPreferences.getInt("server_port", -1)
+            experimentId = sharedPreferences.getString("experiment_id", "test") ?: ""
+            deviceId = sharedPreferences.getString("device_id", "pepper") ?: ""
+            personName = sharedPreferences.getString("person_name", "") ?: ""
+            personGender = sharedPreferences.getString("person_gender", "") ?: ""
+            personAge = sharedPreferences.getString("person_age", "") ?: ""
+            openAIApiKey = sharedPreferences.getString("openai_api_key", null) ?: ""
+            useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
+            autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
+            formalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
+            useLeds = sharedPreferences.getBoolean("use_leds", true)
+            robotPassword = sharedPreferences.getString("robot_password", "") ?: ""
+            voiceSpeed = sharedPreferences.getInt("voice_speed", 100)
+            voicePitch = sharedPreferences.getInt("voice_pitch", 100)
+            userFontSize = sharedPreferences.getInt("user_font_size", 24)
+            robotFontSize = sharedPreferences.getInt("robot_font_size", 24)
+            silenceDuration = sharedPreferences.getInt("silence_duration", 2)
+            autoScreenLockEnabled = sharedPreferences.getBoolean("auto_screen_lock_enabled", false)
+            micAutoOffEnabled = sharedPreferences.getBoolean("mic_auto_off_enabled", true)
+            micAutoOffMinutes = sharedPreferences.getInt("mic_auto_off_minutes", 1).toLong()
+            ambientMoveEnabled = sharedPreferences.getBoolean("ambient_move_enabled", false)
+            ambientMoveSpeed = sharedPreferences.getInt("ambient_move_speed_pct", 20) / 100.0f
 
-        // ----------------- READ STEPS FROM SETTINGS -----------------
-        val jsonSteps = sharedPreferences.getString("ambient_move_steps_json", null)
-
-        ambientMoveSteps = if (jsonSteps.isNullOrBlank()) {
-            emptyList()
-        } else {
-            try {
-                val t = object : TypeToken<List<MoveStepUi>>() {}.type
-                val uiSteps = Gson().fromJson<List<MoveStepUi>>(jsonSteps, t) ?: emptyList()
-                uiSteps.filter { it.isValid() }.map { it.toRuntime() }
-            } catch (e: Exception) {
-                Log.e(TAG, "Invalid ambient_move_steps_json -> disabling movement", e)
+            val jsonSteps = sharedPreferences.getString("ambient_move_steps_json", null)
+            ambientMoveSteps = if (jsonSteps.isNullOrBlank()) {
                 emptyList()
+            } else {
+                try {
+                    val t = object : TypeToken<List<MoveStepUi>>() {}.type
+                    val uiSteps = Gson().fromJson<List<MoveStepUi>>(jsonSteps, t) ?: emptyList()
+                    uiSteps.filter { it.isValid() }.map { it.toRuntime() }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Invalid ambient_move_steps_json -> disabling movement", e)
+                    emptyList()
+                }
             }
-        }
 
-        // se l'utente non ha inserito punti -> il robot NON deve muoversi
-        if (ambientMoveSteps.isEmpty()) {
-            ambientMoveEnabled = false
-        }
+            if (ambientMoveSteps.isEmpty()) {
+                ambientMoveEnabled = false
+            }
 
-        Log.i(TAG, "ambientMoveEnabled=$ambientMoveEnabled steps=${ambientMoveSteps.size}")
+            Log.i(TAG, "ambientMoveEnabled=$ambientMoveEnabled steps=${ambientMoveSteps.size}")
 
-        if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
-            val intent = Intent(this, SettingsActivity::class.java)
-            startActivity(intent)
+            if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
+                startActivity(Intent(this, SettingsActivity::class.java))
+                finish()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load secure preferences", e)
+            Toast.makeText(this, "Errore nel caricamento delle impostazioni", Toast.LENGTH_LONG).show()
+            startActivity(Intent(this, SettingsActivity::class.java))
             finish()
         }
     }
 
     private fun loadScheduledInterventions() {
-        val prefs = getSharedPreferences("interventions", MODE_PRIVATE)
-        val json = prefs.getString("scheduled_interventions", null) ?: return
+        try {
+            val prefs = getSharedPreferences("interventions", MODE_PRIVATE)
+            val json = prefs.getString("scheduled_interventions", null) ?: return
 
-        val listType = object : TypeToken<List<ScheduledIntervention>>() {}.type
-        val loadedInterventions: List<ScheduledIntervention> = Gson().fromJson(json, listType)
+            val listType = object : TypeToken<List<ScheduledIntervention>>() {}.type
+            val loadedInterventions: List<ScheduledIntervention> =
+                Gson().fromJson(json, listType) ?: emptyList()
 
-        personalizationManager.loadFromPrefs()
-        Log.i(TAG, "Loaded $loadedInterventions")
+            personalizationManager.loadFromPrefs()
+            Log.i(TAG, "Loaded $loadedInterventions")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load scheduled interventions", e)
+        }
     }
 
     private suspend fun recalibrateThresholdBlocking() {
+        if (!::audioRecorder.isInitialized) return
+
         val newThreshold = withContext(Dispatchers.IO) {
             audioRecorder.recalibrateThreshold()
         }
@@ -751,85 +845,110 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private suspend fun toggleListening(reason: MicEvent) {
+    private suspend fun toggleListening(reason: MicEvent) = micMutex.withLock {
         val goingOff = isListeningEnabled
 
         if (goingOff) {
             setLeds(false)
-            // don't cancel the timer when it's the auto-off itself
+
             if (reason != MicEvent.AUTO_OFF) {
                 cancelMicAutoOffTimer()
             } else {
                 Log.d(TAG, "[MicToggle] AUTO_OFF: skip cancel of auto-off job (self)")
             }
 
-            // 1) Aspetta SEMPRE eventuale TTS in corso prima di dire la frase di spegnimento
             currentTtsJob?.let { tts ->
                 if (tts.isActive) {
                     Log.i(TAG, "[MicToggle] wait current TTS before OFF")
-                    val waited = withTimeoutOrNull(30_000) {  // safety, opzionale
-                        try { tts.join() } catch (_: CancellationException) {}
+                    val waited = withTimeoutOrNull(30_000) {
+                        try {
+                            tts.join()
+                        } catch (_: CancellationException) {
+                        }
                     }
-                    if (waited == null) Log.w(TAG, "[MicToggle] TTS wait timed out, proceeding to OFF")
+                    if (waited == null) {
+                        Log.w(TAG, "[MicToggle] TTS wait timed out, proceeding to OFF")
+                    }
                 }
             }
 
-            // 2) SOLO per AUTO_OFF: ricontrolla le condizioni (es. è arrivato un intervento)
             if (reason == MicEvent.AUTO_OFF) {
                 val stillHasIntervention = onGoingIntervention?.type?.isNotEmpty() == true
                 if (!isListeningEnabled || isFragmentActive || stillHasIntervention) {
                     Log.i(TAG, "[MicToggle] AUTO_OFF: condizioni cambiate, non spengo")
                     resetMicAutoOffTimerAsync()
-                    return
+                    return@withLock
                 }
             }
 
-            // 3) Dì la frase di spegnimento (sempre)
-            val phrase = if (reason == MicEvent.AUTO_OFF)
+            val phrase = if (reason == MicEvent.AUTO_OFF) {
                 sentenceGenerator.getRandomAutoOff(language)
-            else
+            } else {
                 sentenceGenerator.getPredefinedSentence(language, "microphone_robot")
+            }
 
-            withContext(Dispatchers.Main) { robotSpeechTextView.text = "Pepper: $phrase" }
+            isListeningEnabled = false
+
+            if (::audioRecorder.isInitialized) {
+                try {
+                    audioRecorder.stopRecording()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error stopping recorder", e)
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                Toast.makeText(this@MainActivity, "Microfono disattivato", Toast.LENGTH_SHORT).show()
+                userSpeechTextView.text =
+                    sentenceGenerator.getPredefinedSentence(language, "microphone_user")
+                robotSpeechTextView.text = "Pepper: $phrase"
+            }
+
             trackTts(lifecycleScope.launch(Dispatchers.IO) {
                 pepperInterface.sayMessage(phrase, language)
             }).join()
 
-            // 4) Spegni e avvia hotword
-            isListeningEnabled = false
-            audioRecorder.stopRecording()
-            runOnUiThread {
-                Toast.makeText(this, "Microfono disattivato", Toast.LENGTH_SHORT).show()
-                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone_user")
-            }
             delay(200)
-            qiContext?.let { startHotwordRecognition(it) }
+            qiContext?.let {
+                try {
+                    startHotwordRecognition(it)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Hotword restart error", e)
+                }
+            }
             setLeds(true)
+
         } else {
-            // --- Sto per accendere il microfono ---
             Log.i(TAG, "MicToggle ON (reason=$reason)")
-            hotwordFuture?.cancel(true); hotwordFuture = null
+            hotwordFuture?.cancel(true)
+            hotwordFuture = null
             isListeningEnabled = true
 
-            // Parla SEMPRE quando accendi, tranne se è un resume silenzioso per intervento
             val mustSpeakOn = reason != MicEvent.INTERVENTION_RESUME
             if (mustSpeakOn) {
-                runOnUiThread {
-                    Toast.makeText(this, "Microfono attivato", Toast.LENGTH_SHORT).show()
-                    userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
-                    robotSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_robot")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@MainActivity, "Microfono attivato", Toast.LENGTH_SHORT).show()
+                    userSpeechTextView.text =
+                        sentenceGenerator.getPredefinedSentence(language, "listening_user")
+                    robotSpeechTextView.text =
+                        sentenceGenerator.getPredefinedSentence(language, "listening_robot")
                 }
-                pepperInterface.sayMessage(
-                    sentenceGenerator.getPredefinedSentence(language, "listening_robot"),
-                    language
-                )
+
+                try {
+                    pepperInterface.sayMessage(
+                        sentenceGenerator.getPredefinedSentence(language, "listening_robot"),
+                        language
+                    )
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error speaking mic-on sentence", e)
+                }
             } else {
-                runOnUiThread {
-                    userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
+                withContext(Dispatchers.Main) {
+                    userSpeechTextView.text =
+                        sentenceGenerator.getPredefinedSentence(language, "listening_user")
                 }
             }
 
-            // Timer auto-off riparte (se non ci sono interventi attivi lo gestisce già la tua funzione)
             resetMicAutoOffTimerAsync()
         }
     }
@@ -837,13 +956,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onRobotFocusGained(qiContext: QiContext) {
         this.qiContext = qiContext
         pepperInterface.setContext(this.qiContext)
-        pepperInterface.holdBaseMovement()
+        pepperInterface.holdAutonomousBaseRotation()
 
         pepperInterface.initHomeFrame()
 
-        // avvia SOLO se abilitato E con punti
-        if (ambientMoveEnabled && ambientMoveSteps.isNotEmpty()) sequenceMover.start()
-        else sequenceMover.stop()
+        // avvia solo se abilitato e con punti definiti (partendo dal primo)
+        if (ambientMoveEnabled && ambientMoveSteps.isNotEmpty()) {
+            sequenceMover.start(resetIndex = true)
+        } else {
+            sequenceMover.stop(resetIndex = true)
+        }
 
         if (!isTouchListenerAdded) {
             val touch: Touch = qiContext.touch
@@ -921,25 +1043,46 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
 
         // Start dialogue (needs qiContext)
-        coroutineJob = lifecycleScope.launch { startDialogue() }
+        if (coroutineJob?.isActive != true) {
+            coroutineJob = lifecycleScope.launch { startDialogue() }
+        }
     }
 
     override fun onRobotFocusLost() {
         teleoperationManager?.stopUdpListener()
         teleoperationManager = null
         this.qiContext = null
-        pepperInterface.releaseBaseMovement()
+
+        try {
+            pepperInterface.releaseAutonomousBaseRotation()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing base movement", e)
+        }
+
         pepperInterface.setContext(null)
-        try { session.close() } catch (_: Exception) {}
-        hotwordFuture?.cancel(true); hotwordFuture = null
-        ledRefreshJob?.cancel(); ledRefreshJob = null
+
+        if (this::session.isInitialized) {
+            try {
+                session.close()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error closing session", e)
+            }
+        }
+
+        hotwordFuture?.cancel(true)
+        hotwordFuture = null
+
+        ledRefreshJob?.cancel()
+        ledRefreshJob = null
 
         headTouchEvalJob?.cancel()
         headTouchEvalJob = null
         headTouchCount = 0
         lastHeadTouchTime = 0L
 
-        sequenceMover.stop()
+        if (::sequenceMover.isInitialized) {
+            sequenceMover.stop()
+        }
     }
 
     override fun onRobotFocusRefused(reason: String) {
@@ -947,29 +1090,44 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private fun parseXmlForSentenceAndLanguage(xmlString: String): Pair<String, String> {
-        val factory = DocumentBuilderFactory.newInstance()
-        val builder = factory.newDocumentBuilder()
-        val inputStream = xmlString.byteInputStream()
-        val document = builder.parse(inputStream)
-        document.documentElement.normalize()
-
-        val profileIdElement = document.getElementsByTagName("profile_id").item(0) as Element
-        val nodeList = profileIdElement.childNodes
-
-        val sentenceBuilder = StringBuilder()
-        var detectedLanguage = "it-IT"
-        for (i in 0 until nodeList.length) {
-            val currentNode = nodeList.item(i)
-            if (currentNode.nodeType == Node.TEXT_NODE) {
-                sentenceBuilder.append(currentNode.nodeValue.trim())
+        return try {
+            if (xmlString.isBlank()) {
+                return "" to "it-IT"
             }
-            if (currentNode.nodeType == Node.ELEMENT_NODE && currentNode.nodeName == "language") {
-                detectedLanguage = currentNode.textContent.trim()
+
+            val factory = DocumentBuilderFactory.newInstance()
+            val builder = factory.newDocumentBuilder()
+            val inputStream = xmlString.byteInputStream()
+            val document = builder.parse(inputStream)
+            document.documentElement.normalize()
+
+            val profileNode = document.getElementsByTagName("profile_id").item(0)
+                ?: return "" to "it-IT"
+
+            val profileIdElement = profileNode as? Element
+                ?: return "" to "it-IT"
+
+            val nodeList = profileIdElement.childNodes
+            val sentenceBuilder = StringBuilder()
+            var detectedLanguage = "it-IT"
+
+            for (i in 0 until nodeList.length) {
+                val currentNode = nodeList.item(i)
+
+                if (currentNode.nodeType == Node.TEXT_NODE) {
+                    sentenceBuilder.append(currentNode.nodeValue?.trim().orEmpty())
+                }
+
+                if (currentNode.nodeType == Node.ELEMENT_NODE && currentNode.nodeName == "language") {
+                    detectedLanguage = currentNode.textContent?.trim().orEmpty().ifEmpty { "it-IT" }
+                }
             }
+
+            sentenceBuilder.toString() to detectedLanguage
+        } catch (e: Exception) {
+            Log.e(TAG, "XML parse error", e)
+            "" to "it-IT"
         }
-
-        val sentence = sentenceBuilder.toString()
-        return Pair(sentence, detectedLanguage)
     }
 
     private suspend fun startDialogue() {
@@ -996,7 +1154,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         lastActiveSpeakerTime = System.currentTimeMillis()
         resetMicAutoOffTimerAsync()
 
-        while (isAlive) {
+        while (currentCoroutineContext().isActive && isAlive) {
             Log.i(TAG, "Time since last spoken words (ms) = ${System.currentTimeMillis() - lastActiveSpeakerTime}")
             conversationState.dialogueState.ongoingConversation =
                 (System.currentTimeMillis() - lastActiveSpeakerTime) <= SILENCE_THRESHOLD * 1000
@@ -1180,60 +1338,73 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private suspend fun startListeningOrNull(): AudioResult? {
-        while (true) {
+        while (currentCoroutineContext().isActive) {
             if (!isListeningEnabled || isFragmentActive) {
                 Log.w(TAG, "startListening aborted: micOff=${!isListeningEnabled}, fragment=$isFragmentActive")
                 return null
             }
-            userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
+
+            withContext(Dispatchers.Main) {
+                userSpeechTextView.text =
+                    sentenceGenerator.getPredefinedSentence(language, "listening_user")
+            }
+
             val audioResult = withContext(Dispatchers.IO) {
                 audioRecorder.listenAndSplit()
             }
 
-            // Se durante l'ascolto il mic è stato spento o sei entrato in fragment, abbandona
-            if (!isListeningEnabled || isFragmentActive) return null
+            if (!isListeningEnabled || isFragmentActive) {
+                return null
+            }
 
             val xmlResult = audioResult.xmlResult
             val (userSentence, detectedLang) = parseXmlForSentenceAndLanguage(xmlResult)
 
-            // Update the user sentence TextView only if listening is enabled
-            if(isListeningEnabled) {
-                userSpeechTextView.text = "Utente: $userSentence"
-            }
-
             if (detectedLang.isNotEmpty() && detectedLang != "und") {
                 language = detectedLang
+            }
+
+            if (isListeningEnabled) {
+                withContext(Dispatchers.Main) {
+                    userSpeechTextView.text = "Utente: $userSentence"
+                }
             }
 
             if (xmlResult.isNotBlank()) {
                 Log.i(TAG, "xmlResult = $xmlResult")
                 return audioResult
             }
+
             yield()
         }
+
         return null
     }
 
     // A helper function to persist the new formalLanguage to EncryptedSharedPreferences
     private fun updateFormalLanguageInPrefs(newValue: Boolean) {
-        val masterKeyAlias = MasterKey.Builder(this)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+        try {
+            val masterKeyAlias = MasterKey.Builder(this)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
 
-        val sharedPreferences = EncryptedSharedPreferences.create(
-            this,
-            "secure_prefs",
-            masterKeyAlias,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+            val sharedPreferences = EncryptedSharedPreferences.create(
+                this,
+                "secure_prefs",
+                masterKeyAlias,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
 
-        with(sharedPreferences.edit()) {
-            putBoolean("use_formal_language", newValue)
-            apply()
+            with(sharedPreferences.edit()) {
+                putBoolean("use_formal_language", newValue)
+                apply()
+            }
+
+            Log.d(TAG, "Updated formal language in SharedPreferences -> $newValue")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update formal language in prefs", e)
         }
-
-        Log.d(TAG, "Updated formal language in SharedPreferences -> $newValue")
     }
 
     private suspend fun handle(xmlStringInput: String) {
@@ -1581,25 +1752,35 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private suspend fun performAnimationFromPlan(plan: String?) {
-        if (!plan.isNullOrEmpty()) {
-            val planItems = plan.split("#").drop(1)
-            val job = lifecycleScope.launch(Dispatchers.IO) {
-                for (item in planItems) {
-                    val actionMatch = "action=(\\w+)".toRegex().find(item)
-                    val action = actionMatch?.groupValues?.get(1)
-                    if (action != null) {
-                        Log.d(TAG, "Launched the Animation job")
-                        pepperInterface.performAnimation(action)
-                    } else {
-                        Log.e(TAG, "No action found in plan item: $item")
-                    }
-                }
-            }
-            job.join()
-            Log.d(TAG, "Joined the Animation job")
-        } else {
+    private suspend fun performAnimationFromPlan(plan: String?) = withContext(Dispatchers.IO) {
+        if (plan.isNullOrEmpty()) {
             Log.d(TAG, "Plan is null or empty")
+            return@withContext
+        }
+
+        val planItems = plan.split("#").drop(1)
+        for (item in planItems) {
+            val actionMatch = "action=(\\w+)".toRegex().find(item)
+            val action = actionMatch?.groupValues?.get(1)
+
+            if (action != null) {
+                try {
+                    Log.d(TAG, "Performing animation: $action")
+                    pepperInterface.performAnimation(action)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error performing animation: $action", e)
+                }
+            } else {
+                Log.e(TAG, "No action found in plan item: $item")
+            }
+        }
+    }
+
+    private fun applyAutoScreenLockSetting() {
+        if (autoScreenLockEnabled) {
+            setGlobalLock(true)
+        } else {
+            setGlobalLock(false)
         }
     }
 }

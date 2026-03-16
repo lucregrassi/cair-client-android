@@ -51,7 +51,7 @@ class SentenceGenerator {
         ),
         "microphone_robot" to mapOf(
             "it-IT" to "Va bene, smetto di ascoltare. Toccami 4 volte la testa o dimmi: \"Hey, Pèpper\", quando vuoi parlare di nuovo con me.",
-            "en-US" to "Ok, I'll stop listening. Touch my head four times or say \"Hey, Pepper\" when you want to talk to me again."
+            "en-US" to "Ok, I'll stop listening. Touch my head four times or say \"Hey Pepper\" when you want to talk to me again."
         ),
         "microphone_autooff_1" to mapOf(
             "it-IT" to "Ora sono un po’ stanco, mi prendo una piccola pausa. Se vuoi continuare, dimmi: \"Hey, Pèpper\", o toccami 4 volte la testa.",

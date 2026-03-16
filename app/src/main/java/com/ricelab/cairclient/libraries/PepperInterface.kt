@@ -241,7 +241,7 @@ class PepperInterface(
         }
     }
 
-    fun holdBaseMovement() {
+    fun holdAutonomousBaseRotation() {
         val ctx = qiContext ?: return
         if (holder == null) {
             holder = HolderBuilder.with(ctx)
@@ -251,7 +251,7 @@ class PepperInterface(
         holder?.async()?.hold()
     }
 
-    fun releaseBaseMovement() {
+    fun releaseAutonomousBaseRotation() {
         holder?.async()?.release()
     }
 

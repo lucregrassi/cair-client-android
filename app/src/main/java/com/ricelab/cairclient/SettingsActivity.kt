@@ -72,6 +72,8 @@ class SettingsActivity : AppCompatActivity() {
     private lateinit var ambientAdapter: AmbientPointsAdapter
     private var ambientPoints: MutableList<MoveStepUi> = mutableListOf()
 
+    private lateinit var autoScreenLockSwitch: SwitchCompat
+
     private fun refreshRobotPasswordVisibility() {
         robotPasswordGroup.visibility = if (useLedsSwitch.isChecked) View.VISIBLE else View.GONE
     }
@@ -124,6 +126,7 @@ class SettingsActivity : AppCompatActivity() {
         userFontSizeLabel = findViewById(R.id.userFontSizeLabel)
         robotFontSizeSeekBar = findViewById(R.id.robotFontSizeSeekBar)
         robotFontSizeLabel = findViewById(R.id.robotFontSizeLabel)
+        autoScreenLockSwitch = findViewById(R.id.autoScreenLockSwitch)
 
         silenceDurationSeekBar = findViewById(R.id.silenceDurationSeekBar)
         silenceDurationLabel = findViewById(R.id.silenceDurationLabel)
@@ -257,6 +260,7 @@ class SettingsActivity : AppCompatActivity() {
             val micAutoOffEnabled = micAutoOffSwitch.isChecked
             val micAutoOffMinutes = micAutoOffSeekBar.progress.coerceAtLeast(1)
             val voicePitch = voicePitchSeekBar.progress.coerceAtLeast(50)
+            val autoScreenLockEnabled = autoScreenLockSwitch.isChecked
 
             if (openAIApiKey.isEmpty()) {
                 Toast.makeText(this, "Per favore, inserisci la chiave OpenAI", Toast.LENGTH_SHORT).show()
@@ -308,6 +312,7 @@ class SettingsActivity : AppCompatActivity() {
                 userFontSize = userFontSizeSeekBar.progress,
                 robotFontSize = robotFontSizeSeekBar.progress,
                 silenceDuration = silenceDurationSeekBar.progress,
+                autoScreenLockEnabled = autoScreenLockEnabled,
                 micAutoOffEnabled = micAutoOffEnabled,
                 micAutoOffMinutes = micAutoOffMinutes,
                 ambientMoveEnabled = ambientMoveSwitch.isChecked,
@@ -579,6 +584,10 @@ class SettingsActivity : AppCompatActivity() {
         robotFontSizeSeekBar.progress = savedRobotFontSize
         robotFontSizeLabel.text = "Dimensione testo robot: ${savedRobotFontSize}sp"
 
+        val savedAutoScreenLockEnabled =
+            sharedPreferences.getBoolean("auto_screen_lock_enabled", false)
+        autoScreenLockSwitch.isChecked = savedAutoScreenLockEnabled
+
         val savedMicAutoOffEnabled = sharedPreferences.getBoolean("mic_auto_off_enabled", true)
         val savedMicAutoOffMinutes = sharedPreferences.getInt("mic_auto_off_minutes", 1)
         micAutoOffSwitch.isChecked = savedMicAutoOffEnabled
@@ -643,6 +652,7 @@ class SettingsActivity : AppCompatActivity() {
         userFontSize: Int,
         robotFontSize: Int,
         silenceDuration: Int,
+        autoScreenLockEnabled: Boolean,
         micAutoOffEnabled: Boolean,
         micAutoOffMinutes: Int,
         ambientMoveEnabled: Boolean,
@@ -670,6 +680,7 @@ class SettingsActivity : AppCompatActivity() {
             putInt("user_font_size", userFontSize)
             putInt("robot_font_size", robotFontSize)
             putInt("silence_duration", silenceDuration)
+            putBoolean("auto_screen_lock_enabled", autoScreenLockEnabled)
             putBoolean("mic_auto_off_enabled", micAutoOffEnabled)
             putInt("mic_auto_off_minutes", micAutoOffMinutes)
             putBoolean("ambient_move_enabled", ambientMoveEnabled)
@@ -678,17 +689,22 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun securePrefs(): SharedPreferences {
-        val masterKey = MasterKey.Builder(this)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
+        return try {
+            val masterKey = MasterKey.Builder(this)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
 
-        return EncryptedSharedPreferences.create(
-            this,
-            "secure_prefs",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+            EncryptedSharedPreferences.create(
+                this,
+                "secure_prefs",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create secure prefs", e)
+            getSharedPreferences("fallback_prefs", MODE_PRIVATE)
+        }
     }
 
     private fun deleteAllData() {

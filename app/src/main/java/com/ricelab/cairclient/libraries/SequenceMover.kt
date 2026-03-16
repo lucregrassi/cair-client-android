@@ -25,7 +25,12 @@ class SequenceMover(
 
     var steps: List<MoveStep> = emptyList()
 
-    fun start() {
+    fun start(resetIndex: Boolean = false) {
+        if (resetIndex) {
+            idx = 0
+            onLog("SeqMove -> start(resetIndex=true), idx=0")
+        }
+
         if (job?.isActive == true) return
 
         job = scope.launch(Dispatchers.Default) {
@@ -35,21 +40,18 @@ class SequenceMover(
                     continue
                 }
 
-                val s = steps[idx % steps.size]
+                val currentIndex = idx % steps.size
+                val s = steps[currentIndex]
                 idx++
 
                 try {
-                    pepper.releaseBaseMovement()
-
-                    onLog("SeqMove -> GoTo (${s.x}, ${s.y}, θ=${s.thetaRad})")
+                    onLog("SeqMove -> step ${currentIndex + 1}/${steps.size}: GoTo (${s.x}, ${s.y}, θ=${s.thetaRad})")
                     pepper.goToPoseInHome(
                         Pose2D(s.x, s.y, s.thetaRad),
                         speed,
                         s.mustReach,
                         timeoutMs = s.mustReachTimeoutMs
                     )
-
-                    pepper.holdBaseMovement()
 
                     val dwell = s.dwellMs.coerceAtLeast(0L)
                     onLog("SeqMove -> dwell ${dwell}ms")
@@ -58,18 +60,25 @@ class SequenceMover(
                 } catch (ce: CancellationException) {
                     throw ce
                 } catch (t: Throwable) {
-                    onLog("SeqMove -> error ${t.message}")
-                    try { pepper.holdBaseMovement() } catch (_: Throwable) {}
+                    onLog("SeqMove -> error at step ${currentIndex + 1}: ${t.message}")
                     delay(1000)
                 }
             }
         }
     }
 
-    fun stop() {
+    fun stop(resetIndex: Boolean = false) {
         job?.cancel()
         job = null
+
+        if (resetIndex) {
+            idx = 0
+            onLog("SeqMove -> stop(resetIndex=true), idx=0")
+        }
     }
 
-    fun resetIndex() { idx = 0 }
+    fun resetIndex() {
+        idx = 0
+        onLog("SeqMove -> resetIndex(), idx=0")
+    }
 }
