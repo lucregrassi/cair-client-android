@@ -2,7 +2,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- 🟢 MAIN UI CONTAINER -->
+    <!-- MAIN UI CONTAINER -->
     <FrameLayout
         android:id="@+id/main_ui_container"
         android:layout_width="match_parent"
@@ -14,8 +14,18 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:contentDescription="Image containing the QR code for the Maritime Station"
-            android:src="@drawable/qr_code_pepper_stazione_marittima"
+            android:src="@drawable/background_stazione_marittima"
             android:scaleType="centerCrop" />
+
+        <!-- QR Code overlay -->
+        <ImageView
+            android:id="@+id/qrImageView"
+            android:layout_width="230dp"
+            android:layout_height="230dp"
+            android:layout_marginTop="140dp"
+            android:layout_marginStart="368dp"
+            android:background="@android:color/white"
+            android:src="@drawable/qr_code1" />
 
         <!-- Overlay Layout -->
         <RelativeLayout
@@ -27,25 +37,25 @@
                 android:id="@+id/userSpeechTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Sto ascoltando..."
-                android:visibility="invisible"
-                android:textSize="24sp"
                 android:layout_alignParentTop="true"
                 android:layout_centerHorizontal="true"
+                android:layout_marginTop="30dp"
                 android:padding="16dp"
-                android:layout_marginTop="30dp" />
+                android:text="Sto ascoltando..."
+                android:textSize="24sp"
+                android:visibility="invisible" />
 
             <!-- TextView to display the robot's speech -->
             <TextView
                 android:id="@+id/robotSpeechTextView"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text=""
-                android:textSize="24sp"
-                android:visibility="invisible"
                 android:layout_below="@id/userSpeechTextView"
                 android:layout_centerHorizontal="true"
-                android:padding="16dp" />
+                android:padding="16dp"
+                android:text=""
+                android:textSize="24sp"
+                android:visibility="invisible" />
 
             <!-- TextView to display the threshold -->
             <TextView
@@ -53,10 +63,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_below="@id/userSpeechTextView"
+                android:layout_centerHorizontal="true"
                 android:layout_marginTop="223dp"
                 android:layout_marginBottom="-142dp"
                 android:padding="16dp"
-                android:layout_centerHorizontal="true"
                 android:text="Soglia del rumore: "
                 android:textSize="18sp"
                 android:visibility="invisible" />
@@ -66,16 +76,16 @@
                 android:id="@+id/recalibrateButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Ricalibra soglia"
                 android:layout_alignParentBottom="true"
                 android:layout_centerHorizontal="true"
+                android:layout_marginBottom="16dp"
                 android:alpha="0"
                 android:padding="16dp"
-                android:layout_marginBottom="16dp" />
+                android:text="Ricalibra soglia" />
         </RelativeLayout>
     </FrameLayout>
 
-    <!-- 🟡 FRAGMENT CONTAINER (initially hidden) -->
+    <!-- FRAGMENT CONTAINER (initially hidden) -->
     <FrameLayout
         android:id="@+id/fragment_container"
         android:layout_width="match_parent"

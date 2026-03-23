@@ -228,6 +228,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var autoScreenLockEnabled: Boolean = false
 
     private lateinit var sequenceMover: SequenceMover
+    private var currentAppMode: AppMode = AppMode.DEFAULT
 
     private fun enableKioskMode() {
         try {
@@ -287,8 +288,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         sentenceGenerator.loadFillerSentences(this)
         retrieveStoredValues()
 
-        val appMode = AppModeResolver.fromPort(serverPort)
-        setContentView(getLayoutForMode(appMode))
+        currentAppMode = AppModeResolver.fromPort(serverPort)
+        setContentView(getLayoutForMode(currentAppMode))
 
         QiSDK.register(this, this)
 
@@ -514,6 +515,14 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         val oldMinutes = micAutoOffMinutes
 
         retrieveStoredValues()
+
+        val newAppMode = AppModeResolver.fromPort(serverPort)
+        if (newAppMode != currentAppMode) {
+            currentAppMode = newAppMode
+            recreate()
+            return
+        }
+
         applyAutoScreenLockSetting()
         ensureServerManagerUpToDate()
         applySettingsToRuntime()
