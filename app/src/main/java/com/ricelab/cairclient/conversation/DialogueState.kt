@@ -1,8 +1,9 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.conversation
 
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.collections.get
 
 private const val TAG = "DialogueState"
 

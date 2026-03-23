@@ -1,5 +1,6 @@
-package com.ricelab.cairclient
+package com.ricelab.cairclient.ui.fragments
 
+import android.R
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
@@ -10,12 +11,17 @@ import android.widget.*
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
 import com.ricelab.cairclient.databinding.FragmentInterventionBinding
-import com.ricelab.cairclient.libraries.InterventionManager
-import com.ricelab.cairclient.libraries.InterventionType
-import com.ricelab.cairclient.libraries.ScheduledIntervention
-import com.ricelab.cairclient.libraries.Topic
+import com.ricelab.cairclient.intervention.InterventionManager
+import com.ricelab.cairclient.intervention.InterventionType
+import com.ricelab.cairclient.intervention.ScheduledIntervention
+import com.ricelab.cairclient.intervention.Topic
 import java.util.*
 import kotlin.math.roundToInt
+import com.ricelab.cairclient.config.AppMode
+import com.ricelab.cairclient.config.AppModeResolver
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import kotlin.collections.iterator
 
 private const val TAG = "InterventionFragment"
 
@@ -73,7 +79,7 @@ class InterventionFragment : Fragment() {
         // "Invita a scansionare i codici QR" to "Scansiona i codici QR"
     )
 
-    private val topicTriggerMap = stazioneMarittimaTopicsTriggerMap
+    private var topicTriggerMap: Map<String, String> = emptyMap()
 
     private val predefinedQuestionsMapping = mapOf(
         "salutare alla persona e chiedere come sta" to "greeting the person and ask them how they are feeling",
@@ -83,6 +89,38 @@ class InterventionFragment : Fragment() {
         "chiedere alla persona dove abita" to "asking the person where they live",
         "chiedere alla persona con chi abita" to "asking the person who they live with"
     )
+
+    private fun getTopicTriggerMapForMode(appMode: AppMode): Map<String, String> {
+        return when (appMode) {
+            AppMode.MARITIME_STATION -> stazioneMarittimaTopicsTriggerMap
+            AppMode.DELIRIUM -> deliriumTopicsTriggerMap
+            AppMode.APATHY,
+            AppMode.DEFAULT,
+            AppMode.PARAPLEGIA -> apathiaTopicsTriggerMap
+        }
+    }
+
+    private fun getCurrentAppMode(): AppMode {
+        return try {
+            val masterKeyAlias = MasterKey.Builder(requireContext())
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+
+            val sharedPreferences = EncryptedSharedPreferences.create(
+                requireContext(),
+                "secure_prefs",
+                masterKeyAlias,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+
+            val serverPort = sharedPreferences.getInt("server_port", 12345)
+            AppModeResolver.fromPort(serverPort)
+        } catch (e: Exception) {
+            Log.e(TAG, "Errore nel recupero della modalità corrente", e)
+            AppMode.DEFAULT
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -103,9 +141,13 @@ class InterventionFragment : Fragment() {
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, callback)
 
         interventionManager = InterventionManager.getInstance(requireContext())
-        // interventionManager.loadFromPrefs()
+
+        val appMode = getCurrentAppMode()
+        topicTriggerMap = getTopicTriggerMapForMode(appMode)
+
         scheduledInterventions.clear()
         scheduledInterventions.addAll(interventionManager.getAllScheduledInterventions())
+
         setupUI()
         updateScheduledInterventionsUI()
         loadPatientFields()
@@ -146,7 +188,7 @@ class InterventionFragment : Fragment() {
             "Intervento immediato"
         )
         binding.spinnerInterventionType.adapter =
-            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, spinnerItems)
+            ArrayAdapter(requireContext(), R.layout.simple_spinner_item, spinnerItems)
 
         binding.spinnerInterventionType.onItemSelectedListener =
             object : AdapterView.OnItemSelectedListener {

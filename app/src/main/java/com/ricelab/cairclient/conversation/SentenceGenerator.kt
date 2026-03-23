@@ -1,7 +1,6 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.conversation
 
 import android.util.Log
-import android.os.Bundle
 import java.io.IOException
 import android.content.Context
 

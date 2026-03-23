@@ -1,6 +1,7 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.conversation
 
 import android.util.Log
+import com.ricelab.cairclient.storage.FileStorageManager
 import kotlin.random.Random
 
 private const val TAG = "ConversationState"

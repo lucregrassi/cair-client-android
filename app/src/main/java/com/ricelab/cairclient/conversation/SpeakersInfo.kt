@@ -1,4 +1,4 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.conversation
 
 data class SpeakersInfo(
     var speakers: MutableMap<String, MutableMap<String, Any?>> = mutableMapOf()

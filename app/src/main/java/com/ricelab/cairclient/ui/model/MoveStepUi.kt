@@ -1,4 +1,6 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.ui.model
+
+import com.ricelab.cairclient.robot.MoveStep
 
 data class MoveStepUi(
     val x: Double,

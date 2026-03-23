@@ -1,8 +1,10 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.network
 
 import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
+import com.ricelab.cairclient.conversation.ConversationState
+import com.ricelab.cairclient.intervention.DueIntervention
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -19,6 +21,7 @@ import java.util.zip.DataFormatException
 import java.util.zip.Deflater
 import java.util.zip.Inflater
 import javax.net.ssl.*
+import kotlin.collections.get
 
 private const val TAG = "ServerCommunicationManager"
 

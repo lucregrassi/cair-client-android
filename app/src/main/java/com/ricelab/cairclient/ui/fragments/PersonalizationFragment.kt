@@ -1,4 +1,4 @@
-package com.ricelab.cairclient
+package com.ricelab.cairclient.ui.fragments
 
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -8,7 +8,8 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
 import com.ricelab.cairclient.databinding.FragmentPersonalizationBinding
-import com.ricelab.cairclient.libraries.DialogueNuances
+import com.ricelab.cairclient.conversation.DialogueNuances
+import com.ricelab.cairclient.ui.activities.MainActivity
 
 class PersonalizationFragment : Fragment() {
 

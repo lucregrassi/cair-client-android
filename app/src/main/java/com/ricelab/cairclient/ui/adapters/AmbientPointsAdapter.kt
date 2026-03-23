@@ -1,4 +1,4 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.ui.adapters
 
 import android.view.LayoutInflater
 import android.view.View
@@ -7,6 +7,7 @@ import android.widget.ImageButton
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.ricelab.cairclient.R
+import com.ricelab.cairclient.ui.model.MoveStepUi
 
 class AmbientPointsAdapter(
     private val items: List<MoveStepUi>,

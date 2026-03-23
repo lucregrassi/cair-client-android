@@ -15,7 +15,7 @@
 
         <!-- ServerIpActivity to be launched when the app starts -->
         <activity
-            android:name=".SettingsActivity"
+            android:name=".ui.activities.SettingsActivity"
             android:windowSoftInputMode="stateHidden"
             android:exported="true">
             <intent-filter>
@@ -26,7 +26,7 @@
 
         <!-- MainActivity, launched after entering the server IP -->
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.activities.MainActivity"
             android:exported="true">
             <meta-data
                 android:name="android.app.lib_name"

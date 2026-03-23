@@ -1,9 +1,11 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.storage
 
-import android.content.Context
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.ricelab.cairclient.conversation.DialogueState
+import com.ricelab.cairclient.conversation.DialogueStatistics
+import com.ricelab.cairclient.conversation.SpeakersInfo
 import java.io.File
 
 private const val TAG = "FileStorageManager"

@@ -1,4 +1,4 @@
-package com.ricelab.cairclient
+package com.ricelab.cairclient.ui.activities
 
 import android.Manifest
 import android.content.Intent
@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
+import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
@@ -14,11 +15,12 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentManager
 import androidx.lifecycle.lifecycleScope
 import com.aldebaran.qi.sdk.QiContext
 import com.aldebaran.qi.sdk.QiSDK
 import com.aldebaran.qi.sdk.RobotLifecycleCallbacks
-import com.ricelab.cairclient.libraries.*
+import com.ricelab.cairclient.intervention.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.yield
 import androidx.security.crypto.EncryptedSharedPreferences
@@ -34,8 +36,30 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import org.json.JSONObject
 import com.aldebaran.qi.*
+import com.ricelab.cairclient.R
+import com.ricelab.cairclient.audio.AudioRecorder
+import com.ricelab.cairclient.audio.AudioResult
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import com.ricelab.cairclient.config.AppMode
+import com.ricelab.cairclient.config.AppModeResolver
+import com.ricelab.cairclient.conversation.ConversationState
+import com.ricelab.cairclient.conversation.DialogueState
+import com.ricelab.cairclient.conversation.DialogueStatistics
+import com.ricelab.cairclient.conversation.SentenceGenerator
+import com.ricelab.cairclient.conversation.SpeakersInfo
+import com.ricelab.cairclient.network.ServerCommunicationManager
+import com.ricelab.cairclient.robot.MoveStep
+import com.ricelab.cairclient.robot.PepperInterface
+import com.ricelab.cairclient.robot.SequenceMover
+import com.ricelab.cairclient.robot.TeleoperationManager
+import com.ricelab.cairclient.storage.FileStorageManager
+import com.ricelab.cairclient.ui.fragments.InterventionFragment
+import com.ricelab.cairclient.ui.model.MoveStepUi
+import com.ricelab.cairclient.ui.fragments.PersonalizationFragment
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 
 private const val TAG = "MainActivity"
@@ -243,21 +267,33 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         setGlobalLock(newLocked)
     }
 
-    override fun dispatchTouchEvent(ev: android.view.MotionEvent?): Boolean {
+    override fun dispatchTouchEvent(ev: MotionEvent?): Boolean {
         if (touchLocked) return true
         return super.dispatchTouchEvent(ev)
     }
 
+    private fun getLayoutForMode(appMode: AppMode): Int {
+        return when (appMode) {
+            AppMode.MARITIME_STATION -> R.layout.activity_main_maritime_station
+            AppMode.DEFAULT,
+            AppMode.DELIRIUM,
+            AppMode.APATHY,
+            AppMode.PARAPLEGIA -> R.layout.activity_main
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main_maritime_station)
+        sentenceGenerator.loadFillerSentences(this)
+        retrieveStoredValues()
+
+        val appMode = AppModeResolver.fromPort(serverPort)
+        setContentView(getLayoutForMode(appMode))
+
         QiSDK.register(this, this)
 
         personalizationManager = InterventionManager.getInstance(this)
 
-        sentenceGenerator.loadFillerSentences(this)
-        // retrieve values stored in settings
-        retrieveStoredValues()
         applyAutoScreenLockSetting()
         // blocca movimenti per AMBIENT_MOVE_RESUME_AFTER_SECONDS dal primo avvio
         lastActiveSpeakerTime = System.currentTimeMillis()
@@ -406,7 +442,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         supportFragmentManager.popBackStack(
             null,
-            androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE
+            FragmentManager.POP_BACK_STACK_INCLUSIVE
         )
 
         when (target) {
@@ -465,7 +501,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private fun ensureServerManagerUpToDate() {
         val cfg = Triple(serverIp, serverPort, openAIApiKey)
         if (!::serverCommunicationManager.isInitialized || lastServerCfg != cfg) {
-            serverCommunicationManager = ServerCommunicationManager(this, serverIp, serverPort, logPort, openAIApiKey)
+            serverCommunicationManager =
+                ServerCommunicationManager(this, serverIp, serverPort, logPort, openAIApiKey)
             lastServerCfg = cfg
         }
     }
@@ -612,7 +649,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         return when (item.itemId) {
             R.id.action_home -> {
                 // Close all fragments in the stack and show main UI
-                supportFragmentManager.popBackStack(null, androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE)
+                supportFragmentManager.popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
                 findViewById<View>(R.id.main_ui_container)?.visibility = View.VISIBLE
                 findViewById<View>(R.id.fragment_container)?.visibility = View.GONE
                 true
@@ -1039,7 +1076,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         // Only ensure it exists if onResume didn't create it yet (rare first-boot case)
         if (!::serverCommunicationManager.isInitialized) {
-            serverCommunicationManager = ServerCommunicationManager(this, serverIp, serverPort, logPort, openAIApiKey)
+            serverCommunicationManager =
+                ServerCommunicationManager(this, serverIp, serverPort, logPort, openAIApiKey)
         }
 
         // Start dialogue (needs qiContext)
@@ -1245,8 +1283,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     fun getCurrentTimestamp(): String {
-        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
-        return sdf.format(java.util.Date())
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        return sdf.format(Date())
     }
 
     private suspend fun initializeUserSession() {

@@ -1,4 +1,4 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.conversation
 
 import org.json.JSONObject
 

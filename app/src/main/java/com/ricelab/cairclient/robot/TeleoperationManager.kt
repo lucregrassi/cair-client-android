@@ -1,11 +1,20 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.robot
 
 import android.content.Context
 import android.media.AudioManager
 import android.util.Log
 import com.aldebaran.qi.sdk.QiContext
-import kotlinx.coroutines.*
-import java.net.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import java.net.BindException
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetSocketAddress
+import java.net.SocketException
 
 class TeleoperationManager(
     private val context: Context,

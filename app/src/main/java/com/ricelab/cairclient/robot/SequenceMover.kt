@@ -1,4 +1,4 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.robot
 
 import kotlinx.coroutines.*
 

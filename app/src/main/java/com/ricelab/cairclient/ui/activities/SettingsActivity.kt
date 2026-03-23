@@ -1,4 +1,4 @@
-package com.ricelab.cairclient
+package com.ricelab.cairclient.ui.activities
 
 import android.content.Intent
 import android.content.SharedPreferences
@@ -20,9 +20,10 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.ricelab.cairclient.libraries.AmbientPointsAdapter
-import com.ricelab.cairclient.libraries.FileStorageManager
-import com.ricelab.cairclient.libraries.MoveStepUi
+import com.ricelab.cairclient.R
+import com.ricelab.cairclient.storage.FileStorageManager
+import com.ricelab.cairclient.ui.adapters.AmbientPointsAdapter
+import com.ricelab.cairclient.ui.model.MoveStepUi
 import java.io.IOException
 import kotlin.math.roundToLong
 

@@ -1,4 +1,4 @@
-package com.ricelab.cairclient.libraries
+package com.ricelab.cairclient.audio
 
 import android.Manifest
 import android.app.Activity
