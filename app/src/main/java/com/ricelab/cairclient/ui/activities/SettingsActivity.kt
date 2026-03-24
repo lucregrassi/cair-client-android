@@ -26,6 +26,8 @@ import com.ricelab.cairclient.ui.adapters.AmbientPointsAdapter
 import com.ricelab.cairclient.ui.model.MoveStepUi
 import java.io.IOException
 import kotlin.math.roundToLong
+import com.ricelab.cairclient.config.AppModeResolver
+import com.ricelab.cairclient.ui.model.AppModeOption
 
 private const val TAG = "SettingsActivity"
 
@@ -33,7 +35,8 @@ class SettingsActivity : AppCompatActivity() {
 
     // ui elements
     private lateinit var serverIpSpinner: Spinner
-    private lateinit var serverPortEditText: EditText
+    private lateinit var serverPortSpinner: Spinner
+    private lateinit var appModeOptions: List<AppModeOption>
     private lateinit var experimentIdEditText: EditText
     private lateinit var deviceIdEditText: EditText
     private lateinit var personNameEditText: EditText
@@ -96,7 +99,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // --- findViewById ---
         serverIpSpinner = findViewById(R.id.serverIpSpinner)
-        serverPortEditText = findViewById(R.id.serverPortEditText)
+        serverPortSpinner = findViewById(R.id.serverPortSpinner)
         experimentIdEditText = findViewById(R.id.experimentIdEditText)
         deviceIdEditText = findViewById(R.id.deviceIdEditText)
         personNameEditText = findViewById(R.id.personNameEditText)
@@ -106,6 +109,21 @@ class SettingsActivity : AppCompatActivity() {
         val genderAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, genderOptions)
         genderAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         personGenderSpinner.adapter = genderAdapter
+
+        appModeOptions = AppModeResolver.selectableModes().map { mode ->
+            AppModeOption(
+                mode = mode,
+                label = "${AppModeResolver.displayName(mode)} (${AppModeResolver.toPort(mode)})"
+            )
+        }
+
+        val appModeAdapter = ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            appModeOptions
+        )
+        appModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        serverPortSpinner.adapter = appModeAdapter
 
         personAgeEditText = findViewById(R.id.personAgeEditText)
         openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
@@ -220,10 +238,17 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         proceedButton.setOnClickListener {
+            val sharedPreferences = securePrefs()
+            val oldServerPort = sharedPreferences.getInt("server_port", -1)
+
             val ambientEnabled = ambientMoveSwitch.isChecked
             val validAmbientPoints = ambientPoints.filter { it.isValid() }
             if (ambientEnabled && validAmbientPoints.isEmpty()) {
-                Toast.makeText(this, "Hai abilitato il movimento ma non hai inserito punti validi. Aggiungi almeno un punto con tempo.", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    this,
+                    "Hai abilitato il movimento ma non hai inserito punti validi. Aggiungi almeno un punto con tempo.",
+                    Toast.LENGTH_LONG
+                ).show()
                 return@setOnClickListener
             }
 
@@ -237,7 +262,14 @@ class SettingsActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            val serverPortText = serverPortEditText.text.toString().trim()
+            val selectedOption = serverPortSpinner.selectedItem as? AppModeOption ?: run {
+                Toast.makeText(this, "Seleziona una modalità.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            val selectedMode = selectedOption.mode
+            val serverPort = AppModeResolver.toPort(selectedMode)
+
             val experimentId = experimentIdEditText.text.toString().trim()
             val deviceId = deviceIdEditText.text.toString().trim()
             val personName = personNameEditText.text.toString().trim()
@@ -267,16 +299,6 @@ class SettingsActivity : AppCompatActivity() {
                 Toast.makeText(this, "Per favore, inserisci la chiave OpenAI", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            if (serverPortText.isEmpty()) {
-                Toast.makeText(this, "Per favore, inserisci la porta del server", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            val serverPort = serverPortText.toIntOrNull()
-            if (serverPort == null || serverPort <= 0 || serverPort > 65535) {
-                Toast.makeText(this, "Per favore, inserisci una porta valida (1-65535).", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
 
             val ageInt = personAge.toIntOrNull()
             if (personAge.isNotEmpty() && (ageInt == null || ageInt <= 0)) {
@@ -289,7 +311,14 @@ class SettingsActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            // Save values including ambient movement
+            val oldMode = if (oldServerPort != -1) AppModeResolver.fromPort(oldServerPort) else null
+            val modeChanged = oldMode != null && oldMode != selectedMode
+
+            if (modeChanged) {
+                clearConversationStateOnly()
+                Log.i(TAG, "App mode changed: $oldMode -> $selectedMode, conversation state reset")
+            }
+
             val gson = Gson()
             val ambientJson = gson.toJson(ambientPoints)
 
@@ -536,7 +565,13 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         savedServerIp?.let { setSelectedServerIp(it) }
-        if (savedServerPort != -1) serverPortEditText.setText(savedServerPort.toString())
+        if (savedServerPort != -1) {
+            val savedMode = AppModeResolver.fromPort(savedServerPort)
+            val index = appModeOptions.indexOfFirst { it.mode == savedMode }
+            if (index != -1) {
+                serverPortSpinner.setSelection(index)
+            }
+        }
 
         savedExperimentId?.let { experimentIdEditText.setText(it) }
         savedDeviceId?.let { deviceIdEditText.setText(it) }
@@ -706,6 +741,15 @@ class SettingsActivity : AppCompatActivity() {
             Log.e(TAG, "Failed to create secure prefs", e)
             getSharedPreferences("fallback_prefs", MODE_PRIVATE)
         }
+    }
+
+    private fun clearConversationStateOnly() {
+        Log.i(TAG, "clearConversationStateOnly() with filesDir=$filesDir")
+        val fileStorageManager = FileStorageManager(filesDir)
+
+        fileStorageManager.dialogueStateFile?.delete()
+        fileStorageManager.speakersInfoFile?.delete()
+        fileStorageManager.dialogueStatisticsFile?.delete()
     }
 
     private fun deleteAllData() {

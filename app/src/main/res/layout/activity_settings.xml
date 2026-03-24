@@ -59,22 +59,18 @@
             android:id="@+id/serverPortLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Porta per connettersi al server"
+            android:text="Modalità / ontologia"
             android:textSize="16sp"
             android:textColor="@color/black" />
 
-        <EditText
-            android:id="@+id/serverPortEditText"
+        <Spinner
+            android:id="@+id/serverPortSpinner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="es. 12345"
-            android:inputType="number"
             android:minHeight="48dp"
-            android:text="12345"
             android:paddingStart="8dp"
             android:paddingEnd="8dp"
-            android:layout_marginBottom="16dp"
-            tools:ignore="VisualLintTextFieldSize" />
+            android:layout_marginBottom="16dp" />
 
         <!-- ===================== SERVIZI ESTERNI ===================== -->
         <TextView
