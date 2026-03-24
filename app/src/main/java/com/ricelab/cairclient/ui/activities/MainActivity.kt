@@ -60,6 +60,11 @@ import com.ricelab.cairclient.ui.fragments.PersonalizationFragment
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import android.widget.ImageView
+import com.ricelab.cairclient.conversation.DialogueNuances
+import com.ricelab.cairclient.maritime_experiment.MaritimeExperimentConfig
+import com.ricelab.cairclient.maritime_experiment.MaritimeExperimentManager
+import com.ricelab.cairclient.maritime_experiment.MaritimeNuanceOverrideHelper
 
 
 private const val TAG = "MainActivity"
@@ -229,6 +234,17 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     private lateinit var sequenceMover: SequenceMover
     private var currentAppMode: AppMode = AppMode.DEFAULT
+    private var maritimeExperimentConfig: MaritimeExperimentConfig? = null
+
+    fun refreshEffectiveDialogueNuances() {
+        if (::conversationState.isInitialized) {
+            conversationState.dialogueState.dialogueNuances = getEffectiveDialogueNuances()
+        }
+    }
+
+    fun getCurrentEffectiveDialogueNuances(): DialogueNuances {
+        return getEffectiveDialogueNuances()
+    }
 
     private fun enableKioskMode() {
         try {
@@ -283,11 +299,35 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
+    private fun resolveMaritimeExperimentConfigIfNeeded(): MaritimeExperimentConfig? {
+        val appMode = AppModeResolver.fromPort(serverPort)
+        if (appMode != AppMode.MARITIME_STATION) return null
+        return MaritimeExperimentManager.getTodayConfig(this)
+    }
+
+    private fun getEffectiveAmbientMoveEnabled(): Boolean {
+        return maritimeExperimentConfig?.movementEnabled ?: ambientMoveEnabled
+    }
+
+    private fun getEffectiveDialogueNuances(): DialogueNuances {
+        val baseNuances = DialogueNuances.loadFromPrefs(this)
+        val config = maritimeExperimentConfig ?: return baseNuances
+        return MaritimeNuanceOverrideHelper.applyTone(baseNuances, config.tone)
+    }
+
+    private fun applyMaritimeQrIfNeeded() {
+        val config = maritimeExperimentConfig ?: return
+        val qrImageView = findViewById<ImageView?>(R.id.qrImageView) ?: return
+        qrImageView.setImageResource(config.qrDrawableRes)
+        Log.i(TAG, "Applied maritime QR for condition ${config.id}")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sentenceGenerator.loadFillerSentences(this)
         retrieveStoredValues()
 
+        maritimeExperimentConfig = resolveMaritimeExperimentConfigIfNeeded()
         currentAppMode = AppModeResolver.fromPort(serverPort)
         setContentView(getLayoutForMode(currentAppMode))
 
@@ -307,7 +347,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             canMoveNow = {
                 if (!::conversationState.isInitialized) return@SequenceMover false
 
-                ambientMoveEnabled &&
+                getEffectiveAmbientMoveEnabled() &&
                         ambientMoveSteps.isNotEmpty() &&
                         !isFragmentActive &&
                         !isAnswering &&
@@ -331,6 +371,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         robotSpeechTextView.textSize = robotFontSize.toFloat()
         thresholdTextView = findViewById(R.id.thresholdTextView)
         recalibrateButton = findViewById(R.id.recalibrateButton)
+
+        applyMaritimeQrIfNeeded()
+        Log.i(TAG, "Maritime experiment config in onCreate = $maritimeExperimentConfig")
 
         isListeningEnabled = true
 
@@ -424,7 +467,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 if (isFragmentActive) {
                     sequenceMover.stop()
                 } else {
-                    if (ambientMoveEnabled && ambientMoveSteps.isNotEmpty()) sequenceMover.start() else sequenceMover.stop()
+                    if (getEffectiveAmbientMoveEnabled() && ambientMoveSteps.isNotEmpty()) {
+                        sequenceMover.start()
+                    } else {
+                        sequenceMover.stop()
+                    }
                 }
             }
         }
@@ -515,6 +562,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         val oldMinutes = micAutoOffMinutes
 
         retrieveStoredValues()
+        maritimeExperimentConfig = resolveMaritimeExperimentConfigIfNeeded()
 
         val newAppMode = AppModeResolver.fromPort(serverPort)
         if (newAppMode != currentAppMode) {
@@ -522,6 +570,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             recreate()
             return
         }
+
+        applyMaritimeQrIfNeeded()
+        Log.i(TAG, "Maritime experiment config in onResume = $maritimeExperimentConfig")
 
         applyAutoScreenLockSetting()
         ensureServerManagerUpToDate()
@@ -543,11 +594,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
 
         if (::sequenceMover.isInitialized) {
-            sequenceMover.enabled = ambientMoveEnabled
+            val effectiveMoveEnabled = getEffectiveAmbientMoveEnabled()
+
+            sequenceMover.enabled = effectiveMoveEnabled
             sequenceMover.speed = ambientMoveSpeed
             sequenceMover.steps = ambientMoveSteps
 
-            if (ambientMoveEnabled && ambientMoveSteps.isNotEmpty()) {
+            if (effectiveMoveEnabled && ambientMoveSteps.isNotEmpty()) {
                 sequenceMover.start()
             } else {
                 sequenceMover.stop()
@@ -1006,8 +1059,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         pepperInterface.initHomeFrame()
 
-        // avvia solo se abilitato e con punti definiti (partendo dal primo)
-        if (ambientMoveEnabled && ambientMoveSteps.isNotEmpty()) {
+        if (getEffectiveAmbientMoveEnabled() && ambientMoveSteps.isNotEmpty()) {
             sequenceMover.start(resetIndex = true)
         } else {
             sequenceMover.stop(resetIndex = true)
@@ -1186,8 +1238,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
 
         withContext(Dispatchers.IO) {
-          conversationState.loadFromFile()
+            conversationState.loadFromFile()
         }
+        conversationState.dialogueState.dialogueNuances = getEffectiveDialogueNuances()
+
         // Update the value of formalLanguage in the DialogueState
         conversationState.dialogueState.formalLanguage = formalLanguage
         // Update the person gender and age but not the name as we want to keep it generic

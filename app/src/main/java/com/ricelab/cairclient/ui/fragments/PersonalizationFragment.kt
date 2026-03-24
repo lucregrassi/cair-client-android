@@ -40,7 +40,8 @@ class PersonalizationFragment : Fragment() {
     }
 
     private fun loadNuances() {
-        val nuances = DialogueNuances.loadFromPrefs(requireContext())
+        val nuances = (activity as? MainActivity)?.getCurrentEffectiveDialogueNuances()
+            ?: DialogueNuances.loadFromPrefs(requireContext())
 
         // diversity
         binding.inputNationality.setText(nuances.values["diversity"]?.getOrNull(0).orEmpty())
@@ -93,16 +94,15 @@ class PersonalizationFragment : Fragment() {
 
         Toast.makeText(requireContext(), "Nuances salvate correttamente", Toast.LENGTH_SHORT).show()
 
-        (activity as? MainActivity)?.let { main ->
-            main.conversationState.dialogueState.dialogueNuances =
-                DialogueNuances.loadFromPrefs(requireContext())
-        }
+        (activity as? MainActivity)?.refreshEffectiveDialogueNuances()
     }
 
     private fun resetToDefault() {
         DialogueNuances.resetToDefaults(requireContext())
         loadNuances()
         Toast.makeText(requireContext(), "Valori predefiniti ripristinati", Toast.LENGTH_SHORT).show()
+
+        (activity as? MainActivity)?.refreshEffectiveDialogueNuances()
     }
 
     override fun onDestroyView() {
