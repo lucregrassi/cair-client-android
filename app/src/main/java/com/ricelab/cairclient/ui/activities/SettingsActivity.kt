@@ -91,8 +91,21 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun refreshAmbientMoveVisibility() {
-        val on = ambientMoveSwitch.isChecked
-        ambientMoveGroup.visibility = if (on) View.VISIBLE else View.GONE
+        val selectedOption = serverPortSpinner.selectedItem as? AppModeOption
+        val selectedMode = selectedOption?.mode
+
+        val isMaritimeStation = selectedMode == AppMode.MARITIME_STATION
+        val ambientEnabled = ambientMoveSwitch.isChecked
+
+        ambientMoveGroup.visibility = if (ambientEnabled) View.VISIBLE else View.GONE
+
+        if (isMaritimeStation) {
+            addAmbientPointBtn.visibility = View.GONE
+            ambientPointsRecycler.visibility = View.GONE
+        } else {
+            addAmbientPointBtn.visibility = View.VISIBLE
+            ambientPointsRecycler.visibility = View.VISIBLE
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -796,7 +809,10 @@ class SettingsActivity : AppCompatActivity() {
         val selectedMode = selectedOption.mode
 
         if (selectedMode == AppMode.MARITIME_STATION) {
-            val effectiveValue = MaritimeExperimentManager.getTodayConfig(this).movementEnabled ?: false
+            val effectiveValue = MaritimeExperimentManager
+                .getTodayConfig(this)
+                .movementEnabled ?: false
+
             ambientMoveSwitch.isChecked = effectiveValue
             ambientMoveSwitch.isEnabled = false
         } else {

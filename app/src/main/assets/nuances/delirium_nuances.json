@@ -9,7 +9,7 @@
     },
     "values": {
         "diversity": ["Italian", "good mental health", "no physical problems"],
-        "time": ["during the day", "Spring", "Spring"],
+        "time": ["during the day", "Spring", "nothing specific"],
         "place": ["San Martino Hospital", "Genoa", "Italy"],
         "tone": ["neutral", "neutral", "neutral", "neutral", "neutral", "neutral", "neutral",
             "neutral", "neutral"],

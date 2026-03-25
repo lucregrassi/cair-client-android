@@ -10,6 +10,7 @@ import androidx.fragment.app.Fragment
 import com.ricelab.cairclient.databinding.FragmentPersonalizationBinding
 import com.ricelab.cairclient.conversation.DialogueNuances
 import com.ricelab.cairclient.ui.activities.MainActivity
+import com.ricelab.cairclient.config.AppMode
 
 class PersonalizationFragment : Fragment() {
 
@@ -39,9 +40,19 @@ class PersonalizationFragment : Fragment() {
         binding.btnResetDefaults.setOnClickListener { resetToDefault() }
     }
 
+    private fun getCurrentAppMode(): AppMode {
+        return (activity as? MainActivity)?.getCurrentAppMode() ?: AppMode.DEFAULT
+    }
+
     private fun loadNuances() {
-        val nuances = (activity as? MainActivity)?.getCurrentEffectiveDialogueNuances()
-            ?: DialogueNuances.loadFromPrefs(requireContext())
+        val activity = activity as? MainActivity
+        val appMode = getCurrentAppMode()
+
+        val nuances = if (appMode == AppMode.MARITIME_STATION && activity != null) {
+            activity.getCurrentEffectiveDialogueNuances()
+        } else {
+            DialogueNuances.loadForMode(requireContext(), appMode)
+        }
 
         // diversity
         binding.inputNationality.setText(nuances.values["diversity"]?.getOrNull(0).orEmpty())
@@ -62,11 +73,33 @@ class PersonalizationFragment : Fragment() {
         binding.inputTone.setText(nuances.values["tone"]?.joinToString(", ").orEmpty())
 
         // speech acts
-        binding.inputPositiveSpeechAct.setText(nuances.values["positive_speech_act"]?.joinToString(", ").orEmpty())
-        binding.inputContextualSpeechAct.setText(nuances.values["contextual_speech_act"]?.joinToString(", ").orEmpty())
+        binding.inputPositiveSpeechAct.setText(
+            nuances.values["positive_speech_act"]?.joinToString(", ").orEmpty()
+        )
+        binding.inputContextualSpeechAct.setText(
+            nuances.values["contextual_speech_act"]?.joinToString(", ").orEmpty()
+        )
+
+        val toneLocked = appMode == AppMode.MARITIME_STATION
+        binding.inputTone.isEnabled = !toneLocked
+        binding.inputTone.isFocusable = !toneLocked
+        binding.inputTone.isFocusableInTouchMode = !toneLocked
+        binding.inputTone.isClickable = !toneLocked
     }
 
     private fun saveNuances() {
+        val appMode = getCurrentAppMode()
+        val currentNuances = DialogueNuances.loadForMode(requireContext(), appMode)
+
+        val toneValues = if (appMode == AppMode.MARITIME_STATION) {
+            currentNuances.values["tone"] ?: List(9) { "neutral" }
+        } else {
+            binding.inputTone.text.toString()
+                .split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+        }
+
         val updatedValues = mapOf(
             "diversity" to listOf(
                 binding.inputNationality.text.toString().trim(),
@@ -83,24 +116,41 @@ class PersonalizationFragment : Fragment() {
                 binding.inputCity.text.toString().trim(),
                 binding.inputNation.text.toString().trim()
             ),
-            "tone" to binding.inputTone.text.toString().split(",").map { it.trim() },
-            "positive_speech_act" to binding.inputPositiveSpeechAct.text.toString().split(",").map { it.trim() },
-            "contextual_speech_act" to binding.inputContextualSpeechAct.text.toString().split(",").map { it.trim() }
+            "tone" to toneValues,
+            "positive_speech_act" to binding.inputPositiveSpeechAct.text.toString()
+                .split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() },
+            "contextual_speech_act" to binding.inputContextualSpeechAct.text.toString()
+                .split(",")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
         )
 
-        val currentNuances = DialogueNuances.loadFromPrefs(requireContext())
         currentNuances.values = updatedValues
-        currentNuances.saveToPrefs(requireContext())
+        DialogueNuances.saveForMode(requireContext(), appMode, currentNuances)
 
-        Toast.makeText(requireContext(), "Nuances salvate correttamente", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            requireContext(),
+            "Nuances salvate correttamente per la modalità $appMode",
+            Toast.LENGTH_SHORT
+        ).show()
 
         (activity as? MainActivity)?.refreshEffectiveDialogueNuances()
+        loadNuances()
     }
 
     private fun resetToDefault() {
-        DialogueNuances.resetToDefaults(requireContext())
+        val appMode = getCurrentAppMode()
+
+        DialogueNuances.resetForMode(requireContext(), appMode)
         loadNuances()
-        Toast.makeText(requireContext(), "Valori predefiniti ripristinati", Toast.LENGTH_SHORT).show()
+
+        Toast.makeText(
+            requireContext(),
+            "Valori predefiniti ripristinati per la modalità $appMode",
+            Toast.LENGTH_SHORT
+        ).show()
 
         (activity as? MainActivity)?.refreshEffectiveDialogueNuances()
     }

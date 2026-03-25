@@ -8,9 +8,9 @@
         "contextual_speech_act": [0, 0, 0, 0, 1]
     },
     "values": {
-        "diversity": ["Italian", "good mental health", "no physical problems"],
-        "time": ["nothing specific", "nothing specific", "nothing specific"],
-        "place": ["", "Genoa", "Italy"],
+        "diversity": ["Italian", "good mental health", "the person can't walk"],
+        "time": ["during the day", "nothing specific", "nothing specific"],
+        "place": ["home", "Genoa", "Italy"],
         "tone": ["neutral", "neutral", "neutral", "neutral", "neutral", "neutral", "neutral",
             "neutral", "neutral"],
         "positive_speech_act": ["assertive", "commissive", "expressive"],

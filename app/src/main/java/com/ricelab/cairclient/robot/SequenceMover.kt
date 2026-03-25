@@ -42,20 +42,27 @@ class SequenceMover(
 
                 val currentIndex = idx % steps.size
                 val s = steps[currentIndex]
-                idx++
 
                 try {
                     onLog("SeqMove -> step ${currentIndex + 1}/${steps.size}: GoTo (${s.x}, ${s.y}, θ=${s.thetaRad})")
-                    pepper.goToPoseInHome(
+
+                    val ok = pepper.goToPoseInHome(
                         Pose2D(s.x, s.y, s.thetaRad),
                         speed,
                         s.mustReach,
                         timeoutMs = s.mustReachTimeoutMs
                     )
 
-                    val dwell = s.dwellMs.coerceAtLeast(0L)
-                    onLog("SeqMove -> dwell ${dwell}ms")
-                    delay(dwell)
+                    if (ok) {
+                        idx++
+
+                        val dwell = s.dwellMs.coerceAtLeast(0L)
+                        onLog("SeqMove -> dwell ${dwell}ms")
+                        delay(dwell)
+                    } else {
+                        onLog("SeqMove -> move failed or not started at step ${currentIndex + 1}")
+                        delay(1000)
+                    }
 
                 } catch (ce: CancellationException) {
                     throw ce

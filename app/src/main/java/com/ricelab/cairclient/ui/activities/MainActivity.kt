@@ -307,9 +307,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private fun getEffectiveDialogueNuances(): DialogueNuances {
-        val baseNuances = DialogueNuances.loadFromPrefs(this)
+        val baseNuances = DialogueNuances.loadForMode(this, currentAppMode)
         val config = maritimeExperimentConfig ?: return baseNuances
         return MaritimeNuanceOverrideHelper.applyTone(baseNuances, config.tone)
+    }
+
+    fun getCurrentAppMode(): AppMode {
+        return currentAppMode
     }
 
     private fun applyMaritimeQrIfNeeded() {
