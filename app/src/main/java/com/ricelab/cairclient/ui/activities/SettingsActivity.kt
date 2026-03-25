@@ -28,6 +28,8 @@ import java.io.IOException
 import kotlin.math.roundToLong
 import com.ricelab.cairclient.config.AppModeResolver
 import com.ricelab.cairclient.ui.model.AppModeOption
+import com.ricelab.cairclient.config.AppMode
+import com.ricelab.cairclient.maritime_experiment.MaritimeExperimentManager
 
 private const val TAG = "SettingsActivity"
 
@@ -113,7 +115,7 @@ class SettingsActivity : AppCompatActivity() {
         appModeOptions = AppModeResolver.selectableModes().map { mode ->
             AppModeOption(
                 mode = mode,
-                label = "${AppModeResolver.displayName(mode)} (${AppModeResolver.toPort(mode)})"
+                label = AppModeResolver.displayName(mode)
             )
         }
 
@@ -124,6 +126,13 @@ class SettingsActivity : AppCompatActivity() {
         )
         appModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         serverPortSpinner.adapter = appModeAdapter
+        serverPortSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                applyAmbientMoveOverrideIfNeeded()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
 
         personAgeEditText = findViewById(R.id.personAgeEditText)
         openAIApiKeyEditText = findViewById(R.id.openAIApiKeyEditText)
@@ -241,7 +250,7 @@ class SettingsActivity : AppCompatActivity() {
             val sharedPreferences = securePrefs()
             val oldServerPort = sharedPreferences.getInt("server_port", -1)
 
-            val ambientEnabled = ambientMoveSwitch.isChecked
+            val ambientEnabled = getEffectiveAmbientMoveEnabledForSelectedMode()
             val validAmbientPoints = ambientPoints.filter { it.isValid() }
             if (ambientEnabled && validAmbientPoints.isEmpty()) {
                 Toast.makeText(
@@ -317,6 +326,11 @@ class SettingsActivity : AppCompatActivity() {
             if (modeChanged) {
                 clearConversationStateOnly()
                 Log.i(TAG, "App mode changed: $oldMode -> $selectedMode, conversation state reset")
+                Toast.makeText(
+                    this,
+                    "Modalità cambiata: conversazione resettata",
+                    Toast.LENGTH_LONG
+                ).show()
             }
 
             val gson = Gson()
@@ -345,7 +359,7 @@ class SettingsActivity : AppCompatActivity() {
                 autoScreenLockEnabled = autoScreenLockEnabled,
                 micAutoOffEnabled = micAutoOffEnabled,
                 micAutoOffMinutes = micAutoOffMinutes,
-                ambientMoveEnabled = ambientMoveSwitch.isChecked,
+                ambientMoveEnabled = ambientEnabled,
                 ambientMoveStepsJson = ambientJson
             )
 
@@ -554,9 +568,6 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        ambientMoveSwitch.isChecked = ambientMoveEnabled
-        refreshAmbientMoveVisibility()
-
         // auto-start main if minimal config exists
         if (!fromMenu && !savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
             startActivity(Intent(this, MainActivity::class.java))
@@ -572,6 +583,9 @@ class SettingsActivity : AppCompatActivity() {
                 serverPortSpinner.setSelection(index)
             }
         }
+
+        ambientMoveSwitch.isChecked = ambientMoveEnabled
+        applyAmbientMoveOverrideIfNeeded()
 
         savedExperimentId?.let { experimentIdEditText.setText(it) }
         savedDeviceId?.let { deviceIdEditText.setText(it) }
@@ -764,5 +778,31 @@ class SettingsActivity : AppCompatActivity() {
         sharedPreferences.edit { clear() }
 
         Toast.makeText(this, "Tutti i dati sono stati cancellati.", Toast.LENGTH_LONG).show()
+    }
+
+    private fun getEffectiveAmbientMoveEnabledForSelectedMode(): Boolean {
+        val selectedOption = serverPortSpinner.selectedItem as? AppModeOption
+        val selectedMode = selectedOption?.mode ?: return ambientMoveSwitch.isChecked
+
+        return if (selectedMode == AppMode.MARITIME_STATION) {
+            MaritimeExperimentManager.getTodayConfig(this).movementEnabled ?: false
+        } else {
+            ambientMoveSwitch.isChecked
+        }
+    }
+
+    private fun applyAmbientMoveOverrideIfNeeded() {
+        val selectedOption = serverPortSpinner.selectedItem as? AppModeOption ?: return
+        val selectedMode = selectedOption.mode
+
+        if (selectedMode == AppMode.MARITIME_STATION) {
+            val effectiveValue = MaritimeExperimentManager.getTodayConfig(this).movementEnabled ?: false
+            ambientMoveSwitch.isChecked = effectiveValue
+            ambientMoveSwitch.isEnabled = false
+        } else {
+            ambientMoveSwitch.isEnabled = true
+        }
+
+        refreshAmbientMoveVisibility()
     }
 }

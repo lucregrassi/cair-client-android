@@ -66,7 +66,9 @@ class FileStorageManager(
 
     // Check if files exist
     fun filesExist(): Boolean {
-        return dialogueStateFile?.exists() ?: false
+        return (dialogueStateFile?.exists() == true) &&
+                (speakersInfoFile?.exists() == true) &&
+                (dialogueStatisticsFile?.exists() == true)
     }
 }
 

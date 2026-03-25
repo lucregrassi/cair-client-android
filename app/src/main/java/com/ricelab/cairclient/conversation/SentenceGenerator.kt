@@ -16,8 +16,12 @@ class SentenceGenerator {
             "it-IT" to "È bello rivederci! Di cosa potremmo parlare?",
             "en-US" to "Welcome back! I missed you. What would you like to talk about?"
         ),
-        "server_error" to mapOf(
-            "it-IT" to "Mi dispiace, non riesco a connettermi al server.",
+        "server_unavailable" to mapOf(
+            "it-IT" to "Il server non è disponibile in questo momento.",
+            "en-US" to "The server is not available right now."
+        ),
+        "server_connection_error" to mapOf(
+            "it-IT" to "Mi dispiace, non riesco a collegarmi al server.",
             "en-US" to "I'm sorry, I can't connect to the server."
         ),
         "goodbye" to mapOf(
@@ -79,7 +83,7 @@ class SentenceGenerator {
     fun loadFillerSentences(context: Context) {
         fun loadSentencesForLang(fileName: String): List<String> {
             return try {
-                val inputStream = context.assets.open("dialogue_data/$fileName")
+                val inputStream = context.assets.open("filler_sentences/$fileName")
                 inputStream.bufferedReader().useLines { lines ->
                     lines.map { it.trim() }.filter { it.isNotEmpty() }.toList()
                 }

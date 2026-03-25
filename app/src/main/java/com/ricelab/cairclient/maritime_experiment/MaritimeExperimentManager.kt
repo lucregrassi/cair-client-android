@@ -5,7 +5,9 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import java.time.LocalDate
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.random.Random
 
 object MaritimeExperimentManager {
@@ -17,17 +19,15 @@ object MaritimeExperimentManager {
 
     fun getTodayConfig(context: Context): MaritimeExperimentConfig {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val today = LocalDate.now().toString()
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
 
         val savedDate = prefs.getString(KEY_LAST_DATE, null)
         val savedConditionId = prefs.getInt(KEY_TODAY_CONDITION_ID, -1)
 
-        // stessa giornata -> riusa la stessa condizione
         if (savedDate == today && savedConditionId != -1) {
             return MaritimeExperimentResolver.fromId(savedConditionId)
         }
 
-        // nuovo giorno -> estrai una nuova condizione
         val remaining = loadRemainingIds(prefs).toMutableList()
         if (remaining.isEmpty()) {
             remaining.addAll(listOf(1, 2, 3, 4, 5, 6))

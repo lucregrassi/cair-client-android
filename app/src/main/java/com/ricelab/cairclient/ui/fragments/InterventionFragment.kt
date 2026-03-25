@@ -1,6 +1,6 @@
 package com.ricelab.cairclient.ui.fragments
 
-import android.R
+import com.ricelab.cairclient.R
 import android.content.Context
 import android.os.Bundle
 import android.util.Log
@@ -10,6 +10,10 @@ import android.view.ViewGroup
 import android.widget.*
 import androidx.activity.OnBackPressedCallback
 import androidx.fragment.app.Fragment
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import com.ricelab.cairclient.config.AppMode
+import com.ricelab.cairclient.config.AppModeResolver
 import com.ricelab.cairclient.databinding.FragmentInterventionBinding
 import com.ricelab.cairclient.intervention.InterventionManager
 import com.ricelab.cairclient.intervention.InterventionType
@@ -17,11 +21,6 @@ import com.ricelab.cairclient.intervention.ScheduledIntervention
 import com.ricelab.cairclient.intervention.Topic
 import java.util.*
 import kotlin.math.roundToInt
-import com.ricelab.cairclient.config.AppMode
-import com.ricelab.cairclient.config.AppModeResolver
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
-import kotlin.collections.iterator
 
 private const val TAG = "InterventionFragment"
 
@@ -34,6 +33,7 @@ class InterventionFragment : Fragment() {
     private lateinit var interventionManager: InterventionManager
 
     private val prefsName = "patient_fields"
+    private var currentAppMode: AppMode = AppMode.DEFAULT
 
     private val apathiaTopicsTriggerMap = mapOf(
         "Cucina" to "Parliamo del cucinare",
@@ -75,8 +75,7 @@ class InterventionFragment : Fragment() {
     )
 
     private val actionTriggerMap = mapOf(
-        "Richiama l'attenzione" to "Richiama l'attenzione",
-        // "Invita a scansionare i codici QR" to "Scansiona i codici QR"
+        "Richiama l'attenzione" to "Richiama l'attenzione"
     )
 
     private var topicTriggerMap: Map<String, String> = emptyMap()
@@ -89,6 +88,8 @@ class InterventionFragment : Fragment() {
         "chiedere alla persona dove abita" to "asking the person where they live",
         "chiedere alla persona con chi abita" to "asking the person who they live with"
     )
+
+    private fun isDeliriumMode(): Boolean = currentAppMode == AppMode.DELIRIUM
 
     private fun getTopicTriggerMapForMode(appMode: AppMode): Map<String, String> {
         return when (appMode) {
@@ -142,18 +143,31 @@ class InterventionFragment : Fragment() {
 
         interventionManager = InterventionManager.getInstance(requireContext())
 
-        val appMode = getCurrentAppMode()
-        topicTriggerMap = getTopicTriggerMapForMode(appMode)
+        currentAppMode = getCurrentAppMode()
+        topicTriggerMap = getTopicTriggerMapForMode(currentAppMode)
 
         scheduledInterventions.clear()
         scheduledInterventions.addAll(interventionManager.getAllScheduledInterventions())
 
+        setupVisibilityForMode()
         setupUI()
         updateScheduledInterventionsUI()
         loadPatientFields()
     }
 
+    private fun setupVisibilityForMode() {
+        val showPatientFields = isDeliriumMode()
+
+        binding.patientFieldsContainer.visibility =
+            if (showPatientFields) View.VISIBLE else View.GONE
+
+        binding.questionsSectionContainer.visibility =
+            if (showPatientFields) View.VISIBLE else View.GONE
+    }
+
     private fun loadPatientFields() {
+        if (!isDeliriumMode()) return
+
         val prefs = requireContext().getSharedPreferences(prefsName, Context.MODE_PRIVATE)
         binding.inputName.setText(prefs.getString("name", ""))
         binding.inputConversationPlace.setText(prefs.getString("conversation_place", ""))
@@ -163,6 +177,8 @@ class InterventionFragment : Fragment() {
     }
 
     private fun savePatientFields() {
+        if (!isDeliriumMode()) return
+
         val prefs = requireContext().getSharedPreferences(prefsName, Context.MODE_PRIVATE)
         with(prefs.edit()) {
             putString("name", binding.inputName.text.toString().trim())
@@ -187,8 +203,11 @@ class InterventionFragment : Fragment() {
             "Intervento periodico",
             "Intervento immediato"
         )
+
         binding.spinnerInterventionType.adapter =
-            ArrayAdapter(requireContext(), R.layout.simple_spinner_item, spinnerItems)
+            ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, spinnerItems).apply {
+                setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
 
         binding.spinnerInterventionType.onItemSelectedListener =
             object : AdapterView.OnItemSelectedListener {
@@ -209,6 +228,7 @@ class InterventionFragment : Fragment() {
         populateActions()
 
         binding.btnAdd.setOnClickListener { confirmIntervention() }
+
         binding.btnConfirm.setOnClickListener {
             if (scheduledInterventions.isEmpty()) {
                 Toast.makeText(
@@ -228,25 +248,34 @@ class InterventionFragment : Fragment() {
             ).show()
             Log.d(TAG, "Saved ${scheduledInterventions.size} interventions")
         }
+
         binding.btnClear.setOnClickListener {
             scheduledInterventions.clear()
             interventionManager.clearAll()
             interventionManager.saveToPrefs()
             updateScheduledInterventionsUI()
             Log.d(TAG, "Tutti gli interventi programmati sono stati eliminati")
-            Toast.makeText(requireContext(), "Tutti gli interventi sono stati eliminati", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                requireContext(),
+                "Tutti gli interventi sono stati eliminati",
+                Toast.LENGTH_SHORT
+            ).show()
         }
     }
 
     private fun updateUiForInterventionType(type: String) {
         binding.timePickerContainer.visibility =
             if (type.contains("orario")) View.VISIBLE else View.GONE
+
         binding.periodicContainer.visibility =
             if (type.contains("periodico")) View.VISIBLE else View.GONE
     }
 
     private fun populateQuestions() {
         binding.containerQuestions.removeAllViews()
+
+        if (!isDeliriumMode()) return
+
         for ((questionIt, _) in predefinedQuestionsMapping) {
             val checkBox = CheckBox(requireContext()).apply { text = questionIt }
             checkBox.setOnCheckedChangeListener { _, _ ->
@@ -258,16 +287,23 @@ class InterventionFragment : Fragment() {
 
     private fun populateTopics() {
         binding.containerTopics.removeAllViews()
+
         for ((topic, _) in topicTriggerMap) {
-            val layout =
-                LinearLayout(requireContext()).apply { orientation = LinearLayout.HORIZONTAL }
+            val layout = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+            }
+
             val checkBox = CheckBox(requireContext()).apply { text = topic }
-            val exclusive =
-                CheckBox(requireContext()).apply { text = "Esclusivo"; isEnabled = false }
+            val exclusive = CheckBox(requireContext()).apply {
+                text = "Esclusivo"
+                isEnabled = false
+            }
+
             checkBox.setOnCheckedChangeListener { _, isChecked ->
                 exclusive.isEnabled = isChecked
                 disableIfOtherTypeSelected()
             }
+
             layout.addView(checkBox)
             layout.addView(exclusive)
             binding.containerTopics.addView(layout)
@@ -276,6 +312,7 @@ class InterventionFragment : Fragment() {
 
     private fun populateActions() {
         binding.containerActions.removeAllViews()
+
         for ((action, _) in actionTriggerMap) {
             val checkBox = CheckBox(requireContext()).apply { text = action }
             checkBox.setOnCheckedChangeListener { _, _ ->
@@ -296,7 +333,8 @@ class InterventionFragment : Fragment() {
             return false
         }
 
-        val isQuestionsChecked = isAnyChecked(binding.containerQuestions)
+        val isQuestionsChecked =
+            if (isDeliriumMode()) isAnyChecked(binding.containerQuestions) else false
         val isTopicsChecked = isAnyChecked(binding.containerTopics)
         val isActionsChecked = isAnyChecked(binding.containerActions)
 
@@ -313,7 +351,8 @@ class InterventionFragment : Fragment() {
                 val view = container.getChildAt(i)
                 if (view is LinearLayout) {
                     view.getChildAt(0).isEnabled = enabled
-                    view.getChildAt(1).isEnabled = enabled && (view.getChildAt(0) as CheckBox).isChecked
+                    view.getChildAt(1).isEnabled =
+                        enabled && (view.getChildAt(0) as CheckBox).isChecked
                 } else {
                     view.isEnabled = enabled
                 }
@@ -321,40 +360,53 @@ class InterventionFragment : Fragment() {
         }
 
         if (activeTypes.isEmpty()) {
-            // Nothing selected, re-enable everything
-            setEnabled(binding.containerQuestions, true)
+            if (isDeliriumMode()) {
+                setEnabled(binding.containerQuestions, true)
+            }
             setEnabled(binding.containerTopics, true)
             setEnabled(binding.containerActions, true)
         } else {
-            // Only allow interaction with the selected category
-            setEnabled(binding.containerQuestions, activeTypes.contains("questions"))
+            if (isDeliriumMode()) {
+                setEnabled(binding.containerQuestions, activeTypes.contains("questions"))
+            }
             setEnabled(binding.containerTopics, activeTypes.contains("topics"))
             setEnabled(binding.containerActions, activeTypes.contains("actions"))
         }
     }
 
     private fun confirmIntervention() {
-        val name = binding.inputName.text.toString().trim()
-        val place = binding.inputConversationPlace.text.toString().trim()
-        val living = binding.inputLivingPlace.text.toString().trim()
-        val companion = binding.inputLivingCompanion.text.toString().trim()
+        val contextual = if (isDeliriumMode()) {
+            val name = binding.inputName.text.toString().trim()
+            val place = binding.inputConversationPlace.text.toString().trim()
+            val living = binding.inputLivingPlace.text.toString().trim()
+            val companion = binding.inputLivingCompanion.text.toString().trim()
 
-        if (name.isBlank() || place.isBlank() || living.isBlank() || companion.isBlank()) {
-            Toast.makeText(requireContext(), "Tutti i campi sono obbligatori", Toast.LENGTH_SHORT)
-                .show()
-            return
+            if (name.isBlank() || place.isBlank() || living.isBlank() || companion.isBlank()) {
+                Toast.makeText(
+                    requireContext(),
+                    "Tutti i campi del paziente sono obbligatori",
+                    Toast.LENGTH_SHORT
+                ).show()
+                return
+            }
+
+            mapOf(
+                "name" to name,
+                "conversation_place" to place,
+                "living_place" to living,
+                "living_companion" to companion
+            )
+        } else {
+            emptyMap()
         }
-
-        val contextual = mapOf(
-            "name" to name,
-            "conversation_place" to place,
-            "living_place" to living,
-            "living_companion" to companion
-        )
 
         val selectedTypePosition = binding.spinnerInterventionType.selectedItemPosition
         if (selectedTypePosition == 0) {
-            Toast.makeText(requireContext(), "Seleziona un tipo di intervento", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                requireContext(),
+                "Seleziona un tipo di intervento",
+                Toast.LENGTH_SHORT
+            ).show()
             return
         }
 
@@ -366,14 +418,19 @@ class InterventionFragment : Fragment() {
         }
 
         val selectedQuestions = mutableListOf<String>()
-        for (i in 0 until binding.containerQuestions.childCount) {
-            val checkBox = binding.containerQuestions.getChildAt(i) as CheckBox
-            if (checkBox.isChecked) selectedQuestions.add(predefinedQuestionsMapping[checkBox.text.toString()]!!)
-        }
+        if (isDeliriumMode()) {
+            for (i in 0 until binding.containerQuestions.childCount) {
+                val checkBox = binding.containerQuestions.getChildAt(i) as CheckBox
+                if (checkBox.isChecked) {
+                    selectedQuestions.add(
+                        predefinedQuestionsMapping[checkBox.text.toString()]!!
+                    )
+                }
+            }
 
-        if (selectedQuestions.isNotEmpty()) {
-            // selectedQuestions.add(0, "start the programmed intervention")
-            selectedQuestions.add("telling the user that the question session has ended")
+            if (selectedQuestions.isNotEmpty()) {
+                selectedQuestions.add("telling the user that the question session has ended")
+            }
         }
 
         val selectedTopics = mutableListOf<Topic>()
@@ -381,18 +438,23 @@ class InterventionFragment : Fragment() {
             val row = binding.containerTopics.getChildAt(i) as LinearLayout
             val check = row.getChildAt(0) as CheckBox
             val excl = row.getChildAt(1) as CheckBox
-            if (check.isChecked) selectedTopics.add(
-                Topic(
-                    topicTriggerMap[check.text.toString()]!!,
-                    excl.isChecked
+
+            if (check.isChecked) {
+                selectedTopics.add(
+                    Topic(
+                        topicTriggerMap[check.text.toString()]!!,
+                        excl.isChecked
+                    )
                 )
-            )
+            }
         }
 
         val selectedActions = mutableListOf<String>()
         for (i in 0 until binding.containerActions.childCount) {
             val checkBox = binding.containerActions.getChildAt(i) as CheckBox
-            if (checkBox.isChecked) selectedActions.add(actionTriggerMap[checkBox.text.toString()]!!)
+            if (checkBox.isChecked) {
+                selectedActions.add(actionTriggerMap[checkBox.text.toString()]!!)
+            }
         }
 
         if (selectedQuestions.isEmpty() && selectedTopics.isEmpty() && selectedActions.isEmpty()) {
@@ -416,26 +478,31 @@ class InterventionFragment : Fragment() {
                 calendar.timeInMillis / 1000.0
             }
 
-            InterventionType.PERIODIC -> System.currentTimeMillis() / 1000.0 + (binding.offsetInput.text.toString()
-                .toIntOrNull() ?: 0) * 60
+            InterventionType.PERIODIC ->
+                System.currentTimeMillis() / 1000.0 +
+                        (binding.offsetInput.text.toString().toIntOrNull() ?: 0) * 60
 
-            InterventionType.IMMEDIATE -> System.currentTimeMillis() / 1000.0
+            InterventionType.IMMEDIATE ->
+                System.currentTimeMillis() / 1000.0
         }
 
         val period: Long = when (typeEnum) {
-            InterventionType.PERIODIC -> (binding.periodInput.text.toString().toIntOrNull()
-                ?: 1) * 60L
+            InterventionType.PERIODIC ->
+                (binding.periodInput.text.toString().toIntOrNull() ?: 1) * 60L
 
             InterventionType.FIXED -> 86400L
-            else -> 0L
+            InterventionType.IMMEDIATE -> 0L
         }
 
         val intervention = ScheduledIntervention(
             type = typeEnum.name.lowercase(),
             timestamp = timestamp,
             period = period,
-            offset = if (typeEnum == InterventionType.PERIODIC) (binding.offsetInput.text.toString()
-                .toIntOrNull() ?: 0) * 60L else 0,
+            offset = if (typeEnum == InterventionType.PERIODIC) {
+                (binding.offsetInput.text.toString().toIntOrNull() ?: 0) * 60L
+            } else {
+                0L
+            },
             topics = selectedTopics,
             actions = selectedActions,
             interactionSequence = selectedQuestions,
@@ -444,8 +511,13 @@ class InterventionFragment : Fragment() {
 
         scheduledInterventions.add(intervention)
         updateScheduledInterventionsUI()
+
         Log.d(TAG, "Added new intervention: $intervention")
-        Toast.makeText(requireContext(), "Intervento aggiunto correttamente", Toast.LENGTH_SHORT).show()
+        Toast.makeText(
+            requireContext(),
+            "Intervento aggiunto correttamente",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     private fun updateScheduledInterventionsUI() {
@@ -459,22 +531,26 @@ class InterventionFragment : Fragment() {
 
             val textView = TextView(requireContext())
             val formattedTime = Date((intervention.timestamp * 1000).toLong()).toString()
-            val topics = intervention.topics?.joinToString { it.sentence + if (it.exclusive) " (esclusivo)" else "" }
+            val topics = intervention.topics?.joinToString {
+                it.sentence + if (it.exclusive) " (esclusivo)" else ""
+            }
             val actions = intervention.actions?.joinToString()
             val sequence = intervention.interactionSequence?.joinToString()
-            val context = intervention.contextualData?.entries?.joinToString { "${it.key}: ${it.value}" }
+            val context = intervention.contextualData?.entries?.joinToString {
+                "${it.key}: ${it.value}"
+            }
 
             val details = """
-            Intervento ${index + 1}:
-            • Tipo: ${intervention.typeEnum?.name?.lowercase() ?: "unknown"}
-            • Timestamp: $formattedTime
-            • Periodo (min): ${(intervention.period.toDouble() / 60).roundToInt()}
-            • Offset (min): ${(intervention.offset.toDouble() / 60).roundToInt()}
-            • Topic: $topics
-            • Azioni: $actions
-            • Sequenza interazione: $sequence
-            • Contesto: $context
-        """.trimIndent()
+                Intervento ${index + 1}:
+                • Tipo: ${intervention.typeEnum?.name?.lowercase() ?: "unknown"}
+                • Timestamp: $formattedTime
+                • Periodo (min): ${(intervention.period.toDouble() / 60).roundToInt()}
+                • Offset (min): ${(intervention.offset.toDouble() / 60).roundToInt()}
+                • Topic: $topics
+                • Azioni: $actions
+                • Sequenza interazione: $sequence
+                • Contesto: $context
+            """.trimIndent()
 
             textView.text = details
 
@@ -482,17 +558,19 @@ class InterventionFragment : Fragment() {
                 text = "Elimina"
                 setOnClickListener {
                     scheduledInterventions.removeAt(index)
-                    Log.w(TAG, "setting interventions")
                     interventionManager.setScheduledInterventions(scheduledInterventions)
                     interventionManager.saveToPrefs()
                     updateScheduledInterventionsUI()
-                    Toast.makeText(requireContext(), "Intervento eliminato", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        requireContext(),
+                        "Intervento eliminato",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
 
             container.addView(textView)
             container.addView(deleteButton)
-
             binding.containerScheduled.addView(container)
         }
 

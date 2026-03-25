@@ -12,107 +12,134 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp"
-            android:gravity="center_horizontal">
+            android:padding="16dp">
 
-            <!-- Fragment Title -->
+            <!-- Titolo fragment -->
             <TextView
+                android:id="@+id/interventionTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginBottom="24dp"
                 android:text="Programmazione degli interventi"
                 android:textColor="@color/black"
                 android:textSize="24sp"
-                android:textStyle="bold"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp" />
+                android:textStyle="bold" />
 
-            <!-- Patient Info -->
-            <TextView
-                android:text="Nome del paziente"
-                android:textColor="@color/black"
-                android:textSize="16sp"
+            <!-- Campi paziente: visibili solo dove servono -->
+            <LinearLayout
+                android:id="@+id/patientFieldsContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp" />
-            <EditText
-                android:id="@+id/inputName"
-                android:inputType="textPersonName"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:layout_marginBottom="8dp" />
+                android:orientation="vertical">
 
-            <TextView
-                android:text="Luogo della conversazione"
-                android:textColor="@color/black"
-                android:textSize="16sp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp" />
-            <EditText
-                android:id="@+id/inputConversationPlace"
-                android:inputType="text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:layout_marginBottom="8dp" />
+                <TextView
+                    android:id="@+id/inputNameLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="Nome del paziente"
+                    android:textColor="@color/black"
+                    android:textSize="16sp" />
 
-            <TextView
-                android:text="Luogo in cui vive la persona"
-                android:textColor="@color/black"
-                android:textSize="16sp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp" />
-            <EditText
-                android:id="@+id/inputLivingPlace"
-                android:inputType="text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:layout_marginBottom="8dp" />
+                <EditText
+                    android:id="@+id/inputName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="Inserisci il nome del paziente"
+                    android:inputType="textPersonName"
+                    android:minHeight="48dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp" />
 
-            <TextView
-                android:text="Con chi vive la persona"
-                android:textColor="@color/black"
-                android:textSize="16sp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp" />
-            <EditText
-                android:id="@+id/inputLivingCompanion"
-                android:inputType="text"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:layout_marginBottom="16dp" />
+                <TextView
+                    android:id="@+id/inputConversationPlaceLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="Luogo della conversazione"
+                    android:textColor="@color/black"
+                    android:textSize="16sp" />
 
+                <EditText
+                    android:id="@+id/inputConversationPlace"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="Inserisci il luogo in cui si svolge la conversazione"
+                    android:inputType="text"
+                    android:minHeight="48dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/inputLivingPlaceLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="Luogo in cui vive la persona"
+                    android:textColor="@color/black"
+                    android:textSize="16sp" />
+
+                <EditText
+                    android:id="@+id/inputLivingPlace"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="Inserisci il luogo in cui vive la persona"
+                    android:inputType="text"
+                    android:minHeight="48dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/inputLivingCompanionLabel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="Con chi vive la persona"
+                    android:textColor="@color/black"
+                    android:textSize="16sp" />
+
+                <EditText
+                    android:id="@+id/inputLivingCompanion"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:hint="Inserisci le persone con cui vive il paziente"
+                    android:inputType="text"
+                    android:minHeight="48dp"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp" />
+            </LinearLayout>
+
+            <!-- Tipo intervento -->
             <TextView
+                android:id="@+id/interventionTypeLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
                 android:text="Seleziona il tipo dell'intervento"
                 android:textColor="@color/black"
-                android:textSize="16sp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp" />
+                android:textSize="16sp" />
 
             <Spinner
                 android:id="@+id/spinnerInterventionType"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
                 android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:layout_marginBottom="16dp" />
+                android:paddingEnd="8dp" />
 
-            <!-- TimePicker for fixed -->
+            <!-- TimePicker per interventi a orario fisso -->
             <LinearLayout
                 android:id="@+id/timePickerContainer"
-                android:orientation="horizontal"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
+                android:gravity="center_horizontal"
+                android:orientation="horizontal"
                 android:visibility="gone">
 
                 <TimePicker
@@ -122,146 +149,174 @@
                     android:timePickerMode="spinner" />
             </LinearLayout>
 
-            <!-- Periodic Settings -->
+            <!-- Impostazioni periodiche -->
             <LinearLayout
                 android:id="@+id/periodicContainer"
-                android:orientation="vertical"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
+                android:orientation="vertical"
                 android:visibility="gone">
 
                 <TextView
-                    android:text="Periodo (minuti)"
-                    android:textSize="16sp"
+                    android:id="@+id/periodInputLabel"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="4dp" />
+                    android:layout_marginBottom="4dp"
+                    android:text="Periodo (minuti)"
+                    android:textColor="@color/black"
+                    android:textSize="16sp" />
+
                 <EditText
                     android:id="@+id/periodInput"
-                    android:inputType="number"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="Inserisci il periodo in minuti"
+                    android:inputType="number"
+                    android:minHeight="48dp"
                     android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:layout_marginBottom="8dp" />
+                    android:paddingEnd="8dp" />
 
                 <TextView
-                    android:text="Offset (minuti)"
-                    android:textSize="16sp"
+                    android:id="@+id/offsetInputLabel"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="4dp" />
+                    android:layout_marginBottom="4dp"
+                    android:text="Offset (minuti)"
+                    android:textColor="@color/black"
+                    android:textSize="16sp" />
+
                 <EditText
                     android:id="@+id/offsetInput"
-                    android:inputType="number"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginBottom="8dp"
+                    android:hint="Inserisci l'offset in minuti"
+                    android:inputType="number"
+                    android:minHeight="48dp"
                     android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:layout_marginBottom="8dp" />
+                    android:paddingEnd="8dp" />
             </LinearLayout>
 
-            <!-- Exclusive Options -->
-            <TextView
-                android:text="Domande predefinite"
-                android:textStyle="bold"
-                android:textColor="@color/black"
-                android:textSize="20sp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="4dp" />
-
+            <!-- Domande predefinite: visibili solo dove servono -->
             <LinearLayout
-                android:id="@+id/containerQuestions"
-                android:orientation="vertical"
+                android:id="@+id/questionsSectionContainer"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp" />
+                android:orientation="vertical">
 
+                <TextView
+                    android:id="@+id/questionsSectionTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="4dp"
+                    android:text="Domande predefinite"
+                    android:textColor="@color/black"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:id="@+id/containerQuestions"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <!-- Argomenti -->
             <TextView
+                android:id="@+id/topicsSectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"
                 android:text="Argomenti di conversazione"
-                android:textStyle="bold"
                 android:textColor="@color/black"
                 android:textSize="20sp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp" />
+                android:textStyle="bold" />
 
             <LinearLayout
                 android:id="@+id/containerTopics"
-                android:orientation="vertical"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="16dp"
+                android:orientation="vertical" />
 
+            <!-- Azioni -->
             <TextView
+                android:id="@+id/actionsSectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"
                 android:text="Azioni"
-                android:textStyle="bold"
                 android:textColor="@color/black"
                 android:textSize="20sp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="4dp" />
+                android:textStyle="bold" />
 
             <LinearLayout
                 android:id="@+id/containerActions"
-                android:orientation="vertical"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="16dp"
+                android:orientation="vertical" />
 
-            <!-- Confirm and send -->
+            <!-- Aggiunta intervento -->
             <Button
                 android:id="@+id/btnAdd"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Aggiungi intervento"
-                android:textSize="16sp"
+                android:layout_marginBottom="16dp"
                 android:paddingStart="8dp"
                 android:paddingEnd="8dp"
-                android:layout_marginBottom="16dp" />
+                android:text="Aggiungi intervento"
+                android:textSize="16sp" />
 
+            <!-- Interventi programmati -->
             <TextView
+                android:id="@+id/scheduledSectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
                 android:text="Interventi programmati:"
-                android:textStyle="bold"
                 android:textColor="@color/black"
                 android:textSize="20sp"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp" />
+                android:textStyle="bold" />
 
             <LinearLayout
                 android:id="@+id/containerScheduled"
-                android:orientation="vertical"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp" />
+                android:layout_marginBottom="16dp"
+                android:orientation="vertical" />
 
+            <!-- Conferma -->
             <Button
                 android:id="@+id/btnConfirm"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Conferma gli interventi programmati"
-                android:textSize="16sp"
+                android:layout_marginBottom="8dp"
                 android:backgroundTint="@color/christmas_green"
-                android:textColor="@color/white"
                 android:paddingStart="8dp"
                 android:paddingEnd="8dp"
-                android:layout_marginBottom="8dp" />
+                android:text="Conferma gli interventi programmati"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
 
+            <!-- Cancella -->
             <Button
                 android:id="@+id/btnClear"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Elimina tutti gli interventi programmati"
-                android:textSize="16sp"
+                android:layout_marginBottom="16dp"
                 android:backgroundTint="@android:color/holo_red_dark"
-                android:textColor="@color/white"
                 android:paddingStart="8dp"
                 android:paddingEnd="8dp"
-                android:layout_marginBottom="16dp" />
+                android:text="Elimina tutti gli interventi programmati"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
         </LinearLayout>
     </ScrollView>
 </layout>

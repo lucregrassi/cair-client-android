@@ -1,0 +1,19 @@
+{
+    "flags": {
+        "diversity": [0, 0, 0, 1],
+        "time": [0, 0, 0, 1],
+        "place": [0, 0, 0, 1],
+        "tone": [0, 0, 0, 0, 0, 0, 0, 0, 1],
+        "positive_speech_act": [0, 0, 0, 1],
+        "contextual_speech_act": [0, 0, 0, 0, 1]
+    },
+    "values": {
+        "diversity": ["Italian", "good mental health", "no physical problems"],
+        "time": ["during the day", "Spring", "Spring"],
+        "place": ["San Martino Hospital", "Genoa", "Italy"],
+        "tone": ["neutral", "neutral", "neutral", "neutral", "neutral", "neutral", "neutral",
+            "neutral", "neutral"],
+        "positive_speech_act": ["assertive", "commissive", "expressive"],
+        "contextual_speech_act": ["assertive", "commissive", "expressive", "declarative"]
+    }
+}

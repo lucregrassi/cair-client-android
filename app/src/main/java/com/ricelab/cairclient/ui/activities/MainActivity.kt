@@ -39,8 +39,6 @@ import com.aldebaran.qi.*
 import com.ricelab.cairclient.R
 import com.ricelab.cairclient.audio.AudioRecorder
 import com.ricelab.cairclient.audio.AudioResult
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import com.ricelab.cairclient.config.AppMode
 import com.ricelab.cairclient.config.AppModeResolver
 import com.ricelab.cairclient.conversation.ConversationState
@@ -214,7 +212,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private var micAutoOffMinutes: Long = 1L
 
     @Volatile private var isAnswering = false
-    private val micMutex = Mutex()
 
     private var lastServerCfg: Triple<String, Int, String>? = null
 
@@ -325,7 +322,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         sentenceGenerator.loadFillerSentences(this)
-        retrieveStoredValues()
+        if (!retrieveStoredValues()) return
 
         maritimeExperimentConfig = resolveMaritimeExperimentConfigIfNeeded()
         currentAppMode = AppModeResolver.fromPort(serverPort)
@@ -395,16 +392,24 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                         robotSpeechTextView.text = "Pepper: $filler"
                     }
                     fillerJob = trackTts(lifecycleScope.launch(Dispatchers.IO) {
-                        val fillerStart = System.currentTimeMillis()
-                        pepperInterface.sayMessage(filler, language)
-                        val fillerEnd = System.currentTimeMillis()
-                        lastFillerSpeakingTime = (fillerEnd - fillerStart) / 1000.0
-                    })
+                        try {
+                            val fillerStart = System.currentTimeMillis()
+                            pepperInterface.sayMessage(filler, language)
+                            val fillerEnd = System.currentTimeMillis()
+                            lastFillerSpeakingTime = (fillerEnd - fillerStart) / 1000.0
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Filler TTS failed", e)
+                        }
+                    }).also { job ->
+                        job.invokeOnCompletion {
+                            if (fillerJob === job) fillerJob = null
+                        }
+                    }
                 } else {
-                    Log.d(TAG, "[onSilenceDetected] Filler skipped due to condition.")
+                    Log.d(TAG, "Filler skipped due to condition.")
                 }
             } else {
-                Log.d(TAG, "[onSilenceDetected] Filler skipped: one or more conditions not met.")
+                Log.d(TAG, "Filler skipped: one or more conditions not met.")
             }
         }
 
@@ -561,7 +566,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         val oldEnabled = micAutoOffEnabled
         val oldMinutes = micAutoOffMinutes
 
-        retrieveStoredValues()
+        if (!retrieveStoredValues()) return
         maritimeExperimentConfig = resolveMaritimeExperimentConfigIfNeeded()
 
         val newAppMode = AppModeResolver.fromPort(serverPort)
@@ -625,6 +630,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         coroutineJob?.cancel()
         coroutineJob = null
+
+        fillerJob?.cancel()
+        fillerJob = null
+
+        currentTtsJob?.cancel()
+        currentTtsJob = null
 
         if (::audioRecorder.isInitialized) {
             try {
@@ -769,7 +780,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private fun retrieveStoredValues() {
+    private fun retrieveStoredValues(): Boolean {
         try {
             val masterKeyAlias = MasterKey.Builder(this)
                 .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -794,7 +805,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
             autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
             formalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
-            useLeds = sharedPreferences.getBoolean("use_leds", true)
+            useLeds = sharedPreferences.getBoolean("use_leds", false)
             robotPassword = sharedPreferences.getString("robot_password", "") ?: ""
             voiceSpeed = sharedPreferences.getInt("voice_speed", 100)
             voicePitch = sharedPreferences.getInt("voice_pitch", 100)
@@ -830,12 +841,16 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             if (serverIp.isEmpty() || openAIApiKey.isEmpty() || serverPort == -1) {
                 startActivity(Intent(this, SettingsActivity::class.java))
                 finish()
+                return false
             }
+
+            return true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load secure preferences", e)
             Toast.makeText(this, "Errore nel caricamento delle impostazioni", Toast.LENGTH_LONG).show()
             startActivity(Intent(this, SettingsActivity::class.java))
             finish()
+            return false
         }
     }
 
@@ -882,9 +897,13 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private fun cancelMicAutoOffTimer() {
-        micAutoOffJob?.cancel()
-        micAutoOffJob = null
-        Log.d(TAG, "Timer cancellato")
+        if (micAutoOffJob != null) {
+            micAutoOffJob?.cancel()
+            micAutoOffJob = null
+            Log.d(TAG, "[AUTO_OFF] Timer cancelled")
+        } else {
+            Log.d(TAG, "[AUTO_OFF] No timer to cancel")
+        }
     }
 
     private fun resetMicAutoOffTimerAsync() {
@@ -944,110 +963,85 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
-    private suspend fun toggleListening(reason: MicEvent) = micMutex.withLock {
+    private suspend fun toggleListening(reason: MicEvent) {
         val goingOff = isListeningEnabled
 
         if (goingOff) {
             setLeds(false)
-
+            // don't cancel the timer when it's the auto-off itself
             if (reason != MicEvent.AUTO_OFF) {
                 cancelMicAutoOffTimer()
             } else {
                 Log.d(TAG, "[MicToggle] AUTO_OFF: skip cancel of auto-off job (self)")
             }
 
+            // 1) Aspetta SEMPRE eventuale TTS in corso prima di dire la frase di spegnimento
             currentTtsJob?.let { tts ->
                 if (tts.isActive) {
                     Log.i(TAG, "[MicToggle] wait current TTS before OFF")
-                    val waited = withTimeoutOrNull(30_000) {
-                        try {
-                            tts.join()
-                        } catch (_: CancellationException) {
-                        }
+                    val waited = withTimeoutOrNull(30_000) {  // safety, opzionale
+                        try { tts.join() } catch (_: CancellationException) {}
                     }
-                    if (waited == null) {
-                        Log.w(TAG, "[MicToggle] TTS wait timed out, proceeding to OFF")
-                    }
+                    if (waited == null) Log.w(TAG, "[MicToggle] TTS wait timed out, proceeding to OFF")
                 }
             }
 
+            // 2) SOLO per AUTO_OFF: ricontrolla le condizioni (es. è arrivato un intervento)
             if (reason == MicEvent.AUTO_OFF) {
                 val stillHasIntervention = onGoingIntervention?.type?.isNotEmpty() == true
                 if (!isListeningEnabled || isFragmentActive || stillHasIntervention) {
                     Log.i(TAG, "[MicToggle] AUTO_OFF: condizioni cambiate, non spengo")
                     resetMicAutoOffTimerAsync()
-                    return@withLock
+                    return
                 }
             }
 
-            val phrase = if (reason == MicEvent.AUTO_OFF) {
+            // 3) Dì la frase di spegnimento (sempre)
+            val phrase = if (reason == MicEvent.AUTO_OFF)
                 sentenceGenerator.getRandomAutoOff(language)
-            } else {
+            else
                 sentenceGenerator.getPredefinedSentence(language, "microphone_robot")
-            }
 
-            isListeningEnabled = false
-
-            if (::audioRecorder.isInitialized) {
-                try {
-                    audioRecorder.stopRecording()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error stopping recorder", e)
-                }
-            }
-
-            withContext(Dispatchers.Main) {
-                Toast.makeText(this@MainActivity, "Microfono disattivato", Toast.LENGTH_SHORT).show()
-                userSpeechTextView.text =
-                    sentenceGenerator.getPredefinedSentence(language, "microphone_user")
-                robotSpeechTextView.text = "Pepper: $phrase"
-            }
-
+            withContext(Dispatchers.Main) { robotSpeechTextView.text = "Pepper: $phrase" }
             trackTts(lifecycleScope.launch(Dispatchers.IO) {
                 pepperInterface.sayMessage(phrase, language)
             }).join()
 
-            delay(200)
-            qiContext?.let {
-                try {
-                    startHotwordRecognition(it)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Hotword restart error", e)
-                }
+            // 4) Spegni e avvia hotword
+            isListeningEnabled = false
+            audioRecorder.stopRecording()
+            runOnUiThread {
+                Toast.makeText(this, "Microfono disattivato", Toast.LENGTH_SHORT).show()
+                userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone_user")
             }
+            delay(200)
+            qiContext?.let { startHotwordRecognition(it) }
             setLeds(true)
-
         } else {
+            // --- Sto per accendere il microfono ---
             Log.i(TAG, "MicToggle ON (reason=$reason)")
-            hotwordFuture?.cancel(true)
-            hotwordFuture = null
+            hotwordFuture?.cancel(true); hotwordFuture = null
             isListeningEnabled = true
 
+            // Parla SEMPRE quando accendi, tranne se è un resume silenzioso per intervento
             val mustSpeakOn = reason != MicEvent.INTERVENTION_RESUME
             if (mustSpeakOn) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "Microfono attivato", Toast.LENGTH_SHORT).show()
-                    userSpeechTextView.text =
-                        sentenceGenerator.getPredefinedSentence(language, "listening_user")
-                    robotSpeechTextView.text =
-                        sentenceGenerator.getPredefinedSentence(language, "listening_robot")
+                runOnUiThread {
+                    Toast.makeText(this, "Microfono attivato", Toast.LENGTH_SHORT).show()
+                    userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
+                    robotSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_robot")
                 }
-
-                try {
-                    pepperInterface.sayMessage(
-                        sentenceGenerator.getPredefinedSentence(language, "listening_robot"),
-                        language
-                    )
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error speaking mic-on sentence", e)
-                }
+                pepperInterface.sayMessage(
+                    sentenceGenerator.getPredefinedSentence(language, "listening_robot"),
+                    language
+                )
             } else {
-                withContext(Dispatchers.Main) {
-                    userSpeechTextView.text =
-                        sentenceGenerator.getPredefinedSentence(language, "listening_user")
+                runOnUiThread {
+                    userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "listening_user")
                 }
             }
 
+            // Timer auto-off riparte (se non ci sono interventi attivi lo gestisce già la tua funzione)
             resetMicAutoOffTimerAsync()
         }
     }
@@ -1233,18 +1227,30 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         Log.i(TAG, "Starting dialogue")
         conversationState = ConversationState(fileStorageManager, previousSentence)
 
-        if (!suppressWelcomeOnStart) {
-            initializeUserSession()
+        val filesExist = withContext(Dispatchers.IO) { fileStorageManager.filesExist() }
+
+        if (!filesExist) {
+            if (suppressWelcomeOnStart) {
+                Log.w(TAG, "Conversation files missing and welcome is suppressed; aborting startDialogue")
+                return
+            }
+
+            val initOk = initializeUserSession()
+            if (!initOk) return
         }
 
         withContext(Dispatchers.IO) {
-            conversationState.loadFromFile()
+            if (fileStorageManager.filesExist()) {
+                conversationState.loadFromFile()
+            } else {
+                Log.w(TAG, "Conversation files still missing after initialization; aborting startDialogue")
+                return@withContext
+            }
         }
-        conversationState.dialogueState.dialogueNuances = getEffectiveDialogueNuances()
 
-        // Update the value of formalLanguage in the DialogueState
+        conversationState.dialogueState.dialogueNuances = getEffectiveDialogueNuances()
         conversationState.dialogueState.formalLanguage = formalLanguage
-        // Update the person gender and age but not the name as we want to keep it generic
+
         if (personGender.isNotEmpty()) {
             conversationState.speakersInfo.speakers[profileId]?.set("gender", personGender)
         }
@@ -1350,24 +1356,24 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         return sdf.format(Date())
     }
 
-    private suspend fun initializeUserSession() {
+    private suspend fun initializeUserSession(): Boolean {
         Log.i(TAG, "Initializing user session")
         val firstSentence: String
+
         if (!fileStorageManager.filesExist()) {
             val firstRequestResponse = try {
                 withContext(Dispatchers.IO) {
                     serverCommunicationManager.firstServerRequest(language)
                 }
             } catch (e: Exception) {
-                pepperInterface.sayMessage(sentenceGenerator.getPredefinedSentence(language,"server_error"), language)
-                return
+                Log.e(TAG, "firstServerRequest failed", e)
+                notifyServerUnavailable(e)
+                return false
             }
-            conversationState.dialogueState.printDebug()
+
             firstSentence = firstRequestResponse.firstSentence
 
             val dialogueState = DialogueState(firstRequestResponse.dialogueState)
-            // Update the value based on that taken from the settings activity so that it is
-            // correctly saved in the file
             dialogueState.formalLanguage = formalLanguage
 
             val userName = if (language == "it-IT") "Utente" else "User"
@@ -1401,16 +1407,40 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 fileStorageManager.writeToFile(dialogueStatistics)
             }
         } else {
-            Log.i(TAG, "generating predefined sentence")
             firstSentence = sentenceGenerator.getPredefinedSentence(language, "welcome_back")
         }
-        if(firstSentence != "") {
-            Log.i(TAG, "Uttering first sentence")
+
+        if (firstSentence.isNotEmpty()) {
             robotSpeechTextView.text = "Pepper: $firstSentence"
             pepperInterface.sayMessage(firstSentence, language)
             previousSentence = firstSentence
+        }
+
+        return true
+    }
+
+    private suspend fun notifyServerUnavailable(error: Exception) {
+        val errorText = error.message.orEmpty()
+
+        val messageKey = if (errorText.contains("502")) {
+            "server_unavailable"
         } else {
-            Log.e(TAG, "No first sentence!")
+            "server_connection_error"
+        }
+
+        val uiMessage = sentenceGenerator.getPredefinedSentence(language, messageKey).ifBlank {
+            sentenceGenerator.getPredefinedSentence("it-IT", messageKey)
+        }
+
+        withContext(Dispatchers.Main) {
+            Toast.makeText(this@MainActivity, uiMessage, Toast.LENGTH_LONG).show()
+            robotSpeechTextView.text = "Pepper: $uiMessage"
+        }
+
+        try {
+            pepperInterface.sayMessage(uiMessage, language)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to speak server error message", e)
         }
     }
 

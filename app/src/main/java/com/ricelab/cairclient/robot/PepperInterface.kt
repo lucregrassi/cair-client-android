@@ -129,7 +129,9 @@ class PepperInterface(
                         .withPhrase(phrase)
                         .withLocale(locale)
                         .build()
+                    Log.d(TAG, "Before say.run(): $text")
                     say.run()
+                    Log.d(TAG, "After say.run(): $text")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error during Say: ${e.message}")
