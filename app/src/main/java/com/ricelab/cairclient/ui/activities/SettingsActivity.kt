@@ -376,10 +376,10 @@ class SettingsActivity : AppCompatActivity() {
                 ambientMoveStepsJson = ambientJson
             )
 
-            if (!fromMenu) {
-                startActivity(Intent(this, MainActivity::class.java))
-            }
-            finish()
+            safelyNavigateTo(
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            )
         }
     }
 
@@ -583,8 +583,10 @@ class SettingsActivity : AppCompatActivity() {
 
         // auto-start main if minimal config exists
         if (!fromMenu && !savedServerIp.isNullOrEmpty() && !savedOpenAIApiKey.isNullOrEmpty() && savedServerPort != -1) {
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
+            safelyNavigateTo(
+                Intent(this, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            )
             return true
         }
 

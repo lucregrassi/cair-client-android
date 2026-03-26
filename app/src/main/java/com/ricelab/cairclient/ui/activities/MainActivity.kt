@@ -232,6 +232,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     private lateinit var sequenceMover: SequenceMover
     private var currentAppMode: AppMode = AppMode.DEFAULT
     private var maritimeExperimentConfig: MaritimeExperimentConfig? = null
+    private var shouldSpeakWelcomeOnNextDialogueStart = true
 
     fun refreshEffectiveDialogueNuances() {
         if (::conversationState.isInitialized) {
@@ -618,13 +619,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         if (qiContext != null && coroutineJob == null && !isDestroyed && !isFinishing) {
             Log.i(TAG, "Restarting dialogue coroutine in onResume")
-            suppressWelcomeOnStart = true
             coroutineJob = lifecycleScope.launch {
-                try {
-                    startDialogue()
-                } finally {
-                    suppressWelcomeOnStart = false
-                }
+                startDialogue()
             }
         }
     }
@@ -734,6 +730,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             R.id.action_intervention -> { showInterventionFragment(); true }
             R.id.action_personalization -> { showPersonalizationFragment(); true }
             R.id.action_setup -> {
+                shouldSpeakWelcomeOnNextDialogueStart = true
                 val intent = Intent(this, SettingsActivity::class.java)
                 intent.putExtra("fromMenu", true)
                 startActivity(intent)
@@ -1150,12 +1147,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         teleoperationManager = null
         this.qiContext = null
 
-        try {
-            pepperInterface.releaseAutonomousBaseRotation()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error releasing base movement", e)
-        }
-
         pepperInterface.setContext(null)
 
         if (this::session.isInitialized) {
@@ -1231,17 +1222,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         Log.i(TAG, "Starting dialogue")
         conversationState = ConversationState(fileStorageManager, previousSentence)
 
-        val filesExist = withContext(Dispatchers.IO) { fileStorageManager.filesExist() }
+        val speakWelcomeNow = shouldSpeakWelcomeOnNextDialogueStart && !suppressWelcomeOnStart
+        shouldSpeakWelcomeOnNextDialogueStart = false
 
-        if (!filesExist) {
-            if (suppressWelcomeOnStart) {
-                Log.w(TAG, "Conversation files missing and welcome is suppressed; aborting startDialogue")
-                return
-            }
-
-            val initOk = initializeUserSession()
-            if (!initOk) return
-        }
+        val initOk = initializeUserSession(speakWelcome = speakWelcomeNow)
+        if (!initOk) return
 
         withContext(Dispatchers.IO) {
             if (fileStorageManager.filesExist()) {
@@ -1360,7 +1345,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         return sdf.format(Date())
     }
 
-    private suspend fun initializeUserSession(): Boolean {
+    private suspend fun initializeUserSession(speakWelcome: Boolean = true): Boolean {
         Log.i(TAG, "Initializing user session")
         val firstSentence: String
 
@@ -1414,8 +1399,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             firstSentence = sentenceGenerator.getPredefinedSentence(language, "welcome_back")
         }
 
-        if (firstSentence.isNotEmpty()) {
-            robotSpeechTextView.text = "Pepper: $firstSentence"
+        if (speakWelcome && firstSentence.isNotEmpty()) {
+            withContext(Dispatchers.Main) {
+                robotSpeechTextView.text = "Pepper: $firstSentence"
+            }
             pepperInterface.sayMessage(firstSentence, language)
             previousSentence = firstSentence
         }

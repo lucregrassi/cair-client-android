@@ -30,7 +30,6 @@ import kotlinx.coroutines.withTimeoutOrNull
 data class Pose2D(val x: Double, val y: Double, val yawRad: Double)
 
 private const val TAG = "PepperInterface"
-private var holder: Holder? = null
 
 class PepperInterface(
     private var qiContext: QiContext? = null,
@@ -39,6 +38,7 @@ class PepperInterface(
 ) {
     private var goToFuture: Future<Void>? = null
     private var homeFreeFrame: FreeFrame? = null
+    private var holder: Holder? = null
 
     fun initHomeFrame() {
         val ctx = qiContext ?: return
