@@ -208,8 +208,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     // --- Auto-off Microfono ---
     private var micAutoOffJob: Job? = null
-    private var micAutoOffEnabled: Boolean = true
-    private var micAutoOffMinutes: Long = 1L
+    private var micAutoOffEnabled: Boolean = false
+    private var micAutoOffMinutes: Long = 60L
 
     @Volatile private var isAnswering = false
 
@@ -805,7 +805,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             openAIApiKey = sharedPreferences.getString("openai_api_key", null) ?: ""
             useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
             autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
-            formalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
+            formalLanguage = sharedPreferences.getBoolean("use_formal_language", false)
             useLeds = sharedPreferences.getBoolean("use_leds", false)
             robotPassword = sharedPreferences.getString("robot_password", "") ?: ""
             voiceSpeed = sharedPreferences.getInt("voice_speed", 100)
@@ -814,8 +814,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             robotFontSize = sharedPreferences.getInt("robot_font_size", 24)
             silenceDuration = sharedPreferences.getInt("silence_duration", 2)
             autoScreenLockEnabled = sharedPreferences.getBoolean("auto_screen_lock_enabled", false)
-            micAutoOffEnabled = sharedPreferences.getBoolean("mic_auto_off_enabled", true)
-            micAutoOffMinutes = sharedPreferences.getInt("mic_auto_off_minutes", 1).toLong()
+            micAutoOffEnabled = sharedPreferences.getBoolean("mic_auto_off_enabled", false)
+            micAutoOffMinutes = sharedPreferences.getInt("mic_auto_off_minutes", 60).toLong()
             ambientMoveEnabled = sharedPreferences.getBoolean("ambient_move_enabled", false)
             ambientMoveSpeed = sharedPreferences.getInt("ambient_move_speed_pct", 20) / 100.0f
 

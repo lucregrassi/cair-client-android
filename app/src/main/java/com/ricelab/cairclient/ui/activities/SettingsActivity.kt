@@ -120,7 +120,7 @@ class SettingsActivity : AppCompatActivity() {
         personNameEditText = findViewById(R.id.personNameEditText)
 
         personGenderSpinner = findViewById(R.id.personGenderSpinner)
-        val genderOptions = listOf("Femmina", "Maschio", "Non binario")
+        val genderOptions = listOf("Non binario", "Femmina", "Maschio")
         val genderAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, genderOptions)
         genderAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         personGenderSpinner.adapter = genderAdapter
@@ -298,9 +298,9 @@ class SettingsActivity : AppCompatActivity() {
 
             val selectedGenderLabel = personGenderSpinner.selectedItem.toString()
             val personGender = when (selectedGenderLabel) {
+                "Non binario" -> "nb"
                 "Femmina" -> "f"
                 "Maschio" -> "m"
-                "Non binario" -> "nb"
                 else -> ""
             }
 
@@ -564,7 +564,7 @@ class SettingsActivity : AppCompatActivity() {
         val savedAzureSpeechKey = sharedPreferences.getString("azure_speech_key", null)
         val useFillerSentence = sharedPreferences.getBoolean("use_filler_sentence", true)
         val autoDetectLanguage = sharedPreferences.getBoolean("auto_detect_language", false)
-        val useFormalLanguage = sharedPreferences.getBoolean("use_formal_language", true)
+        val useFormalLanguage = sharedPreferences.getBoolean("use_formal_language", false)
         val ambientMoveEnabled = sharedPreferences.getBoolean("ambient_move_enabled", false)
 
         // ambient steps JSON read
@@ -608,9 +608,9 @@ class SettingsActivity : AppCompatActivity() {
 
         savedPersonGender?.let {
             val index = when (it) {
-                "f" -> 0
-                "m" -> 1
-                "nb" -> 2
+                "nb" -> 0
+                "f" -> 1
+                "m" -> 2
                 else -> -1
             }
             if (index != -1) personGenderSpinner.setSelection(index)
@@ -653,8 +653,8 @@ class SettingsActivity : AppCompatActivity() {
             sharedPreferences.getBoolean("auto_screen_lock_enabled", false)
         autoScreenLockSwitch.isChecked = savedAutoScreenLockEnabled
 
-        val savedMicAutoOffEnabled = sharedPreferences.getBoolean("mic_auto_off_enabled", true)
-        val savedMicAutoOffMinutes = sharedPreferences.getInt("mic_auto_off_minutes", 1)
+        val savedMicAutoOffEnabled = sharedPreferences.getBoolean("mic_auto_off_enabled", false)
+        val savedMicAutoOffMinutes = sharedPreferences.getInt("mic_auto_off_minutes", 60)
         micAutoOffSwitch.isChecked = savedMicAutoOffEnabled
         micAutoOffSeekBar.progress = savedMicAutoOffMinutes
         micAutoOffLabel.text = "Timer auto-spegnimento microfono (min): $savedMicAutoOffMinutes"
