@@ -1,6 +1,5 @@
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
@@ -22,8 +21,8 @@ android {
         getByName("release") {
             isMinifyEnabled = false
             proguardFiles(
-                    getDefaultProguardFile("proguard-android-optimize.txt"),
-                    "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
             )
         }
     }
@@ -39,10 +38,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_1_8
     }
 
-    kotlinOptions {
-        jvmTarget = "1.8"
-    }
-
     splits {
         abi {
             isEnable = true
@@ -54,20 +49,26 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.17.0")
+    implementation("androidx.core:core-ktx:1.18.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("com.google.android.material:material:1.13.0")
     implementation("androidx.constraintlayout:constraintlayout:2.2.1")
     implementation("androidx.security:security-crypto-ktx:1.1.0")
 
+    implementation("com.softbankrobotics:qisdk:1.8.6") {
+        exclude(group = "com.android.support", module = "support-compat")
+    }
+    implementation("com.softbankrobotics:qisdk-design:1.8.6") {
+        exclude(group = "com.android.support", module = "support-compat")
+    }
+
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("com.google.code.gson:gson:2.13.2")
+    // cannot be updated because they need minSdk 26
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+    implementation("com.microsoft.cognitiveservices.speech:client-sdk:1.25.0")
+
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
-
-    implementation("com.aldebaran:qisdk:1.7.5")
-    implementation("com.aldebaran:qisdk-design:1.7.5")
-    implementation("com.squareup.okhttp3:okhttp:5.2.1")
-    implementation("com.google.code.gson:gson:2.13.2")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
-    implementation("com.microsoft.cognitiveservices.speech:client-sdk:1.25.0")
 }
