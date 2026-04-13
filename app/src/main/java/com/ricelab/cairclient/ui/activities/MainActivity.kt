@@ -221,6 +221,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     @Volatile
     private var kioskEnabled: Boolean = false // stato di startLockTask / stopLockTask
 
+    @Volatile
+    private var ledsReady: Boolean = false
+
     private var headTouchEvalJob: Job? = null
 
     // --- Ambient movement (sequence) ---
@@ -333,11 +336,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         currentAppMode = AppModeResolver.fromPort(serverPort)
         setContentView(getLayoutForMode(currentAppMode))
 
-        QiSDK.register(this, this)
-
         personalizationManager = InterventionManager.getInstance(this)
 
-        applyAutoScreenLockSetting()
         // blocca movimenti per AMBIENT_MOVE_RESUME_AFTER_SECONDS dal primo avvio
         lastActiveSpeakerTime = System.currentTimeMillis()
 
@@ -554,6 +554,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onStart() {
         super.onStart()
+        Log.i(TAG, "onStart -> QiSDK.register")
+        QiSDK.register(this, this)
     }
 
     private fun ensureServerManagerUpToDate() {
@@ -584,7 +586,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         applyMaritimeQrIfNeeded()
         Log.i(TAG, "Maritime experiment config in onResume = $maritimeExperimentConfig")
 
-        applyAutoScreenLockSetting()
         ensureServerManagerUpToDate()
         applySettingsToRuntime()
 
@@ -650,11 +651,15 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     override fun onStop() {
+        Log.i(TAG, "onStop -> QiSDK.unregister")
+        QiSDK.unregister(this, this)
+
         setLeds(false)
-        super.onStop()
         teleoperationManager?.stopUdpListener()
         cancelMicAutoOffTimer()
         ledRefreshJob?.cancel()
+
+        super.onStop()
     }
 
     override fun onDestroy() {
@@ -664,6 +669,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         currentTtsJob?.cancel()
         headTouchEvalJob?.cancel()
         ledRefreshJob?.cancel()
+        ledsReady = false
         micAutoOffJob?.cancel()
 
         hotwordFuture?.cancel(true)
@@ -685,7 +691,6 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         } catch (_: Exception) {
         }
 
-        QiSDK.unregister(this, this)
         super.onDestroy()
     }
 
@@ -1048,17 +1053,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     override fun onRobotFocusGained(qiContext: QiContext) {
+        Log.e(TAG, "=== onRobotFocusGained ===")
         this.qiContext = qiContext
         pepperInterface.setContext(this.qiContext)
         pepperInterface.holdAutonomousBaseRotation()
 
         pepperInterface.initHomeFrame()
-
-        if (getEffectiveAmbientMoveEnabled() && ambientMoveSteps.isNotEmpty()) {
-            sequenceMover.start(resetIndex = true)
-        } else {
-            sequenceMover.stop(resetIndex = true)
-        }
 
         if (!isTouchListenerAdded) {
             val touch: Touch = qiContext.touch
@@ -1112,6 +1112,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
             isTouchListenerAdded = true
         }
 
+        if (getEffectiveAmbientMoveEnabled() && ambientMoveSteps.isNotEmpty()) {
+            sequenceMover.start(resetIndex = true)
+        } else {
+            sequenceMover.stop(resetIndex = true)
+        }
+
         teleoperationManager = TeleoperationManager(this, qiContext, pepperInterface)
         teleoperationManager?.startUdpListener()
 
@@ -1124,8 +1130,10 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                     connect("tcps://198.18.0.1:9503").get()
                 }
                 leds = session.service("ALLeds").get()
+                ledsReady = true
                 withContext(Dispatchers.Main) { if (!isFragmentActive) setLeds(true) }
             } catch (e: Exception) {
+                ledsReady = false
                 Log.e(TAG, "Errore nella connessione alla sessione", e)
             }
         }
@@ -1140,9 +1148,12 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         if (coroutineJob?.isActive != true) {
             coroutineJob = lifecycleScope.launch { startDialogue() }
         }
+
+        applyAutoScreenLockSetting()
     }
 
     override fun onRobotFocusLost() {
+        Log.e(TAG, "=== onRobotFocusLost ===")
         teleoperationManager?.stopUdpListener()
         teleoperationManager = null
         this.qiContext = null
@@ -1162,6 +1173,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
         ledRefreshJob?.cancel()
         ledRefreshJob = null
+        ledsReady = false
 
         headTouchEvalJob?.cancel()
         headTouchEvalJob = null
@@ -1218,6 +1230,68 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         }
     }
 
+    private suspend fun resetConversationStateAndRestart(): Boolean {
+        return try {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "Stato conversazione non valido: reinizializzazione in corso",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+
+            withContext(Dispatchers.IO) {
+                Log.e(TAG, "Conversation state invalid -> clearing conversation files and restarting")
+
+                fileStorageManager.dialogueStateFile?.delete()
+                fileStorageManager.speakersInfoFile?.delete()
+                fileStorageManager.dialogueStatisticsFile?.delete()
+            }
+
+            previousSentence = ""
+            onGoingIntervention = null
+            startedCurrentIntervention = false
+
+            conversationState = ConversationState(fileStorageManager, previousSentence)
+
+            val initOk = initializeUserSession(speakWelcome = false)
+            if (!initOk) {
+                Log.e(TAG, "initializeUserSession failed during recovery")
+                return false
+            }
+
+            val reloadOk = withContext(Dispatchers.IO) {
+                if (!fileStorageManager.filesExist()) {
+                    Log.e(TAG, "Files still missing after re-initialization")
+                    false
+                } else {
+                    conversationState.loadFromFile()
+                }
+            }
+
+            if (!reloadOk) {
+                Log.e(TAG, "Reload after conversation reset failed")
+                return false
+            }
+
+            conversationState.dialogueState.dialogueNuances = getEffectiveDialogueNuances()
+            conversationState.dialogueState.formalLanguage = formalLanguage
+
+            if (personGender.isNotEmpty()) {
+                conversationState.speakersInfo.speakers[profileId]?.set("gender", personGender)
+            }
+            if (personAge.isNotEmpty()) {
+                conversationState.speakersInfo.speakers[profileId]?.set("age", personAge)
+            }
+
+            lastActiveSpeakerTime = System.currentTimeMillis()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "resetConversationStateAndRestart failed", e)
+            false
+        }
+    }
+
     private suspend fun startDialogue() {
         Log.i(TAG, "Starting dialogue")
         conversationState = ConversationState(fileStorageManager, previousSentence)
@@ -1228,12 +1302,22 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
         val initOk = initializeUserSession(speakWelcome = speakWelcomeNow)
         if (!initOk) return
 
-        withContext(Dispatchers.IO) {
+        val loadOk = withContext(Dispatchers.IO) {
             if (fileStorageManager.filesExist()) {
                 conversationState.loadFromFile()
             } else {
-                Log.w(TAG, "Conversation files still missing after initialization; aborting startDialogue")
-                return@withContext
+                Log.w(TAG, "Conversation files still missing after initialization")
+                false
+            }
+        }
+
+        if (!loadOk) {
+            Log.e(TAG, "Conversation state is invalid. Resetting conversation from scratch.")
+
+            val recovered = resetConversationStateAndRestart()
+            if (!recovered) {
+                Log.e(TAG, "Conversation recovery failed, aborting startDialogue")
+                return
             }
         }
 
@@ -1261,11 +1345,8 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 delay(1000)
                 continue
             }
-            // Check if listening is enabled
-            if (!isListeningEnabled) {
-                // userSpeechTextView.text = sentenceGenerator.getPredefinedSentence(language, "microphone")
 
-                // Check for due interventions even if mic is off
+            if (!isListeningEnabled) {
                 if (onGoingIntervention == null) {
                     Log.d("InterventionManager", "Entering DueIntervention 1 (onGoingIntervention = null)")
                     onGoingIntervention = personalizationManager.getDueIntervention()
@@ -1305,21 +1386,18 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 handle("")
             }
 
-
-            // Accendi LED per stato "listening"
             setLeds(true)
             val audioResult = startListeningOrNull()
-            // Se l'ascolto è stato abortito (mic OFF o fragment), gestisci i LED in base al motivo
+
             if (audioResult == null) {
                 if (!isListeningEnabled) {
-                    // mic è OFF: tieni i LED accesi
                     setLeds(true)
                 } else if (isFragmentActive) {
-                    // sei entrato in un fragment: spegni
                     setLeds(false)
                 }
                 continue
             }
+
             setLeds(false)
 
             val xmlString = audioResult.xmlResult
@@ -1331,9 +1409,11 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
                 deviceId,
                 serverPort
             )
+
             Log.d(TAG, "Entering handle for xmlString = $xmlString")
             handle(xmlString)
             Log.d(TAG, "Exited handle function")
+
             withContext(Dispatchers.IO) {
                 conversationState.writeToFile()
             }
@@ -1436,24 +1516,32 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     private fun setLeds(on: Boolean) {
-        if (!useLeds || !this::leds.isInitialized) return
+        if (!useLeds || !ledsReady || !this::leds.isInitialized || !this::session.isInitialized) return
+
         ledRefreshJob?.cancel()
+
         if (!on) {
             lifecycleScope.launch(Dispatchers.IO) {
                 try {
                     leds.call<Void>("fadeRGB", "ChestLeds", 0x00000000, 0.0).get()
                     leds.call<Void>("fadeRGB", "EarLeds", 0x00000000, 0.0).get()
                     leds.call<Void>("setIntensity", "EarLeds", 0.0).get()
-                } catch (e: Exception) { Log.e(TAG, "Error setting LEDs off", e) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error setting LEDs off", e)
+                }
             }
             return
         }
+
         ledRefreshJob = lifecycleScope.launch(Dispatchers.IO) {
             while (isActive) {
                 try {
                     leds.call<Void>("fadeRGB", "ChestLeds", 0x000000FF, 0.0).get()
                     leds.call<Void>("setIntensity", "EarLeds", 1.0).get()
-                } catch (e: Exception) { Log.e(TAG, "Error setting LEDs on", e) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error setting LEDs on", e)
+                    break
+                }
                 delay(1_500)
             }
         }

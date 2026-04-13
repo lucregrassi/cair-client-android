@@ -21,33 +21,63 @@ class ConversationState(
     var prevTurnLastSpeaker: String = ""
     var prevSpeakerTopic: Int? = null
 
-    // Function to load conversation state
-    fun loadFromFile() {
-        // Step 1: Retrieve the state of the conversation
-        Log.i(TAG, "Loading conversation state elements")
-        dialogueState = fileStorageManager.readFromFile(DialogueState::class.java)!!
+    /**
+     * Loads conversation state from files.
+     * Returns true if everything was loaded correctly, false otherwise.
+     *
+     * This method is intentionally defensive:
+     * - no !! operator
+     * - no crash if one file is missing/corrupted
+     * - caller can decide how to recover
+     */
+    fun loadFromFile(): Boolean {
+        return try {
+            Log.i(TAG, "Loading conversation state elements")
 
-        Log.i(TAG, "dialogueState = $dialogueState")
+            val loadedDialogueState = fileStorageManager.readFromFile(DialogueState::class.java)
+            if (loadedDialogueState == null) {
+                Log.e(TAG, "dialogueState is null while loading from file")
+                return false
+            }
 
-        // Step 2: If it's the first time, initialize dialogueNuances
-        if (dialogueState.dialogueNuances.flags.isEmpty() && dialogueState.dialogueNuances.values.isEmpty()) {
-            Log.i(TAG, "dialogueNuances is empty, loading default values")
-            dialogueState.dialogueNuances = DialogueNuances()  // <- uses constructor defaults
+            val loadedSpeakersInfo = fileStorageManager.readFromFile(SpeakersInfo::class.java)
+            if (loadedSpeakersInfo == null) {
+                Log.e(TAG, "speakersInfo is null while loading from file")
+                return false
+            }
+
+            val loadedDialogueStatistics =
+                fileStorageManager.readFromFile(DialogueStatistics::class.java)
+            if (loadedDialogueStatistics == null) {
+                Log.e(TAG, "dialogueStatistics is null while loading from file")
+                return false
+            }
+
+            dialogueState = loadedDialogueState
+            speakersInfo = loadedSpeakersInfo
+            dialogueStatistics = loadedDialogueStatistics
+
+            Log.i(TAG, "dialogueState = $dialogueState")
+            Log.i(TAG, "speakersInfo = $speakersInfo")
+            Log.i(TAG, "dialogueStatistics = $dialogueStatistics")
+
+            if (dialogueState.dialogueNuances.flags.isEmpty() &&
+                dialogueState.dialogueNuances.values.isEmpty()
+            ) {
+                Log.i(TAG, "dialogueNuances is empty, loading default values")
+                dialogueState.dialogueNuances = DialogueNuances()
+            }
+
+            dialogueState.conversationHistory.add(
+                mapOf("role" to "assistant", "content" to previousSentence)
+            )
+            dialogueState.prevDialogueSentence = listOf(listOf("s", previousSentence))
+
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error while loading conversation state from file", e)
+            false
         }
-
-        // Step 3: Store the welcome or welcome back message in the conversation history
-        dialogueState.conversationHistory.add(mapOf("role" to "assistant", "content" to previousSentence))
-
-        // Step 4: Retrieve user info and store it
-        speakersInfo = fileStorageManager.readFromFile(SpeakersInfo::class.java)!!
-        Log.i(TAG, "speakersInfo = $speakersInfo")
-
-        // Step 5: Load dialogue statistics
-        dialogueStatistics = fileStorageManager.readFromFile(DialogueStatistics::class.java)!!
-        Log.i(TAG, "dialogueStatistics = $dialogueStatistics")
-
-        // Step 6: Set the previous dialogue sentence
-        dialogueState.prevDialogueSentence = listOf(listOf("s", previousSentence))
     }
 
     fun writeToFile() {
@@ -60,7 +90,6 @@ class ConversationState(
         Log.i(TAG, "dialogueStatistics = $dialogueStatistics")
     }
 
-    // Custom copy method
     fun copy(
         fileStorageManager: FileStorageManager = this.fileStorageManager,
         previousSentence: String = this.previousSentence,
@@ -86,70 +115,72 @@ class ConversationState(
     ): String {
         var result = sentence
 
-        // Regex patterns to find placeholders in text
         val patternDesspk = "\\s*,?\\s*\\\$desspk\\s*,?\\s*".toRegex()
         val patternPrevspk = "\\s*,?\\s*\\\$prevspk\\s*,?\\s*".toRegex()
 
-        // Randomly decide whether to replace with the actual name or an empty string
         val usePrevSpeakerName = prevSpeakerName != null && Random.nextInt(100) < 10
         val useDestSpeakerName = destSpeakerName != null && Random.nextInt(100) < 10
 
-        // Replace the placeholders
         result = if (usePrevSpeakerName) {
             result.replace(patternPrevspk, " $prevSpeakerName ")
         } else {
-            // If no name found, just remove the placeholder
             result.replace(patternPrevspk, " ")
         }
+
         result = if (useDestSpeakerName) {
             result.replace(patternDesspk, " $destSpeakerName ")
         } else {
             result.replace(patternDesspk, " ")
-
         }
+
         return result
     }
 
     fun getLastContinuationSentence(personName: String): String {
         var lastContinuationSentence = dialogueState.dialogueSentence.lastOrNull()?.getOrNull(1) ?: ""
-        val destSpeakerName = if (personName.isEmpty() || personName == "Utente" || personName == "User") {
+        val destSpeakerName = if (
+            personName.isEmpty() ||
+            personName == "Utente" ||
+            personName == "User"
+        ) {
             null
         } else {
             personName
         }
-        lastContinuationSentence = replaceSpeakerTags(lastContinuationSentence, null, destSpeakerName)
+        lastContinuationSentence =
+            replaceSpeakerTags(lastContinuationSentence, null, destSpeakerName)
         return lastContinuationSentence
     }
 
     fun getPreviousContinuationSentence(personName: String): String {
-        var lastContinuationSentence = dialogueState.prevDialogueSentence.lastOrNull()?.getOrNull(1) ?: ""
-        val destSpeakerName = if (personName.isEmpty() || personName == "Utente" || personName == "User") {
+        var lastContinuationSentence =
+            dialogueState.prevDialogueSentence.lastOrNull()?.getOrNull(1) ?: ""
+        val destSpeakerName = if (
+            personName.isEmpty() ||
+            personName == "Utente" ||
+            personName == "User"
+        ) {
             null
         } else {
             personName
         }
-        lastContinuationSentence = replaceSpeakerTags(lastContinuationSentence,null, destSpeakerName)
+        lastContinuationSentence =
+            replaceSpeakerTags(lastContinuationSentence, null, destSpeakerName)
         return lastContinuationSentence
     }
 
     fun getReplySentence(personName: String): String {
-        // Determine the initial reply sentence
         val replySentence = if (!plan.isNullOrEmpty()) {
             planSentence.toString()
         } else {
-            dialogueState.dialogueSentence[0][1]
+            dialogueState.dialogueSentence.getOrNull(0)?.getOrNull(1).orEmpty()
         }
 
         Log.i(TAG, "Reply sentence: $replySentence")
 
-        // Determine whether to use the person's name or fallback to null
-        val prevSpeakerName = personName.ifEmpty {
-            null
-        }
+        val prevSpeakerName = personName.ifEmpty { null }
 
-        // Clean up and process the reply sentence
         return if (replySentence.isNotEmpty()) {
-            // Replace speaker tags with the determined name or null
             replaceSpeakerTags(replySentence, prevSpeakerName, null)
         } else {
             ""
