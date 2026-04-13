@@ -329,6 +329,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.i(TAG, "onCreate -> QiSDK.register")
+        QiSDK.register(this, this)
+
         sentenceGenerator.loadFillerSentences(this)
         if (!retrieveStoredValues()) return
 
@@ -554,8 +557,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onStart() {
         super.onStart()
-        Log.i(TAG, "onStart -> QiSDK.register")
-        QiSDK.register(this, this)
+        Log.i(TAG, "onStart")
     }
 
     private fun ensureServerManagerUpToDate() {
@@ -569,6 +571,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onResume() {
         super.onResume()
+        Log.i(TAG, "onResume, qiContext=${qiContext != null}")
 
         val oldEnabled = micAutoOffEnabled
         val oldMinutes = micAutoOffMinutes
@@ -627,6 +630,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     override fun onPause() {
+        Log.i(TAG, "onPause")
         super.onPause()
 
         coroutineJob?.cancel()
@@ -651,8 +655,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     override fun onStop() {
-        Log.i(TAG, "onStop -> QiSDK.unregister")
-        QiSDK.unregister(this, this)
+        Log.i(TAG, "onStop")
 
         setLeds(false)
         teleoperationManager?.stopUdpListener()
@@ -663,6 +666,9 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
     }
 
     override fun onDestroy() {
+        Log.i(TAG, "onDestroy -> QiSDK.unregister")
+        QiSDK.unregister(this, this)
+
         isAlive = false
         coroutineJob?.cancel()
         fillerJob?.cancel()
@@ -1054,6 +1060,7 @@ class MainActivity : AppCompatActivity(), RobotLifecycleCallbacks {
 
     override fun onRobotFocusGained(qiContext: QiContext) {
         Log.e(TAG, "=== onRobotFocusGained ===")
+
         this.qiContext = qiContext
         pepperInterface.setContext(this.qiContext)
         pepperInterface.holdAutonomousBaseRotation()
