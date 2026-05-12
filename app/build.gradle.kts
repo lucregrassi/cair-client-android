@@ -66,7 +66,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.13.2")
     // cannot be updated because they need minSdk 26
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
-    implementation("com.microsoft.cognitiveservices.speech:client-sdk:1.25.0")
+    implementation("com.microsoft.cognitiveservices.speech:client-sdk:1.43.0")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
