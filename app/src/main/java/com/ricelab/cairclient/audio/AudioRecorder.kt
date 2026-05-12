@@ -296,6 +296,11 @@ class AudioRecorder(private val context: Context, private val autoDetectLanguage
         writeWavFile(audioBytes, tempFile)
 
         val speechConfig = SpeechConfig.fromSubscription(subscriptionKey, serviceRegion)
+
+        // Workaround for Azure Speech SDK < 1.48.2 on Android/Linux.
+        // Needed if staying on SDK 1.43 on Pepper / Android SDK 23.
+        speechConfig.setProperty("OPENSSL_DISABLE_CRL_CHECK", "true")
+
         val audioConfig = AudioConfig.fromWavFileInput(tempFile.absolutePath)
 
         val recognizer: SpeechRecognizer
